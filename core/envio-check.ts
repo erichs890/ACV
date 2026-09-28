@@ -196,6 +196,23 @@ registrarAdapter({
   },
 });
 const { navegador } = await import('./browser.ts');
+/**
+ * Este cenário é o único da suíte que precisa de uma JANELA VISÍVEL (o login é feito pela pessoa). Em máquina
+ * sem navegador que abra com janela, ele derrubava a suíte inteira com exceção — e, como é o último cenário,
+ * o resultado era um `exit 1` que fazia parecer que o envio estava quebrado. Agora ele se anuncia como pulado,
+ * bem visível, e não vira um ✓: teste que não rodou não é teste que passou.
+ */
+const janelaVisivelDisponivel = async () => {
+  try {
+    await navegador(true);
+    return true;
+  } catch (e) {
+    console.log(`
+⚠ PULADO — login assistido precisa de janela visível, e esta máquina não abriu nenhuma:
+  ${(e as Error).message.split(' (')[0]}`);
+    return false;
+  }
+};
 /** Espera a aba de login existir na janela do robô. Devolve a aba. */
 const esperarAbaLogin = async () => {
   const ctx = await navegador(true);
@@ -209,7 +226,9 @@ const esperarAbaLogin = async () => {
 
 /** Faz o papel da pessoa: acha a aba de login na janela do robô e clica em "Entrar com senha". */
 const pessoaEntra = async () => (await esperarAbaLogin()).click('#ok');
+const temJanela = await janelaVisivelDisponivel();
 try {
+  if (!temJanela) throw new Error('pulado');
   // Cancelar: a janela fecha, nada é gravado
   const cancelada = entrarNaJanela('falsa');
   // Esperar a aba existir, e não um tempo fixo: com o navegador frio o cancelamento chegava antes de haver o
@@ -232,10 +251,13 @@ try {
   marcarSessaoExpirada('falsa');
   assert.equal(sessaoValida('falsa'), false, 'sessão caída segura a fila daquela plataforma');
   assert.equal(sessaoValida('inhire'), true, 'plataforma sem login nunca é barrada por sessão');
+} catch (e) {
+  if (!temJanela) loginSrv.close();
+  else throw e;
 } finally {
   loginSrv.close();
 }
-console.log('✓ Login assistido: cancelar não grava; sair do login + prova = conectado; sessão expirada segura só aquela plataforma');
+if (temJanela) console.log('✓ Login assistido: cancelar não grava; sair do login + prova = conectado; sessão expirada segura só aquela plataforma');
 
 await fecharNavegador();
 console.log('\nEnvio: tudo certo.');

@@ -890,7 +890,8 @@ export async function preencherSequencialGenerico(raiz: Raiz, dados: DadosCandid
   // O botão pode ser só uma seta ("→"): na tela de boas-vindas vale o único botão visível; o clique também dá foco
   // ao iframe, que o Enter das próximas telas precisa.
   const semControles = async () => (await descobrirCampos(raiz)).length === 0 && (await escolhasVisiveis(raiz)).textos.length === 0;
-  const naBoasVindas = async () => SEQUENCIAL.boasVindas.test(await textoVisivel(raiz)) && (await semControles());
+  const blocoDeBoasVindas = async () => (await raiz.locator(SEQUENCIAL.boasVindasBloco).count()) > 0;
+  const naBoasVindas = async () => ((await blocoDeBoasVindas()) || SEQUENCIAL.boasVindas.test(await textoVisivel(raiz))) && (await semControles());
   // Três tentativas, não uma: o QuillForms entra com animação e o primeiro clique pode cair antes de ele
   // responder — e aí a tela seguinte nunca chega, o que virava "estrutura não reconhecida" (23/09/2026).
   for (let tentativa = 1; tentativa <= 3 && (await naBoasVindas()); tentativa++) {

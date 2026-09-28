@@ -99,6 +99,15 @@ export const SEQUENCIAL = {
   frameTypeform: /form\.typeform\.com/,
   frameInHire: /form-app\.inhire\.app/,
   boasVindas: /responda as perguntas|para finalizar sua inscri/i,
+  /**
+   * A tela de boas-vindas pela ESTRUTURA, não pelo texto.
+   *
+   * Cada empresa escreve o seu convite: o da Framework Digital não casava com a regex acima, então o motor nem
+   * entrava no laço de boas-vindas, caía na tela sem campo nenhum e respondia "estrutura não reconhecida" — três
+   * candidaturas perdidas em 28/09/2026. O QuillForms marca essa tela na classe do bloco, e classe de fornecedor
+   * é mais estável do que o texto que o recrutador digitou.
+   */
+  boasVindasBloco: '.blocktype-welcome-screen-block, .qf-welcome-screen-block__wrapper',
   iniciar: /^(iniciar|começar|comecar|start|responder|vamos)/i,
   proximo: /^(ok|próximo|proximo|avançar|avancar|next|seguinte|→|>)\b/i, // "OK" pode vir com a dica "pressione Enter" colada
   final: /^(enviar|finalizar|concluir|submit|enviar respostas|enviar candidatura|finalizar inscri)/i,
