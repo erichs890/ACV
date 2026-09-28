@@ -253,6 +253,28 @@ export const textoIntervalo = (s: number) => (s < 60 ? `${s} s` : s % 60 === 0 ?
  * Focar em uma plataforma sem limpar a tela não seria foco nenhum. Nada é apagado — a lista tem um botão para
  * mostrar as que ficaram de fora. Conexão sem o campo = no foco (as conexões criadas antes disto continuam valendo).
  */
+/**
+ * O termo de exclusão que bate no título desta vaga, ou null. Fonte única: o score (`core/resume/score.ts`)
+ * corta por aqui e a tela de Configurações conta por aqui — se fossem duas regras, a prévia mentiria.
+ *
+ * Só o TÍTULO, com borda de palavra. Procurar no texto inteiro excluiria uma vaga full stack que cita SAP
+ * numa linha de integração; sem borda, "sap" casaria com "Sapucaia do Sul" (caso real do acervo).
+ */
+export function termoExcluido(titulo: string, excluir: string[] = []): string | null {
+  const limpar = (t: string) =>
+    t
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  const t = limpar(titulo);
+  for (const bruto of excluir) {
+    const termo = limpar(bruto).trim();
+    if (!termo) continue;
+    if (new RegExp(`(^|[^a-z0-9])${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t)) return bruto.trim();
+  }
+  return null;
+}
+
 export const plataformaNoFoco = (conexoes: Record<string, Conexao>, plataforma: string) => conexoes[plataforma]?.enviar !== false;
 
 export const NIVEIS = ['Estágio', 'Júnior', 'Pleno', 'Sênior', 'Liderança'];

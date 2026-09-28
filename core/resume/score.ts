@@ -1,8 +1,13 @@
 import type { PerfilBusca, Vaga } from '../../src/types.ts';
-import { SOFT, normalizar, similaridade } from './texto.ts';
+import { SOFT, similaridade } from './texto.ts';
 import { vagaCompativelComLocalizacao } from '../localizacao.ts';
 import type { PreferenciasLocalizacao } from '../../src/paises.ts';
 import { familiaDoCargo, familiasAfins, inferirArea, inferirSenioridade, NIVEIS, type Nivel } from './analyzer.ts';
+
+import { termoExcluido } from '../../src/dados.ts';
+
+// Reexportado porque o score é o dono conceitual do corte; a regra em si mora em src/ para a tela usar a mesma.
+export { termoExcluido };
 
 export interface FiltrosScore {
   area?: string; // área escolhida na Automação (sobrepõe a do currículo)
@@ -11,23 +16,6 @@ export interface FiltrosScore {
   localizacao?: PreferenciasLocalizacao; // cidade (presencial/híbrida) e países (remota) que a pessoa aceita
   cargoRigido?: boolean; // true = vaga com cargo fora da sua função é cortada com força
   excluir?: string[]; // nichos que a pessoa não quer, mesmo sendo da função dela (Configurações)
-}
-
-/**
- * O termo de exclusão que bate no título desta vaga, ou null.
- *
- * Só o TÍTULO: é onde mora a identidade da vaga. Procurar no texto inteiro excluiria uma vaga full stack
- * que cita SAP numa linha de integração — e exclusão errada é invisível, a pessoa nunca saberia o que perdeu.
- * Com borda de palavra, para "sap" não casar com "sapataria" nem "sapiens".
- */
-export function termoExcluido(titulo: string, excluir: string[] = []): string | null {
-  const t = normalizar(titulo);
-  for (const bruto of excluir) {
-    const termo = normalizar(bruto).trim();
-    if (!termo) continue;
-    if (new RegExp(`(^|[^a-z0-9])${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t)) return bruto.trim();
-  }
-  return null;
 }
 
 // Quantas competências técnicas suas uma vaga precisa citar para ser considerada do seu ramo

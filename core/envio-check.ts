@@ -196,20 +196,25 @@ registrarAdapter({
   },
 });
 const { navegador } = await import('./browser.ts');
-/** Faz o papel da pessoa: acha a aba de login na janela do robô e clica em "Entrar com senha". */
-const pessoaEntra = async () => {
+/** Espera a aba de login existir na janela do robô. Devolve a aba. */
+const esperarAbaLogin = async () => {
   const ctx = await navegador(true);
-  for (let i = 0; i < 20; i++) {
+  for (let i = 0; i < 40; i++) {
     const aba = ctx.pages().find(p => p.url().startsWith(`${base}/login`));
-    if (aba) return aba.click('#ok');
+    if (aba) return aba;
     await new Promise(r => setTimeout(r, 250));
   }
   throw new Error('a aba de login não abriu');
 };
+
+/** Faz o papel da pessoa: acha a aba de login na janela do robô e clica em "Entrar com senha". */
+const pessoaEntra = async () => (await esperarAbaLogin()).click('#ok');
 try {
   // Cancelar: a janela fecha, nada é gravado
   const cancelada = entrarNaJanela('falsa');
-  await new Promise(r => setTimeout(r, 1500));
+  // Esperar a aba existir, e não um tempo fixo: com o navegador frio o cancelamento chegava antes de haver o
+  // que cancelar, o teste caía no timeout de 10 min e a suíte inteira ficava pendurada (visto em 28/09/2026).
+  await esperarAbaLogin();
   cancelarLogin();
   const rc = await cancelada;
   assert.equal(rc.ok, false, 'cancelar não conecta');

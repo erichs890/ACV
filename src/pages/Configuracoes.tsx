@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import type { Vaga } from '../types';
 import { useSearchParams } from 'react-router-dom';
 import { BotaoSalvar, SalvoEm } from '../components/BotaoSalvar';
 import {
@@ -24,7 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useEstado, type Perfil } from '../estado';
-import { AREAS, NIVEIS, NOTIFICACOES, iniciais } from '../dados';
+import { AREAS, NIVEIS, NOTIFICACOES, iniciais, termoExcluido } from '../dados';
 import { CPF_PATTERN, TELEFONE_PATTERN, mascaraCPF, mascaraMoeda, mascaraTelefone, mascarar } from '../mascaras';
 import ConfigIA from './ConfigIA';
 import ConfigDescoberta from './ConfigDescoberta';
@@ -368,6 +369,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
             <span className="label">Nichos que você NÃO quer</span>
             <ListaTermos
               valor={excluir}
+              vagas={estado.vagas}
               onChange={v => {
                 setExcluir(v);
                 setSujo(true);
@@ -607,8 +609,25 @@ function AbaPrivacidade() {
  * Lista de termos livre (os nichos a evitar). Enter ou vírgula adiciona; clique no × remove.
  * Guardado em minúsculas e sem repetir, porque quem compara é `termoExcluido` no score.
  */
-function ListaTermos({ valor, onChange }: { valor: string[]; onChange: (v: string[]) => void }) {
+function ListaTermos({ valor, vagas, onChange }: { valor: string[]; vagas: Vaga[]; onChange: (v: string[]) => void }) {
   const [texto, setTexto] = useState('');
+
+  /**
+   * As opções saem das SUAS vagas, não de uma lista alfabética de tecnologias: cada `skill` que o núcleo já
+   * extraiu vira candidata, e ao lado dela vai quantas vagas o corte levaria — com a MESMA regra do score
+   * (`termoExcluido`), senão a prévia mentiria. Ordenado pelo que mais pesa.
+   */
+  const sugestoes = useMemo(() => {
+    const tecnologias = new Set<string>();
+    for (const v of vagas) for (const s of v.skills ?? []) tecnologias.add(s);
+    return [...tecnologias]
+      .map(t => ({ termo: t, quantas: vagas.filter(v => termoExcluido(v.titulo, [t])).length }))
+      .filter(o => o.quantas > 0 && !valor.includes(o.termo))
+      .sort((a, b) => b.quantas - a.quantas);
+  }, [vagas, valor]);
+
+  const atingidas = useMemo(() => vagas.filter(v => termoExcluido(v.titulo, valor)), [vagas, valor]);
+  const jaEnviadas = atingidas.filter(v => v.status === 'enviada').length;
   const adicionar = () => {
     const novos = texto
       .split(',')
@@ -641,6 +660,29 @@ function ListaTermos({ valor, onChange }: { valor: string[]; onChange: (v: strin
         aria-label="Nicho a evitar"
         className="min-w-[140px] flex-1 bg-transparent px-1 py-0.5 text-xs outline-none"
       />
+      {sugestoes.length > 0 && (
+        <select
+          aria-label="Escolher uma tecnologia das suas vagas"
+          value=""
+          className="field h-7 w-full text-xs"
+          onChange={e => {
+            if (e.target.value) onChange([...valor, e.target.value]);
+          }}
+        >
+          <option value="">Escolher das suas vagas...</option>
+          {sugestoes.map(o => (
+            <option key={o.termo} value={o.termo}>
+              {o.termo} — {o.quantas} vaga(s)
+            </option>
+          ))}
+        </select>
+      )}
+      {valor.length > 0 && (
+        <p className={`w-full text-[11px] ${jaEnviadas ? 'font-bold text-orange-deep' : 'text-ink-soft'}`}>
+          Esta lista tira <strong>{atingidas.length}</strong> vaga(s) da sua lista
+          {jaEnviadas > 0 && ` — e ${jaEnviadas} dela(s) você já enviou currículo`}.
+        </p>
+      )}
     </div>
   );
 }
