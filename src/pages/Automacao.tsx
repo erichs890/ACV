@@ -144,6 +144,26 @@ export default function Automacao() {
     void guardar(false);
   };
 
+  /**
+   * Grava sozinho, sem precisar do botão. O foco das plataformas e o modo de perguntas já faziam isso; o resto
+   * da tela não, e ficava a dúvida do que estava valendo — ainda mais depois de ligar o robô com uma alteração
+   * pendente na tela.
+   *
+   * Meio segundo de espera porque campo de número dispara `onChange` a cada tecla: sem isso, digitar "70" no
+   * score mínimo gravaria 7 e depois 70. E só grava se o formulário estiver válido — score 150 continua sendo
+   * recusado pelo navegador, como antes.
+   */
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `cfg` é o gatilho certo; `guardar` é recriada a cada render e zeraria o timer sem parar
+  useEffect(() => {
+    if (!sujo || !estado.automacao.configurada) return;
+    const t = setTimeout(() => {
+      const form = document.getElementById('form-automacao') as HTMLFormElement | null;
+      if (form && !form.checkValidity()) return; // `checkValidity`, não `reportValidity`: não abre balão sozinho
+      void guardar(false);
+    }, 500);
+    return () => clearTimeout(t);
+  }, [cfg]);
+
   async function reavaliar() {
     setReavaliando(true);
     try {
@@ -617,7 +637,7 @@ export default function Automacao() {
             </Passo>
             <div className="sticky bottom-0 flex items-center gap-2.5 rounded-lg border border-panel-border bg-panel px-3.5 py-3">
               <p role="status" className={`flex-1 text-xs ${sujo ? 'font-bold text-amber-ink' : 'text-ink-soft'}`}>
-                {sujo ? 'Você tem alterações não salvas.' : 'Configuração salva. As mudanças valem para as próximas candidaturas.'}
+                {sujo ? 'Salvando...' : 'Tudo salvo — esta tela grava sozinha. As mudanças valem para as próximas candidaturas.'}
               </p>
               <button type="button" className="btn btn-secondary" disabled={!sujo} onClick={() => setCfg(base)}>
                 Descartar
@@ -1043,7 +1063,16 @@ function Passo({ n, titulo, children }: { n: number; titulo: string; children: R
 function PainelVarredura({ varredura }: { varredura: ProgressoVarredura }) {
   const { rodando, plataforma, etapa, atual, total, feitas, restantes, novas, conhecidas } = varredura;
   const nome = (id: string) => PLATAFORMAS.find(p => p.id === id)?.nome ?? id;
-  const percentual = total > 0 ? Math.round((atual / total) * 100) : null;
+
+  /**
+   * Porcentagem do trabalho TODO, não da plataforma atual: cada plataforma vale uma fatia igual, e a que está
+   * rodando contribui com a fração que já andou. É o que responde "falta muito?" — a barra por plataforma
+   * sozinha zerava a cada troca e dava a impressão de que nunca acabava.
+   */
+  const fatias = feitas.length + restantes.length + (rodando && plataforma ? 1 : 0);
+  const dentroDaAtual = total > 0 ? atual / total : 0;
+  const geral = fatias > 0 ? Math.min(100, Math.round(((feitas.length + dentroDaAtual) / fatias) * 100)) : 100;
+  const faltam = restantes.length + (rodando && plataforma ? 1 : 0);
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-panel-border bg-panel p-3.5">
@@ -1059,6 +1088,11 @@ function PainelVarredura({ varredura }: { varredura: ProgressoVarredura }) {
           )}
         </p>
         <p className="text-[11px] text-ink-soft tabular-nums">
+          {rodando && (
+            <>
+              <strong className="text-base text-ink">{geral}%</strong> · {faltam === 1 ? 'última plataforma' : `faltam ${faltam} plataformas`} ·{' '}
+            </>
+          )}
           <strong className="text-green-deep">{novas}</strong> vaga(s) nova(s)
           {conhecidas > 0 && <> · {conhecidas} que o robô já tinha (não duplicadas)</>}
         </p>
@@ -1067,17 +1101,14 @@ function PainelVarredura({ varredura }: { varredura: ProgressoVarredura }) {
       {rodando && (
         <div
           role="progressbar"
-          aria-label={`Varrendo ${nome(plataforma)}`}
+          aria-label="Progresso da varredura"
           aria-valuemin={0}
-          aria-valuemax={total || undefined}
-          aria-valuenow={percentual === null ? undefined : atual}
-          className="h-1.5 w-full overflow-hidden rounded-full bg-page-bg"
+          aria-valuemax={100}
+          aria-valuenow={geral}
+          aria-valuetext={`${geral}% — ${etapa || nome(plataforma)}`}
+          className="h-2 w-full overflow-hidden rounded-full bg-page-bg"
         >
-          {/* Sem total conhecido a barra não pode fingir uma porcentagem: vira uma faixa que anda */}
-          <div
-            className={percentual === null ? 'h-full w-1/3 animate-pulse rounded-full bg-blue-dark' : 'h-full rounded-full bg-blue-dark transition-all'}
-            style={percentual === null ? undefined : { width: `${percentual}%` }}
-          />
+          <div className="h-full rounded-full bg-blue-dark transition-all duration-300" style={{ width: `${geral}%` }} />
         </div>
       )}
 

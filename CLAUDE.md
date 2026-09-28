@@ -37,7 +37,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | nome, e-mail, celular, LinkedIn, CPF, cidade, pretensão, **cargo desejado** | `perfil` (Configurações › Meus Dados) |
 | senioridade, área, rigor de função, **nichos a evitar** (`excluir`) | `automacao` — editável **só** em Configurações; Automação espelha |
 | cidade (presencial/híbrida) e países aceitos (remota) | `perfil.cidade` + `perfil.paisesRemoto` → `ler.localizacao()` |
-| ritmo, limite, janela, modo, ensaio, adaptação, modo de perguntas (`manual` · `duvida` · `sem_piedade`) | `automacao` (Automação) |
+| ritmo, limite, janela, modo, ensaio, adaptação, modo de perguntas (`manual` · `duvida` · `sem_piedade`) | `automacao` (Automação) — **a tela grava sozinha**, meio segundo depois da mudança e só se o formulário estiver válido |
 | plataforma ligada **e se está no foco da automação** (`enviar`) | `conexoes` — editável **só** em Automação; Plataformas espelha |
 | exige conta para candidatar (`login`) | `PLATAFORMAS` em `src/dados.ts` — a tag "Exige login" e o fluxo de `core/sessao.ts` saem daí |
 | respostas de autodeclaração | `sensiveis` |
