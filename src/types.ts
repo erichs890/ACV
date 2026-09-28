@@ -14,6 +14,7 @@ export interface Plataforma {
   regiao: 'brasil' | 'global' | 'internacional'; // agrupa a lista de Plataformas
   site?: string; // endereço oficial, para quando formos escrever o adapter
   nota?: string; // o que já se sabe da plataforma (idioma, acesso, tipo de conta) antes de integrar
+  login?: boolean; // exige conta: conecta entrando numa janela do robô (core/sessao.ts)
 }
 
 export interface Envio {
@@ -97,6 +98,8 @@ export interface Conexao {
    * Fica aqui, e não em `automacao`, para não existir um segundo lugar dizendo quais plataformas valem.
    */
   enviar?: boolean;
+  /** Plataformas com login: última validação da sessão no navegador do robô (core/sessao.ts) */
+  sessao?: { validadaEm: string; valida: boolean };
 }
 
 export interface ConfigAutomacao {
@@ -229,6 +232,28 @@ export interface Candidatura {
   resultado: 'enviada' | 'ensaio';
 }
 
+/** Campo obrigatório que a extensão achou no formulário e o perfil não tem como responder. */
+export interface CampoFaltando {
+  pergunta: string;
+  obrigatorio: boolean;
+  /** A extensão não conseguiu decidir se é obrigatório — revise manualmente (política conservadora) */
+  incerto?: boolean;
+}
+
+/** Plataforma que a extensão viu no seu navegador, tenha ou não adapter no núcleo. */
+export interface PlataformaDetectada {
+  dominio: string;
+  /** null = a detecção não teve certeza */
+  precisaLogin: boolean | null;
+  logadoAtualmente: boolean;
+  motivo: string;
+  /** 'generico' ou o domínio do handler dedicado que atendeu */
+  handler: string;
+  detectadaEm: string;
+  camposFaltando?: CampoFaltando[];
+  camposEm?: string;
+}
+
 // ─── Estado completo (o que o núcleo entrega ao front) ──────
 export interface Estado {
   perfil: Perfil | null;
@@ -246,6 +271,7 @@ export interface Estado {
   log: LinhaLog[];
   perguntas: Pergunta[];
   sensiveis: ConfigSensiveis; // política para perguntas de autodeclaração
+  deteccoes: PlataformaDetectada[]; // o que a extensão de navegador relatou (core/extensao.ts)
   notificacoes: Record<string, boolean>;
   proximoEnvioEm: string | null;
   ultimaBusca: string | null;

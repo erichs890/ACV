@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, ExternalLink, Plug, Plus, RadarIcon, Search, Trash2, Unplug } from 'lucide-react';
+import { Building2, ExternalLink, KeyRound, Plug, Plus, Puzzle, RadarIcon, Search, Trash2, Unplug } from 'lucide-react';
+import Modal from '../components/Modal';
 import Panel from '../components/Panel';
 import { useEstado } from '../estado';
 import { api, post } from '../api';
@@ -25,8 +26,7 @@ export default function Plataformas() {
   const { estado, salvar, registrar } = useEstado();
   const [erro, setErro] = useState('');
   const [adicionando, setAdicionando] = useState(false);
-  const [entrando, setEntrando] = useState(false); // esperando o login manual na janela do Indeed
-  const [erroIndeed, setErroIndeed] = useState('');
+  const [loginDe, setLoginDe] = useState<string | null>(null); // plataforma do modal "Fazer login"
 
   const conectadas = Object.keys(estado.conexoes).length;
   const conexaoInhire = estado.conexoes.inhire;
@@ -59,19 +59,6 @@ export default function Plataformas() {
     );
   }
 
-  // Indeed: o login é feito por você na janela do robô; o AutoCV não vê nem guarda a senha
-  async function conectarIndeed() {
-    setEntrando(true);
-    setErroIndeed('');
-    try {
-      await post('/indeed/entrar');
-    } catch (err) {
-      setErroIndeed((err as Error).message);
-    } finally {
-      setEntrando(false);
-    }
-  }
-
   async function adicionar(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const campo = e.currentTarget.elements.namedItem('empresa') as HTMLInputElement;
@@ -92,7 +79,9 @@ export default function Plataformas() {
       <div className="rounded-lg border border-panel-border bg-panel px-3 py-[9px]">
         <p className="text-[13px] font-bold">
           {conectadas} {conectadas === 1 ? 'plataforma conectada' : 'plataformas conectadas'}{' '}
-          <span className="text-xs font-normal text-ink-soft">• InHire, Indeed e Vagas PJ disponíveis; as outras chegam como plugins</span>
+          <span className="text-xs font-normal text-ink-soft">
+            • {PLATAFORMAS.filter(p => p.disponivel).length} com adapter pronto · {PLATAFORMAS.filter(p => p.login).length} exigem login · as outras chegam como plugins
+          </span>
         </p>
       </div>
 
@@ -110,6 +99,12 @@ export default function Plataformas() {
               <span className="rounded-[9px] border border-panel-border bg-page-bg px-2 py-0.5 text-[10px] font-bold text-ink-soft tabular-nums">
                 {ligadas ? `${ligadas} de ${doGrupo.length} conectada(s)` : `${doGrupo.length} plataforma(s)`}
               </span>
+              {doGrupo.some(p => p.login) && (
+                <span className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink">
+                  <KeyRound size={10} aria-hidden />
+                  {doGrupo.filter(p => p.login).length} exige(m) login
+                </span>
+              )}
               <p className="min-w-[200px] flex-1 text-[11px] text-ink-soft">{r.texto}</p>
             </div>
             <ul className="grid grid-cols-4 gap-3.5 max-lg:grid-cols-2 max-md:grid-cols-1">
@@ -124,22 +119,27 @@ export default function Plataformas() {
                       <div className="flex flex-col items-start gap-1">
                         <h3 className="text-[15px] font-bold">{p.nome}</h3>
                         <span
-                          className={`inline-flex items-center gap-[5px] rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${conexao ? 'bg-green-deep text-white' : 'border border-panel-border bg-page-bg text-ink'}`}
+                          className={`inline-flex items-center gap-[5px] rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${conexao ? (conexao.sessao?.valida === false ? 'bg-orange-deep text-white' : 'bg-green-deep text-white') : 'border border-panel-border bg-page-bg text-ink'}`}
                         >
                           <span aria-hidden className="size-1.5 rounded-full bg-current" />
-                          {conexao ? 'Conectado' : p.disponivel ? 'Não conectado' : 'Indisponível'}
+                          {conexao ? (conexao.sessao?.valida === false ? 'Sessão expirada' : 'Conectado') : p.disponivel ? 'Não conectado' : 'Indisponível'}
                         </span>
+                        {/* Dito na cara: o que separa estas das outras não é a integração, é você precisar de conta */}
+                        {p.login && (
+                          <span
+                            className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink"
+                            title="Esta plataforma só deixa candidatar quem está logado: você entra uma vez numa janela do robô e a sessão fica salva."
+                          >
+                            <KeyRound size={10} aria-hidden />
+                            Exige login
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-ink-soft">{descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}</p>
-                    {p.id === 'indeed' && entrando && (
-                      <p role="status" className="text-[11px] font-bold text-amber-ink">
-                        Entre na sua conta na janela do Indeed que abriu (até 5 min)...
-                      </p>
-                    )}
-                    {p.id === 'indeed' && erroIndeed && (
+                    {conexao?.sessao?.valida === false && (
                       <p role="alert" className="text-[11px] font-bold text-orange-deep">
-                        {erroIndeed}
+                        A sessão caiu: as vagas de {p.nome} ficam paradas até você entrar de novo.
                       </p>
                     )}
                     {p.site && (
@@ -164,21 +164,23 @@ export default function Plataformas() {
                         </Link>
                       </p>
                     )}
-                    <div className="mt-auto">
+                    <div className="mt-auto flex flex-col gap-1.5">
+                      {p.login && conexao?.sessao?.valida === false && (
+                        <button type="button" className="btn btn-success btn-sm w-full" onClick={() => setLoginDe(p.id)}>
+                          <KeyRound size={14} aria-hidden />
+                          Entrar de novo
+                          <span className="sr-only"> em {p.nome}</span>
+                        </button>
+                      )}
                       {conexao && p.disponivel ? (
                         <button type="button" className="btn btn-secondary btn-sm w-full" onClick={() => desconectar(p.id)}>
                           <Unplug size={14} aria-hidden />
                           Desconectar
                         </button>
                       ) : (
-                        <button
-                          type="button"
-                          className="btn btn-success btn-sm w-full"
-                          disabled={!p.disponivel || (p.id === 'indeed' && entrando)}
-                          onClick={p.id === 'indeed' ? conectarIndeed : () => conectar(p.id)}
-                        >
-                          <Plug size={14} aria-hidden />
-                          {!p.disponivel ? 'Indisponível' : p.id === 'indeed' ? (entrando ? 'Aguardando login...' : 'Entrar e conectar') : 'Conectar'}
+                        <button type="button" className="btn btn-success btn-sm w-full" disabled={!p.disponivel} onClick={p.login ? () => setLoginDe(p.id) : () => conectar(p.id)}>
+                          {p.login ? <KeyRound size={14} aria-hidden /> : <Plug size={14} aria-hidden />}
+                          {!p.disponivel ? 'Indisponível' : p.login ? 'Entrar e conectar' : 'Conectar'}
                           <span className="sr-only"> {p.nome}</span>
                         </button>
                       )}
@@ -190,6 +192,10 @@ export default function Plataformas() {
           </section>
         );
       })}
+
+      <ModalLogin plataforma={loginDe} onFechar={() => setLoginDe(null)} />
+
+      <Extensao />
 
       {conexaoInhire && (
         <Panel
@@ -315,5 +321,155 @@ export default function Plataformas() {
         </Panel>
       )}
     </div>
+  );
+}
+
+/**
+ * A extensão de navegador (pasta `extensao/`) roda no navegador DA PESSOA, na sessão dela, e só relata: se a
+ * plataforma exige conta e quais campos obrigatórios o perfil não cobre. Nenhuma candidatura sai por ela.
+ * Aqui ficam o token (a fronteira de confiança com o núcleo) e o que ela já viu.
+ */
+function Extensao() {
+  const { estado } = useEstado();
+  const [token, setToken] = useState('');
+  const [erro, setErro] = useState('');
+  const detectadas = estado.deteccoes ?? [];
+
+  async function mostrarToken() {
+    setErro('');
+    try {
+      const r = await api<{ token: string }>('/extensao/token');
+      setToken(r.token);
+      await navigator.clipboard?.writeText(r.token).catch(() => {});
+    } catch (e) {
+      setErro((e as Error).message);
+    }
+  }
+
+  const conta = (d: (typeof detectadas)[number]) => (d.precisaLogin === true ? 'Exige conta' : d.precisaLogin === false ? 'Não exige conta' : 'Não deu para saber se exige conta');
+
+  return (
+    <Panel
+      icon={Puzzle}
+      title="Extensão do navegador"
+      tone="slate"
+      aside={detectadas.length ? `${detectadas.length} plataforma(s) vista(s)` : 'nenhuma plataforma vista ainda'}
+      bodyClassName="flex flex-col gap-3 p-3.5"
+    >
+      <p className="text-xs text-ink-soft">
+        A extensão olha as páginas de vaga que <strong className="text-ink">você</strong> abre no seu navegador de sempre e diz duas coisas: se aquela plataforma exige conta e quais campos
+        obrigatórios ela vai pedir que o seu perfil ainda não responde. Ela não preenche, não clica e não envia nada — quem candidata continua sendo o robô. Para instalar: em
+        <code className="mx-1 font-mono">chrome://extensions</code>, ligue o "Modo do desenvolvedor" e use "Carregar sem compactação" na pasta <code className="font-mono">extensao/</code> do AutoCV.
+        Depois abra o popup dela e cole o token abaixo.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button type="button" className="btn btn-secondary btn-sm" onClick={mostrarToken}>
+          <KeyRound size={14} aria-hidden />
+          {token ? 'Copiado' : 'Mostrar token da extensão'}
+        </button>
+        {token && <code className="select-all rounded border border-panel-border bg-page-bg px-2 py-1 font-mono text-[11px]">{token}</code>}
+      </div>
+      {erro && (
+        <p role="alert" className="text-xs font-bold text-orange-deep">
+          {erro}
+        </p>
+      )}
+      {detectadas.length === 0 ? (
+        <p className="py-2 text-center text-xs text-ink-soft">Nada visto ainda. Abra uma vaga qualquer no navegador com a extensão instalada e ela aparece aqui.</p>
+      ) : (
+        <ul className="flex flex-col gap-2">
+          {detectadas.map(d => (
+            <li key={d.dominio} className="rounded-[7px] border border-panel-border bg-page-bg px-2.5 py-2 text-xs">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <strong className="font-mono text-[12px]">{d.dominio}</strong>
+                <span className={`rounded-[9px] px-1.5 py-0.5 text-[10px] font-bold ${d.precisaLogin === null ? 'bg-amber/30 text-amber-ink' : 'border border-panel-border text-ink-soft'}`}>
+                  {conta(d)}
+                </span>
+                {d.logadoAtualmente && <span className="text-[10px] font-bold text-green-deep">você está logado</span>}
+                <span className="text-[10px] text-ink-soft">{d.handler === 'generico' ? 'motor genérico (sem handler dedicado)' : `handler ${d.handler}`}</span>
+              </div>
+              <p className="mt-0.5 text-[11px] text-ink-soft">{d.motivo}</p>
+              {!!d.camposFaltando?.length && (
+                <p className="mt-1 text-[11px] text-orange-deep">
+                  <strong>Falta no seu perfil:</strong> {d.camposFaltando.map(c => `${c.pergunta}${c.obrigatorio ? '' : ' (talvez opcional)'}`).join(' · ')}.{' '}
+                  <Link to="/configuracoes" className="font-bold text-blue-dark underline">
+                    Completar em Configurações
+                  </Link>
+                </p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  );
+}
+
+/**
+ * "Fazer login manualmente": o núcleo abre uma janela visível do navegador do robô na página de login; a pessoa
+ * entra como sempre (senha, código, captcha) e o AutoCV só espera a página sair do login e provar a sessão.
+ * Genérico: vale para qualquer plataforma com `login: true` no catálogo e `sessao` no adapter.
+ */
+function ModalLogin({ plataforma, onFechar }: { plataforma: string | null; onFechar: () => void }) {
+  const { registrar } = useEstado();
+  const [esperando, setEsperando] = useState(false);
+  const [erro, setErro] = useState('');
+  const p = PLATAFORMAS.find(x => x.id === plataforma);
+
+  async function entrar() {
+    if (!p) return;
+    setEsperando(true);
+    setErro('');
+    try {
+      await post('/sessao/entrar', { plataforma: p.id });
+      registrar('sucesso', `${p.nome} conectado.`);
+      onFechar();
+    } catch (e) {
+      setErro((e as Error).message);
+    } finally {
+      setEsperando(false);
+    }
+  }
+
+  async function cancelar() {
+    if (esperando) await post('/sessao/cancelar').catch(() => {});
+    onFechar();
+  }
+
+  return (
+    <Modal
+      aberto={!!p}
+      onFechar={cancelar}
+      titulo={`Entrar em ${p?.nome ?? ''}`}
+      icon={KeyRound}
+      rodape={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={cancelar}>
+            Cancelar
+          </button>
+          <button type="button" className="btn btn-primary" onClick={entrar} disabled={esperando}>
+            {esperando ? 'Aguardando o seu login...' : 'Abrir a janela de login'}
+          </button>
+        </>
+      }
+    >
+      {esperando ? (
+        <p role="status" className="flex items-center gap-2 text-sm">
+          <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-blue-dark border-t-transparent" />
+          Faça login na janela que abriu. Assim que terminar, vamos continuar automaticamente.
+        </p>
+      ) : (
+        <p className="text-xs text-ink-soft">
+          Vai abrir uma janela do navegador do robô, identificada como do AutoCV, na página de login de {p?.nome}. Entre como sempre — senha, código por e-mail, captcha, o que {p?.nome} pedir. O
+          AutoCV não vê nem guarda a sua senha: ele só espera a página sair do login e confere se a sessão ficou ativa. A sessão fica no perfil do navegador do robô, e cai de volta para "Sessão
+          expirada" se {p?.nome} deslogar.
+        </p>
+      )}
+      {erro && (
+        <p role="alert" className="text-xs font-bold text-orange-deep">
+          {erro}
+        </p>
+      )}
+    </Modal>
   );
 }

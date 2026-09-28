@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <title>AutoCV</title>
+    <style>
+      body { font: 13px system-ui, sans-serif; width: 300px; margin: 0; padding: 12px; color: #1b1b1f; }
+      h1 { font-size: 14px; margin: 0 0 8px; }
+      p { margin: 0 0 8px; color: #55555f; line-height: 1.4; }
+      input, button { font: inherit; width: 100%; box-sizing: border-box; padding: 6px 8px; border-radius: 6px; border: 1px solid #c9c9d1; }
+      button { background: #1b3a8f; color: #fff; border-color: #1b3a8f; cursor: pointer; margin-top: 6px; }
+      button.secundario { background: #fff; color: #1b1b1f; border-color: #c9c9d1; }
+      #saida { margin-top: 10px; white-space: pre-wrap; font-size: 12px; }
+      .erro { color: #a03000; font-weight: 700; }
+    </style>
+  </head>
+  <body>
+    <h1>AutoCV</h1>
+    <p>Cole aqui o token que o AutoCV mostra em <b>Plataformas › Extensão</b>. Ele permite esta extensão falar com o núcleo no seu computador.</p>
+    <input id="token" type="password" placeholder="token do AutoCV" aria-label="Token do AutoCV" />
+    <button id="salvar" type="button">Salvar token</button>
+    <button id="reavaliar" type="button" class="secundario">Reavaliar esta página agora</button>
+    <div id="saida" role="status"></div>
+    <script src="popup.js"></script>
+  </body>
+</html>

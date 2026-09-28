@@ -126,15 +126,6 @@ const baixar = async (url: string) => {
   return r.text();
 };
 
-/**
- * Hora de varrer o Vagas PJ de novo? O feed é uma requisição e as vagas novas são poucas, então o ritmo é o mesmo
- * da revarredura do InHire (Plataformas › intervalo de varredura) em vez de um número escondido aqui.
- */
-export function vagaspjVencido(horas: number): boolean {
-  const ultima = kv.get<string | null>('vagaspj:ultimaBusca', null);
-  return !ultima || Date.now() - new Date(ultima).getTime() >= horas * 3_600_000;
-}
-
 let buscando = false;
 
 export async function buscarNoVagasPJ(perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao, log: Log): Promise<Vaga[]> {

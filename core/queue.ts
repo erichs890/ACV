@@ -10,11 +10,10 @@ import { empresas } from './storage/db.ts';
 import { calcularScore } from './resume/score.ts';
 import { vagaCompativelComLocalizacao } from './localizacao.ts';
 import { indeedVencido } from './platforms/indeed/busca.ts';
-import { vagaspjVencido } from './platforms/vagaspj/busca.ts';
-import { divulgaVencido } from './platforms/divulgavagas/busca.ts';
 import { inferirSenioridade } from './resume/analyzer.ts';
 import { esperaDaTentativa, falhaRepetivel, MAX_TENTATIVAS } from './falhas.ts';
 import { fecharNavegador } from './browser.ts';
+import { sessaoValida } from './sessao.ts';
 import { DADO_PESSOAL, categoriaSensivel } from '../src/sensiveis.ts';
 import { perguntaSoDestaVaga, textoIntervalo } from '../src/dados.ts';
 
@@ -175,7 +174,7 @@ const modeloAceito = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => v.model
  * Vale só para a fila automática: clicar em "Candidatar" numa vaga é um ato seu, e um filtro do robô não
  * manda em você. Conexão sem o campo = pode, para as conexões criadas antes disto continuarem funcionando.
  */
-export const plataformaEnviaCurriculo = (v: Vaga) => ler.conexoes()[v.plataforma]?.enviar !== false;
+export const plataformaEnviaCurriculo = (v: Vaga) => ler.conexoes()[v.plataforma]?.enviar !== false && sessaoValida(v.plataforma);
 
 /**
  * Vaga que a fila pode pegar.
@@ -247,7 +246,13 @@ export function enfileirarCompativeis(motivo: string): number {
   if (!candidatas.length) {
     // "liguei o robô e a fila continua vazia": se o que barrou foi o filtro de plataformas, diga isso
     const barradas = todas.filter(v => podeEntrarNaFila(v, cfg) && v.score >= cfg.scoreMinimo && modeloAceito(v, cfg) && !jaCandidatado(v) && !plataformaEnviaCurriculo(v));
-    if (barradas.length) registrar('info', `${barradas.length} vaga(s) compatível(is) ficaram de fora: o envio está desligado para a plataforma delas (Plataformas).`);
+    if (barradas.length)
+      registrar(
+        'info',
+        barradas.some(v => !sessaoValida(v.plataforma))
+          ? `${barradas.length} vaga(s) compatível(is) ficaram de fora: a sessão da plataforma delas expirou (entre de novo em Plataformas).`
+          : `${barradas.length} vaga(s) compatível(is) ficaram de fora: o envio está desligado para a plataforma delas (Plataformas).`,
+      );
     // Ensaiadas esperando o ensaio ser desligado: é a explicação mais provável para "tenho vaga boa e a fila não anda"
     const ensaiadas = todas.filter(v => v.status === 'ensaio' && v.score >= cfg.scoreMinimo && !jaCandidatado(v));
     if (cfg.ensaio && ensaiadas.length) registrar('info', `${ensaiadas.length} vaga(s) já ensaiada(s) esperam o modo ensaio ser desligado para entrarem na fila de verdade.`);
@@ -545,6 +550,20 @@ let agendando = false;
  *  - descoberta de empresas novas (Fonte B) 1x/dia, se ligada e com chave;
  *  - com o robô ligado, processa a próxima candidatura da fila.
  */
+/**
+ * Hora de revarrer esta plataforma? Vale para qualquer adapter que grave `<id>:ultimaBusca` ao terminar a busca
+ * — que é o que todos fazem. InHire e Indeed ficam de fora porque têm agenda própria: o InHire tem a descoberta
+ * de empresas (Fonte A/B) e o Indeed tem uma varredura por dia por causa do bloqueio dele.
+ */
+const COM_AGENDA_PROPRIA = ['inhire', 'indeed'];
+
+export function plataformaVencida(id: string, horas: number): boolean {
+  const ultima = kv.get<string | null>(`${id}:ultimaBusca`, null);
+  return !ultima || Date.now() - new Date(ultima).getTime() >= horas * 3_600_000;
+}
+
+export const algumaPlataformaVencida = (horas: number) => Object.keys(ler.conexoes()).some(id => !COM_AGENDA_PROPRIA.includes(id) && adapters[id] && plataformaVencida(id, horas));
+
 export function iniciarLaco() {
   setInterval(async () => {
     if (!agendando) {
@@ -563,10 +582,10 @@ export function iniciarLaco() {
         } else if (ler.conexoes().indeed && indeedVencido() && ler.curriculos()[0]?.perfilBusca) {
           // Só o Indeed conectado (ou o InHire em dia): a varredura diária dele não depende da do InHire
           await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
-        } else if (ler.conexoes().vagaspj && vagaspjVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
-          // Idem para o Vagas PJ: quem está conectado sozinho também precisa que a varredura role
-          await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
-        } else if (ler.conexoes().divulgavagas && divulgaVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
+        } else if (algumaPlataformaVencida(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
+          // Qualquer outra plataforma conectada vencida. Era um `else if` por plataforma, e cada adapter novo
+          // que esquecesse de entrar na cadeia ficava sem varredura agendada — foi o que aconteceu com o
+          // Quickin, o Workable e o Arbeitnow, que só varriam de carona quando o InHire estava vencido.
           await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
         }
       } finally {

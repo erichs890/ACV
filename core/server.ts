@@ -4,7 +4,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { Arquivo, Estado } from '../src/types.ts';
 import './platforms/inhire/index.ts';
-import { entrarNoIndeed } from './platforms/indeed/index.ts';
+import './platforms/indeed/index.ts';
+import { cancelarLogin, entrarNaJanela } from './sessao.ts';
+import { autorizado, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } from './extensao.ts';
 import './platforms/vagaspj/index.ts';
 import './platforms/divulgavagas/index.ts';
 import './platforms/workable/index.ts';
@@ -112,18 +114,36 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     if (a && (filtrosMudaram || a.modo !== antes.modo || a.regimes.join() !== antes.regimes.join() || a.limiteDiario !== antes.limiteDiario)) enfileirarCompativeis('configuração salva');
     json(res, 200, montarEstado());
   },
-  // Indeed: login manual na janela do robô (o AutoCV não vê nem guarda a senha); só então a plataforma fica conectada
-  'POST /indeed/entrar': async (_req, res) => {
+  // Login manual assistido (qualquer plataforma com `adapter.sessao`): a pessoa entra na janela do robô; o AutoCV
+  // não vê nem guarda a senha. Só fica conectada depois da prova de login (core/sessao.ts grava em `conexoes`).
+  'POST /sessao/entrar': async (req, res) => {
+    const { plataforma } = JSON.parse((await corpo(req)).toString('utf8')) as { plataforma: string };
     try {
-      const entrou = await entrarNoIndeed(registrar);
-      if (!entrou) return json(res, 400, { erro: 'Não detectei o login no Indeed (tempo esgotado ou janela fechada). Tente de novo.' });
-      // `conexoes` é a única fonte de verdade de plataforma ligada
-      salvarParcial({ conexoes: { ...ler.conexoes(), indeed: { conectadaEm: new Date().toISOString() } } });
-      registrar('sucesso', 'Indeed conectado: a sessão fica no perfil do navegador do robô.');
+      const r = await entrarNaJanela(plataforma);
+      if (!r.ok) return json(res, 400, { erro: r.motivo });
       json(res, 200, { ok: true });
     } catch (e) {
       json(res, 400, { erro: (e as Error).message });
     }
+  },
+  'POST /sessao/cancelar': async (_req, res) => {
+    cancelarLogin();
+    json(res, 200, { ok: true });
+  },
+  // ─── Extensão de navegador (extensao/) ───────────────────────────────────────────────────────
+  // O núcleo é um servidor local sem senha: estas rotas exigem o token que a pessoa cola no popup da extensão.
+  'GET /extensao/token': (_req, res) => json(res, 200, { token: tokenDaExtensao() }),
+  'GET /extensao/perfil': (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido: abra o popup da extensão e cole o token de Plataformas › Extensão' });
+    json(res, 200, perfilParaExtensao());
+  },
+  'POST /extensao/plataforma': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, registrarPlataformaDetectada(JSON.parse((await corpo(req)).toString('utf8'))));
+  },
+  'POST /extensao/campos': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, registrarCamposFaltando(JSON.parse((await corpo(req)).toString('utf8'))));
   },
   'POST /log': async (req, res) => {
     const { tipo, msg } = JSON.parse((await corpo(req)).toString('utf8'));

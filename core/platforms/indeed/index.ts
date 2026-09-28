@@ -12,36 +12,27 @@ import { extrairSkills } from '../../resume/texto.ts';
 import { executarFormulario } from '../inhire/formulario.ts';
 import { buscarNoIndeed, detectarBloqueio } from './busca.ts';
 import { INDEED } from './seletores.ts';
+import { marcarSessaoExpirada, type ProvaDeLogin } from '../../sessao.ts';
 
 const buscarVagas = (perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log, opcoes?: OpcoesBusca): Promise<Vaga[]> => buscarNoIndeed(perfil, cfg, ler.localizacao(), log, opcoes?.manual === true);
 
 /**
- * Login manual: abre a página de entrada do Indeed na janela do robô e espera a pessoa entrar (senha, código por
- * e-mail, captcha — tudo com ela). O AutoCV não vê nem guarda a senha: a sessão fica nos cookies do perfil do
- * navegador, que o próprio Edge/Chrome cifra com a conta do Windows.
+ * Login manual assistido (core/sessao.ts): a pessoa entra na janela do robô; o AutoCV não vê nem guarda a senha.
+ * Prova de "logado": a home sem redirect para as telas de login e sem o link "Acessar" do cabeçalho (é assim que
+ * o Indeed em pt-BR chama o entrar — visto ao vivo em 23/09/2026). Se o Indeed responder com a verificação da
+ * Cloudflare, a prova falha: o robô não a contorna (ver seletores.ts). O cabeçalho LOGADO nunca foi observado.
  */
-export async function entrarNoIndeed(log: Log, esperaMin = 5): Promise<boolean> {
-  const ctx = await navegador(true);
-  const page = await ctx.newPage();
-  try {
-    await page.goto('https://secure.indeed.com/auth?hl=pt_BR&co=BR', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    const bloqueio = await detectarBloqueio(page);
-    if (bloqueio === 'bloqueado') throw new Error('o Indeed bloqueou o acesso deste navegador; tente de novo mais tarde');
-    log('aguardo', `Entre na sua conta do Indeed na janela que abriu (até ${esperaMin} min). O AutoCV não vê nem guarda a sua senha.`);
-    const fim = Date.now() + esperaMin * 60_000;
-    let fora = 0;
-    while (Date.now() < fim) {
-      await new Promise(r => setTimeout(r, 2000));
-      if (page.isClosed()) return false;
-      // Saiu das telas de autenticação e continua fora por algumas checagens seguidas = entrou
-      fora = INDEED.login.test(page.url()) ? 0 : fora + 1;
-      if (fora >= 3) return true;
-    }
-    return false;
-  } finally {
-    await page.close().catch(() => {});
-  }
-}
+const sessao: ProvaDeLogin = {
+  urlLogin: 'https://secure.indeed.com/auth?hl=pt_BR&co=BR',
+  telasDeLogin: INDEED.login,
+  urlProva: 'https://br.indeed.com/?hl=pt_BR',
+  logado: async page => {
+    if (INDEED.login.test(page.url())) return false;
+    if (await detectarBloqueio(page)) return false;
+    const entrar = page.locator('a, button').filter({ hasText: INDEED.textoEntrar }).first();
+    return !(await entrar.isVisible().catch(() => false));
+  },
+};
 
 async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promise<ResultadoCandidatura> {
   const ctx = await navegador(true); // o Indeed bloqueia navegador oculto
@@ -94,8 +85,10 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     } else {
       await page.waitForLoadState('domcontentloaded').catch(() => {});
     }
-    if (INDEED.login.test(page.url()))
+    if (INDEED.login.test(page.url())) {
+      marcarSessaoExpirada('indeed');
       return { status: 'erro', motivo: 'faça login no Indeed (Plataformas › Indeed › Entrar): sem sessão o Indeed não abre a candidatura', captura: await captura('indeed-login') };
+    }
     await page
       .locator('input, textarea, button')
       .first()
@@ -123,5 +116,5 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   }
 }
 
-export const indeed: PlatformAdapter = { id: 'indeed', nome: 'Indeed', buscarVagas, candidatar };
+export const indeed: PlatformAdapter = { id: 'indeed', nome: 'Indeed', buscarVagas, candidatar, sessao };
 registrarAdapter(indeed);

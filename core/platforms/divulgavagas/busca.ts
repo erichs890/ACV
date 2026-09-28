@@ -132,10 +132,6 @@ const baixar = async (url: string) => {
 };
 
 /** Mesmo ritmo da revarredura do InHire: o acervo muda devagar e são 5 sitemaps grandes. */
-export function divulgaVencido(horas: number): boolean {
-  const ultima = kv.get<string | null>('divulgavagas:ultimaBusca', null);
-  return !ultima || Date.now() - new Date(ultima).getTime() >= horas * 3_600_000;
-}
 
 let buscando = false;
 

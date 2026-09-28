@@ -21,6 +21,12 @@ export const QUICKIN = {
     resumo: 'textarea#summary',
     curriculo: 'input#validatedCustomFile, input[type="file"]',
     termos: 'input#consent, input[type="checkbox"][id*="consent" i]',
+    /**
+     * Perguntas da empresa. O Quickin as marca com `job_question_<id>` no `id` do campo, e elas podem ser
+     * obrigatórias — a vaga da elaw pergunta "Tem disponibilidade para presencial 3x por semana na Pechincha
+     * RJ?". Responder isso sozinho seria declarar disponibilidade em nome da pessoa para um empregador real.
+     */
+    perguntas: '[id*="job_question_"]',
     submit: 'button[type="submit"]:has-text("Finalizar"), button:has-text("Finalizar"), button[type="submit"]',
   },
 

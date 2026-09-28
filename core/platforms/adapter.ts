@@ -1,4 +1,5 @@
 import type { ConfigAutomacao, PerfilBusca, PerguntaExtra, ResumoFormulario, Vaga } from '../../src/types.ts';
+import type { ProvaDeLogin } from '../sessao.ts';
 
 export type Log = (tipo: 'sucesso' | 'info' | 'aguardo' | 'erro' | 'alerta', msg: string) => void;
 
@@ -41,6 +42,8 @@ export interface PlatformAdapter {
   candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promise<ResultadoCandidatura>;
   /** Perguntas que a vaga com certeza vai fazer (schema via API), para resolver antes de abrir o navegador. */
   perguntasPrevias?(vaga: Vaga): Promise<PerguntaExtra[]>;
+  /** Plataforma com login: onde entrar e como provar que a sessão do navegador do robô está ativa (core/sessao.ts). */
+  sessao?: ProvaDeLogin;
 }
 
 export const adapters: Record<string, PlatformAdapter> = {};

@@ -35,9 +35,20 @@ Em **Configurações › Meus Dados** há dois campos independentes: **sua cidad
 
 ## Indeed
 
-Em **Plataformas › Indeed › Entrar e conectar** abre uma janela do navegador do robô: você entra na sua conta ali (senha, código, captcha — tudo com você; o AutoCV não vê nem guarda a senha). O robô só considera vagas com **"Candidatar-se facilmente"**; as que levam ao site da empresa são descartadas na busca. Presenciais são buscadas no Indeed do seu país, com a sua cidade; remotas, no Indeed de cada país que você escolheu.
+Em **Plataformas › Indeed › Entrar e conectar** abre uma janela do navegador do robô, identificada como do AutoCV, já na página de login: você entra na sua conta ali (senha, código, captcha — tudo com você; o AutoCV não vê nem guarda a senha). O app espera até 10 min, sem tempo fixo: assim que a página sai do login ele confere se a sessão ficou ativa e marca "Conectado"; dá para cancelar a qualquer momento. Se a sessão cair depois, o card mostra **"Sessão expirada"**, as vagas do Indeed param (as outras plataformas seguem) e você entra de novo pelo mesmo botão. O robô só considera vagas com **"Candidatar-se facilmente"**; as que levam ao site da empresa são descartadas na busca. Presenciais são buscadas no Indeed do seu país, com a sua cidade; remotas, no Indeed de cada país que você escolheu.
 
 O Indeed **bloqueia navegador oculto** e, depois de algumas páginas, pode pedir uma **verificação**. Por isso a janela sempre aparece, o robô faz poucas buscas (uma a cada 30 s, uma varredura automática por dia) e, se o Indeed bloquear ou pedir verificação, ele para e avisa: você pode resolver a verificação na janela; ele não tenta burlar. A candidatura pelo Indeed ainda não foi testada contra o site real — deixe o **modo ensaio** ligado na primeira vez.
+
+## Extensão do navegador (opcional)
+
+A pasta `extensao/` é uma extensão do Chrome/Edge que trabalha do outro lado: em vez de o robô abrir o site, ela olha as páginas de vaga que **você** abre, no seu navegador de sempre, com a sua sessão. Ela responde duas coisas e nada mais:
+
+- **esta plataforma exige conta?** — pelo que a própria página mostra (o botão de candidatura leva ao login, tem campo de senha, o formulário está ali mesmo). Quando não dá para saber, ela diz "não sei dizer" em vez de chutar;
+- **o que falta no seu perfil para candidatar aqui?** — lê o formulário sem preencher nada e cruza com o que você já cadastrou, listando os campos obrigatórios que ficariam em branco.
+
+Ela **não preenche, não clica e não envia** candidatura nenhuma — quem candidata continua sendo o robô. Plataforma que ela nunca viu já funciona pelo motor genérico, sem código novo; Indeed tem tratamento dedicado.
+
+Para instalar: em `chrome://extensions`, ligue o "Modo do desenvolvedor", clique em "Carregar sem compactação" e escolha a pasta `extensao/`. Depois abra o popup dela e cole o token que aparece em **Plataformas › Extensão do navegador** (o núcleo é um servidor local sem senha; o token impede que outra extensão fale com ele). O que ela encontrar aparece nessa mesma tela e no log.
 
 ## Descoberta de vagas
 

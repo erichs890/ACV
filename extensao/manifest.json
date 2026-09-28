@@ -1,0 +1,18 @@
+{
+  "manifest_version": 3,
+  "name": "AutoCV",
+  "version": "0.1.0",
+  "description": "Olha as páginas de vaga que você abre, diz se a plataforma exige conta e quais campos obrigatórios faltam no seu perfil. Não preenche nem envia nada.",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": ["http://127.0.0.1:4780/*"],
+  "background": { "service_worker": "fundo.js" },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["conteudo.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ],
+  "action": { "default_popup": "popup.html", "default_title": "AutoCV" }
+}

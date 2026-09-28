@@ -5,7 +5,8 @@ import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
 import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
-import { pretensaoEmReais } from '../inhire/formulario.ts';
+import type { Page } from 'playwright';
+import { melhorOpcao, pretensaoEmReais } from '../inhire/formulario.ts';
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
 import { ler } from '../../estado.ts';
@@ -145,13 +146,31 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
       log('info', 'Termos de consentimento marcados.');
     }
 
-    // 9. Modo ensaio: para antes de submeter
+    // 9. Perguntas da empresa. O adapter não as inventava: ia direto para o envio, e uma pergunta obrigatória
+    // como "tem disponibilidade para presencial 3x por semana no Rio?" ficava em branco (ou seria respondida
+    // por acidente). Agora ela passa pelo mesmo caminho das outras plataformas: resposta salva preenche;
+    // sem resposta, a vaga volta para a pessoa.
+    for (const q of await lerPerguntas(page)) {
+      const salva = dados.responder({ rotulo: q.rotulo, tipo: q.tipo, opcoes: q.opcoes, obrigatoria: q.obrigatoria });
+      if (salva === null) {
+        if (!q.obrigatoria) {
+          log('info', `Pergunta opcional sem resposta guardada, seguindo sem ela: "${q.rotulo.slice(0, 60)}".`);
+          continue;
+        }
+        log('aguardo', `"${q.rotulo.slice(0, 70)}" é da empresa e é obrigatória — o robô não responde isso por você.`);
+        return { status: 'pergunta', pergunta: { rotulo: q.rotulo, tipo: q.tipo, opcoes: q.opcoes, obrigatoria: true } };
+      }
+      await responderPergunta(page, q, salva);
+      log('info', `"${q.rotulo.slice(0, 55)}": ${salva.slice(0, 50)}.`);
+    }
+
+    // 10. Modo ensaio: para antes de submeter
     if (dados.ensaio) {
       log('info', 'Modo ensaio: formulário do Quickin preenchido sem submeter.');
       return { status: 'ensaio', captura: await captura('quickin-ensaio'), pronto: true };
     }
 
-    // 10. Submeter formulário
+    // 11. Submeter formulário
     const submitBtn = page.locator(QUICKIN.campos.submit).first();
     const btnAtivo = await submitBtn
       .waitFor({ state: 'visible', timeout: 5000 })
@@ -212,6 +231,59 @@ export function motivoDoErro(motivo: string, envioTentado: boolean, recusa: stri
   if (recusa) return recusa;
   if (envioTentado) return `${motivo} — o envio chegou a ser disparado; revise no portal da empresa antes de reenviar`;
   return motivo;
+}
+
+/** Uma pergunta da empresa lida do formulário do Quickin. */
+interface PerguntaQuickin {
+  id: string;
+  rotulo: string;
+  tipo: 'texto' | 'opcoes';
+  opcoes?: string[];
+  obrigatoria: boolean;
+}
+
+/** As perguntas da empresa que estão na tela, com rótulo, tipo e opções — lidas do DOM, nunca supostas. */
+export async function lerPerguntas(page: Page): Promise<PerguntaQuickin[]> {
+  return page.evaluate(sel => {
+    const vistos = new Set<string>();
+    const saida: { id: string; rotulo: string; tipo: 'texto' | 'opcoes'; opcoes?: string[]; obrigatoria: boolean }[] = [];
+    for (const el of document.querySelectorAll<HTMLInputElement>(sel)) {
+      // "radio-yes-questio-job_question_X" e "radio-no-..." são a mesma pergunta
+      const chave = (el.id.match(/job_question_[0-9a-zA-Z]+/) ?? [''])[0];
+      if (!chave || vistos.has(chave)) continue;
+      vistos.add(chave);
+      const grupo = el.closest('.form-group') ?? el.parentElement?.parentElement ?? el;
+      const rotuloEl = grupo.querySelector('label');
+      const rotulo = (rotuloEl?.textContent ?? '')
+        .replace(/\s*\*\s*$/, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+      const radios = [...grupo.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+      const opcoes = radios.map(r => {
+        const lab = r.id ? document.querySelector(`label[for="${CSS.escape(r.id)}"]`) : null;
+        return (lab?.textContent ?? r.value ?? '').replace(/\s+/g, ' ').trim();
+      });
+      saida.push({
+        id: chave,
+        rotulo: rotulo || chave,
+        tipo: radios.length ? 'opcoes' : 'texto',
+        opcoes: radios.length ? opcoes : undefined,
+        obrigatoria: !!grupo.querySelector('[title="Campo obrigatório"]') || el.required,
+      });
+    }
+    return saida;
+  }, QUICKIN.campos.perguntas);
+}
+
+/** Escreve a resposta na pergunta: radio casa pela opção, texto vai direto. */
+async function responderPergunta(page: Page, q: PerguntaQuickin, resposta: string): Promise<void> {
+  if (q.tipo === 'opcoes' && q.opcoes?.length) {
+    const k = melhorOpcao(q.opcoes, resposta);
+    if (k < 0) throw new Error(`a resposta guardada "${resposta}" não bate com as opções de "${q.rotulo.slice(0, 50)}"`);
+    await page.locator(`[id*="${q.id}"][type="radio"]`).nth(k).check({ force: true });
+    return;
+  }
+  await page.locator(`[id*="${q.id}"]`).first().fill(resposta);
 }
 
 export const quickin: PlatformAdapter = {

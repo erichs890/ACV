@@ -39,6 +39,8 @@ export const INDEED = {
   botaoCandidatar: '#indeedApplyButton, button[id*="indeedApply"], [data-testid*="indeedApply"] button',
   textoCandidatar: /candidat[ae]r?-se (facilmente|agora)|candidatura simplificada|apply now|easily apply/i,
   login: /secure\.indeed\.com\/(auth|account)|\/account\/login/i,
+  // Link de entrar do cabeçalho deslogado: "Acessar" em pt-BR (visto ao vivo; nenhum seletor de href o pegava, por isso texto)
+  textoEntrar: /^\s*(acessar|entrar|sign in|log ?in)\s*$/i,
 
   // Motor de formulário: botões e confirmação do fluxo "Candidatar-se facilmente" (NÃO verificado ao vivo)
   convencoes: {

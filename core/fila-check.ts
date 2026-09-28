@@ -401,6 +401,24 @@ assert.equal(enviadas(), 1, 'o ensaio não contava como envio; agora existe uma 
 assert.throws(() => candidatarAgora(ensaiada), /já se candidatou/);
 console.log('✓ Vaga ensaiada volta à fila ao desligar o ensaio (e nunca com ele ligado)');
 
+// ─── 12) Varredura agendada vale para QUALQUER plataforma conectada ──────────────────────────────
+// Era um `else if` por plataforma; adapter novo que esquecesse de entrar na cadeia ficava sem varredura
+// agendada (aconteceu com Quickin, Workable e Arbeitnow, que só varriam de carona com o InHire).
+const { plataformaVencida, algumaPlataformaVencida } = await import('./queue.ts');
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString() } });
+assert.ok(plataformaVencida('teste', 6), 'plataforma que nunca varreu está vencida');
+assert.ok(algumaPlataformaVencida(6), 'com uma conectada e nunca varrida, a varredura tem de rolar');
+kv.set('teste:ultimaBusca', new Date().toISOString());
+assert.ok(!plataformaVencida('teste', 6), 'acabou de varrer: não vence de novo agora');
+assert.ok(!algumaPlataformaVencida(6));
+kv.set('teste:ultimaBusca', new Date(Date.now() - 7 * 3600_000).toISOString());
+assert.ok(algumaPlataformaVencida(6), 'passadas as horas do intervalo, vence de novo');
+// InHire e Indeed têm agenda própria e não entram por aqui
+kv.set('conexoes', { inhire: { conectadaEm: new Date().toISOString() }, indeed: { conectadaEm: new Date().toISOString() } });
+assert.ok(!algumaPlataformaVencida(6), 'InHire e Indeed têm agenda própria; não podem disparar por esta regra');
+console.log('✓ Varredura agendada: regra única, serve para qualquer adapter novo');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');

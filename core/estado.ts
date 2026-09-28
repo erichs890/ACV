@@ -4,6 +4,7 @@ import { emitir } from './events.ts';
 import { iaParaFront } from './ia.ts';
 import { descobertaParaFront } from './platforms/inhire/discovery.ts';
 import { SENSIVEIS_PADRAO, type ConfigSensiveis } from '../src/sensiveis.ts';
+import { lerDeteccoes } from './extensao.ts';
 import { PAISES_REMOTO_PADRAO, type PreferenciasLocalizacao } from '../src/paises.ts';
 
 export const AUTOMACAO_PADRAO: ConfigAutomacao = {
@@ -103,6 +104,7 @@ export function montarEstado(): Estado {
     log: log.listar(),
     perguntas: ler.perguntas(),
     sensiveis: ler.sensiveis(),
+    deteccoes: lerDeteccoes(),
     notificacoes: ler.notificacoes(),
     proximoEnvioEm: ler.proximoEnvioEm(),
     ultimaBusca: ler.ultimaBusca(),
