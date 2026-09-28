@@ -99,6 +99,16 @@ const configurado = calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil
 assert.ok(configurado.score > pleno.score && /senioridade ok/.test(configurado.motivo), `senioridade configurada deve sobrepor a do currículo: ${configurado.score} (${configurado.motivo})`);
 console.log(`✓ Senioridade: júnior ${junior.score} · pleno ${pleno.score} · sênior ${senior.score}`);
 
+// Rigor de senioridade: "só Pleno" é corte, não desconto
+const soPleno = { senioridade: 'Pleno', senioridadeRigida: true };
+assert.equal(calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil, soPleno).score, 0, 'com rigor, vaga de outro nível é zerada');
+assert.equal(calcularScore({ ...VAGA, titulo: `${BASE} Júnior` }, perfil, soPleno).score, 0, 'inclusive um nível abaixo');
+assert.ok(calcularScore({ ...VAGA, titulo: `${BASE} Pleno` }, perfil, soPleno).score > 0, 'o nível pedido continua passando');
+// Vaga que não diz o nível não pode ser cortada: o anúncio não declarou, o robô não inventa
+assert.ok(calcularScore({ ...VAGA, titulo: BASE }, perfil, soPleno).score > 0, 'vaga sem nível declarado escapa do corte');
+assert.ok(/só Pleno/.test(calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil, soPleno).motivo), 'o motivo diz de onde veio o corte');
+console.log('✓ Rigor de senioridade: só o nível escolhido passa, e vaga sem nível declarado continua na lista');
+
 // 3c) Localização: presencial/híbrida pela cidade, remota pelos países escolhidos
 const { lerLocal } = await import('./resume/score.ts');
 assert.deepEqual(lerLocal('São Paulo - SP'), { cidade: 'sao paulo', uf: 'SP' });

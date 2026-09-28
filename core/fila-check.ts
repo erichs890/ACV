@@ -374,6 +374,22 @@ assert.equal(enfileirarCompativeis('teste'), 1, 'conexão sem o campo `enviar` c
 assert.equal(st(semCampo), 'na_fila');
 console.log('✓ Filtro por portal: envio desligado tira da fila, mantém na lista e não bloqueia o envio manual');
 
+// Bug real (28/09/2026): InHire desmarcado em Automação e o robô mandou currículo para três vagas do InHire —
+// elas já estavam `na_fila` de antes, e o foco só era checado na ENTRADA da fila. Agora vale no ponto de uso.
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const jaNaFila = enfileirar();
+assert.equal(st(jaNaFila), 'na_fila');
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: false } }); // desmarcou DEPOIS
+await processarProxima();
+assert.equal(chamadas.get(jaNaFila), undefined, 'vaga de plataforma fora do foco não pode ser enviada');
+assert.equal(st(jaNaFila), 'encontrada', 'e tem de sair da fila, não ficar presa nela');
+// Marcar de novo devolve a vaga à fila pelo caminho normal
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+assert.equal(enfileirarCompativeis('voltou ao foco'), 1);
+assert.equal(st(jaNaFila), 'na_fila');
+console.log('✓ Fora do foco: vaga que já estava na fila sai dela e não é enviada');
+
 // ─── 11) Vaga ensaiada volta para a fila quando o ensaio é desligado ─────────────────────────────
 // Caso real (23/09/2026): ensaio já desligado, modo automático, e 13 vagas presas em `ensaio` — entre elas as
 // 8 de maior compatibilidade da lista. A fila só aceitava `encontrada` e nada jamais tirava a vaga de `ensaio`.

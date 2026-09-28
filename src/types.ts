@@ -120,6 +120,12 @@ export interface ConfigAutomacao {
   scoreMinimo: number; // 0–100
   cargoRigido: boolean; // só vagas da mesma função que a sua passam com nota cheia
   /**
+   * Só vagas do seu nível exato. Escolheu Pleno: vaga que pede Júnior ou Sênior é zerada e sai da lista.
+   * Vaga que NÃO diz o nível continua passando — o robô não tem como inventar o que o anúncio não escreveu,
+   * e cortá-las apagaria metade do mercado.
+   */
+  senioridadeRigida: boolean;
+  /**
    * Nichos que você não quer, mesmo sendo da sua função: "sap", "salesforce", "cobol"...
    * Vaga com um destes termos no TÍTULO é zerada e sai da lista. Só o título de propósito — uma vaga
    * full stack que cita SAP numa linha de integração não é uma vaga de SAP.
@@ -223,6 +229,7 @@ export interface Vaga {
   adaptado?: { markdown: string; diff: string[]; viaIA: boolean; pdf?: string }; // última adaptação gerada para esta vaga
   status: StatusVaga;
   posicao?: number;
+  pedidaPorVoce?: boolean; // você clicou em "Candidatar": nenhum filtro do robô (foco, score) tira esta da fila
   pendencia?: Pendencia;
   erro?: string;
   captura?: string; // captura de tela (ensaio/erro)

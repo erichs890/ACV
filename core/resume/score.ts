@@ -15,6 +15,7 @@ export interface FiltrosScore {
   senioridade?: string; // senioridade escolhida na Automação (sobrepõe a do currículo)
   localizacao?: PreferenciasLocalizacao; // cidade (presencial/híbrida) e países (remota) que a pessoa aceita
   cargoRigido?: boolean; // true = vaga com cargo fora da sua função é cortada com força
+  senioridadeRigida?: boolean; // true = só o seu nível exato passa (vaga sem nível declarado continua passando)
   excluir?: string[]; // nichos que a pessoa não quer, mesmo sendo da função dela (Configurações)
 }
 
@@ -96,6 +97,11 @@ export function calcularScore(
   // Um nível acima é ambição normal e a vaga costuma aceitar: quase não penaliza. Dois ou mais acima você
   // não alcança; dois abaixo é regressão de carreira (um Pleno não deveria disputar estágio).
   const fatorSenioridade = !senioridadeConhecida ? 1 : degraus >= 2 ? 0.35 : degraus === 1 ? 0.9 : degraus <= -2 ? 0.5 : 1;
+  // Rigor de senioridade é corte, não desconto: quem pediu "só Pleno" não quer ver Sênior com nota menor,
+  // quer não ver. Vaga que não declara o nível (`Indefinida`) escapa do corte de propósito.
+  if (filtros.senioridadeRigida && senioridadeConhecida && degraus !== 0) {
+    return { score: 0, motivo: `pede ${nivelVaga} e você marcou "só ${nivelCv}" (Configurações › Rigor de senioridade)` };
+  }
 
   // Localização é regra compartilhada (core/localizacao.ts): fora do estado/país zera, outra cidade do estado
   // perde 40%, remota restrita a país não escolhido zera. Vale para InHire, Indeed e o que vier depois.

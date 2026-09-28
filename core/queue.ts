@@ -176,6 +176,21 @@ export async function buscarVagas(manual = false): Promise<number> {
   return novas.length;
 }
 
+/**
+ * Um aviso explicativo só sai quando muda de verdade.
+ *
+ * O laço da fila roda a cada 20 s e reenfileira: a mesma linha ("60 vagas ficaram de fora") apareceu 13 vezes
+ * em 5 minutos num caso real e empurrou para fora do log as linhas das candidaturas, que era o que importava.
+ */
+const avisosDados = new Map<string, number>();
+const JANELA_AVISO_MS = 30 * 60_000;
+function avisoNovo(chave: string): boolean {
+  const agora = Date.now();
+  if ((avisosDados.get(chave) ?? 0) > agora - JANELA_AVISO_MS) return false;
+  avisosDados.set(chave, agora);
+  return true;
+}
+
 // Status que já ocupam uma vaga de trabalho do robô (não podem ser enfileirados de novo nem contar duas vezes)
 const NA_FILA: Vaga['status'][] = ['na_fila', 'em_andamento', 'aguardando_pergunta', 'aguardando_aprovacao'];
 
@@ -187,7 +202,61 @@ const modeloAceito = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => v.model
  * Vale só para a fila automática: clicar em "Candidatar" numa vaga é um ato seu, e um filtro do robô não
  * manda em você. Conexão sem o campo = pode, para as conexões criadas antes disto continuarem funcionando.
  */
-export const plataformaEnviaCurriculo = (v: Vaga) => ler.conexoes()[v.plataforma]?.enviar !== false && sessaoValida(v.plataforma);
+export const plataformaEnviaCurriculo = (v: Vaga) => plataformaNoFoco(v.plataforma) && sessaoValida(v.plataforma);
+
+/**
+ * A plataforma está no foco da automação? (Automação › quais plataformas entram na fila.)
+ *
+ * Separado de `plataformaEnviaCurriculo` de propósito: foco é escolha do usuário e vale na hora do envio;
+ * sessão vencida é uma situação passageira, que segura a vaga na fila até o login, sem tirá-la de lá.
+ */
+export const plataformaNoFoco = (id: string) => ler.conexoes()[id]?.enviar !== false;
+
+/**
+ * Devolve para "encontrada" as vagas que estão na fila mas cuja plataforma saiu do foco.
+ *
+ * O filtro de foco só existia na ENTRADA da fila (`enfileirarCompativeis`). Quem já estava na fila continuava
+ * sendo enviado: desmarcar o InHire com três vagas dele enfileiradas não impedia nada — o robô mandava as três
+ * assim mesmo. Caso real do usuário. Filtro que vale num ponto do ciclo de vida e não no ponto de uso é mentira.
+ *
+ * Volta para "encontrada" (e não para um status novo): marcar a plataforma de novo devolve a vaga à fila pelo
+ * caminho normal, sem nada especial para desfazer.
+ */
+/**
+ * Candidatura que ficou em `em_andamento` sem ninguém tocando nela (o núcleo caiu ou foi fechado no meio).
+ *
+ * Caso real (28/09/2026): o Vagas PJ clicou em "Candidatar", dispensou o anúncio, e a vaga ficou `em_andamento`
+ * para sempre — a fila seguiu adiante e ninguém mais olhou para ela.
+ *
+ * NÃO volta para a fila: o envio pode ter chegado ao servidor sem o robô ver a resposta, e reenviar seria o
+ * segundo currículo na mesa do mesmo recrutador (invariante 4). Vira `erro` com a dúvida escrita, para você
+ * decidir — o botão "Candidatar" continua ali se quiser tentar de novo.
+ */
+export function resgatarInterrompidas(): number {
+  const presas = vagas.listar().filter(v => v.status === 'em_andamento');
+  for (const v of presas) {
+    vagas.atualizar(v.id, {
+      status: 'erro',
+      pedidaPorVoce: undefined,
+      posicao: undefined,
+      erro: 'o robô foi interrompido no meio desta candidatura — confira no site se ela entrou antes de tentar de novo',
+    });
+    registrar('alerta', `"${v.titulo}" ficou pela metade quando o robô parou. Não reenviei por conta própria: confira no site se a candidatura entrou.`);
+  }
+  if (presas.length) emitir({ tipo: 'estado' });
+  return presas.length;
+}
+
+export function limparForaDoFoco(): number {
+  const fora = vagas.listar().filter(v => NA_FILA.includes(v.status) && !v.pedidaPorVoce && !plataformaNoFoco(v.plataforma));
+  for (const v of fora) vagas.atualizar(v.id, { status: 'encontrada', pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
+  if (fora.length) {
+    const nomes = [...new Set(fora.map(v => v.plataforma))].join(', ');
+    registrar('alerta', `${fora.length} vaga(s) saíram da fila: ${nomes} está fora do foco da automação. Elas voltam se você marcar a plataforma de novo.`);
+    emitir({ tipo: 'estado' });
+  }
+  return fora.length;
+}
 
 /**
  * Vaga que a fila pode pegar.
@@ -259,7 +328,7 @@ export function enfileirarCompativeis(motivo: string): number {
   if (!candidatas.length) {
     // "liguei o robô e a fila continua vazia": se o que barrou foi o filtro de plataformas, diga isso
     const barradas = todas.filter(v => podeEntrarNaFila(v, cfg) && v.score >= cfg.scoreMinimo && modeloAceito(v, cfg) && !jaCandidatado(v) && !plataformaEnviaCurriculo(v));
-    if (barradas.length)
+    if (barradas.length && avisoNovo(`barradas:${barradas.length}`))
       registrar(
         'info',
         barradas.some(v => !sessaoValida(v.plataforma))
@@ -268,7 +337,8 @@ export function enfileirarCompativeis(motivo: string): number {
       );
     // Ensaiadas esperando o ensaio ser desligado: é a explicação mais provável para "tenho vaga boa e a fila não anda"
     const ensaiadas = todas.filter(v => v.status === 'ensaio' && v.score >= cfg.scoreMinimo && !jaCandidatado(v));
-    if (cfg.ensaio && ensaiadas.length) registrar('info', `${ensaiadas.length} vaga(s) já ensaiada(s) esperam o modo ensaio ser desligado para entrarem na fila de verdade.`);
+    if (cfg.ensaio && ensaiadas.length && avisoNovo(`ensaiadas:${ensaiadas.length}`))
+      registrar('info', `${ensaiadas.length} vaga(s) já ensaiada(s) esperam o modo ensaio ser desligado para entrarem na fila de verdade.`);
     return 0;
   }
   if (restantes <= 0) {
@@ -301,14 +371,14 @@ export function candidatarAgora(id: string) {
   if (!v) throw new Error('vaga não encontrada');
   if (jaEnviada(id)) throw new Error('você já se candidatou a esta vaga');
   if (jaCandidatado(v)) throw new Error(`você já se candidatou a "${v.titulo}" em ${v.empresa} (outra publicação da mesma vaga)`);
-  vagas.atualizar(id, { status: 'na_fila', posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
+  vagas.atualizar(id, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
   void processarProxima(true);
 }
 
 export function removerDaFila(id: string) {
-  vagas.atualizar(id, { status: 'encontrada', posicao: undefined, pendencia: undefined });
+  vagas.atualizar(id, { status: 'encontrada', pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
   emitir({ tipo: 'estado' });
 }
 
@@ -544,6 +614,7 @@ async function girarFila(forcar: boolean) {
       }
       ultimaEspera = '';
     }
+    limparForaDoFoco(); // o foco pode ter mudado depois que a vaga entrou na fila
     const proxima = vagas.proximaNaFila();
     if (!proxima) {
       await liberarNavegador();

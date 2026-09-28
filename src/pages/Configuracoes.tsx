@@ -253,7 +253,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
     e.preventDefault();
     const dados = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
     // senioridade/área/rigor moram na automação (o score usa); cargo, cidade e países ficam no perfil
-    const { regimePreferido, senioridade, area, cargoRigido, buscaPais: _fora, ...perfil } = dados;
+    const { regimePreferido, senioridade, area, cargoRigido, senioridadeRigida, buscaPais: _fora, ...perfil } = dados;
     await salvar({
       perfil: { ...p, ...(perfil as unknown as Perfil), paisesRemoto: paises },
       automacao: {
@@ -262,6 +262,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
         senioridade,
         area,
         cargoRigido: cargoRigido === 'sim',
+        senioridadeRigida: senioridadeRigida === 'sim',
         excluir,
       },
     });
@@ -357,6 +358,12 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
                   {a}
                 </option>
               ))}
+            </select>
+          </Campo>
+          <Campo label="Rigor de senioridade" ajuda="Rígido corta quem pede outro nível. Vaga que não declara o nível continua aparecendo.">
+            <select name="senioridadeRigida" defaultValue={estado.automacao.senioridadeRigida ? 'sim' : 'nao'} className="field">
+              <option value="nao">Equilibrado — um nível acima ou abaixo ainda conta</option>
+              <option value="sim">Rígido — só vagas de {estado.automacao.senioridade || 'o meu nível'}</option>
             </select>
           </Campo>
           <Campo label="Rigor na função" ajuda="Rígido mantém o mundo da tecnologia (dev, IA, QA, dados, segurança) e corta o resto.">

@@ -54,6 +54,10 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   let envioAceito = false;
   let envioTentado = false;
   let recusa = '';
+  // O corpo da resposta recusada. "HTTP 400" sozinho não dá para consertar nada: o Quickin diz ali qual campo
+  // faltou, e sem isto a falha de um envio real (elaw, 28/09/2026) não ensinava nada. Guardado como promessa
+  // porque o `response` é ouvinte síncrono e `res.text()` não é.
+  let corpoDaRecusa: Promise<string> | null = null;
   const ehEnvio = (url: string, metodo: string) => QUICKIN.rotaEnvio.test(url) && metodo.toUpperCase() === 'POST';
 
   page.on('dialog', d => void d.dismiss().catch(() => {}));
@@ -62,8 +66,10 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   });
   page.on('response', res => {
     if (!ehEnvio(res.url(), res.request().method())) return;
-    if (res.status() >= 400) recusa = `o Quickin recusou a candidatura (HTTP ${res.status()})`;
-    else if (!envioAceito) {
+    if (res.status() >= 400) {
+      recusa = `o Quickin recusou a candidatura (HTTP ${res.status()})`;
+      corpoDaRecusa = res.text().catch(() => '');
+    } else if (!envioAceito) {
       envioAceito = true;
       log('sucesso', `O Quickin aceitou a candidatura (HTTP ${res.status()} em /apply).`);
     }
@@ -193,7 +199,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
         .catch(() => false);
     }
 
-    if (recusa) return { status: 'erro', motivo: recusa, captura: await captura('quickin-recusa') };
+    if (recusa) return { status: 'erro', motivo: await detalhar(recusa, corpoDaRecusa, log), captura: await captura('quickin-recusa') };
     if (envioAceito) return { status: 'enviada' };
 
     const naTela = await page.evaluate(() => document.body.innerText).catch(() => '');
@@ -225,6 +231,17 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   } finally {
     await page.close().catch(() => {});
   }
+}
+
+/**
+ * Junta ao "HTTP 400" o que o servidor escreveu. Sem isto a única pista de um envio recusado era o número, e
+ * o número não diz que faltou o CEP.
+ */
+async function detalhar(recusa: string, corpo: Promise<string> | null, log: (t: 'info' | 'alerta', m: string) => void): Promise<string> {
+  const texto = (await (corpo ?? Promise.resolve(''))).replace(/\s+/g, ' ').trim();
+  if (!texto) return recusa;
+  log('alerta', `Resposta do Quickin à recusa: ${texto.slice(0, 300)}`);
+  return `${recusa}: ${texto.slice(0, 160)}`;
 }
 
 export function motivoDoErro(motivo: string, envioTentado: boolean, recusa: string): string {

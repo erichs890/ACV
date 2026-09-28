@@ -26,6 +26,7 @@ export const AUTOMACAO_PADRAO: ConfigAutomacao = {
   navegador: 'edge',
   scoreMinimo: 30,
   cargoRigido: false,
+  senioridadeRigida: false,
   excluir: [],
   presencialSoNaMinhaCidade: true,
   modoPerguntas: 'manual',
@@ -43,6 +44,7 @@ export const filtrosDaAutomacao = (cfg: ConfigAutomacao, localizacao: Preferenci
   cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
   senioridade: cfg.senioridade,
   cargoRigido: cfg.cargoRigido,
+  senioridadeRigida: cfg.senioridadeRigida,
   excluir: cfg.excluir,
   localizacao,
 });

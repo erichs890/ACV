@@ -13,10 +13,25 @@ import './platforms/workable/index.ts';
 import './platforms/quickin/index.ts';
 import './platforms/arbeitnow/index.ts';
 import { PORTA, DIRS } from './config.ts';
+import { abrirDiario, caminhoDoDia, DIR_DIARIO } from './diario.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';
 import { ler, montarEstado, salvarParcial } from './estado.ts';
-import { buscarVagas, candidatarAgora, decidirPreview, enfileirarCompativeis, iniciarLaco, ligarRobo, limparDuplicatasDaFila, removerDaFila, repontuar, repontuarComIA, responder } from './queue.ts';
+import {
+  buscarVagas,
+  candidatarAgora,
+  decidirPreview,
+  enfileirarCompativeis,
+  iniciarLaco,
+  ligarRobo,
+  limparDuplicatasDaFila,
+  limparForaDoFoco,
+  removerDaFila,
+  repontuar,
+  repontuarComIA,
+  resgatarInterrompidas,
+  responder,
+} from './queue.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
 import { markdownParaPdf } from './resume/mdToPdf.ts';
@@ -99,6 +114,16 @@ function migrarPerfilBusca(): boolean {
 
 const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL) => Promise<void> | void> = {
   'GET /estado': (_r, res) => json(res, 200, montarEstado()),
+  // O diário completo do dia, em texto puro: é o que se abre no navegador ou se cola numa conversa quando algo
+  // deu errado. `?dia=2026-09-27` pega um dia anterior (ficam 14). A tela guarda 300 linhas; o diário, tudo.
+  'GET /diario': (_r, res, url) => {
+    const dia = url.searchParams.get('dia') ?? '';
+    if (dia && !/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/.test(dia)) return json(res, 400, { erro: 'dia inválido (use AAAA-MM-DD)' });
+    const alvo = dia ? join(DIR_DIARIO, `autocv-${dia}.log`) : caminhoDoDia();
+    if (!existsSync(alvo)) return json(res, 404, { erro: 'nenhum diário para este dia' });
+    res.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+    res.end(readFileSync(alvo));
+  },
   'POST /estado': async (req, res) => {
     const parcial = JSON.parse((await corpo(req)).toString('utf8')) as Partial<Estado>;
     const antes = ler.automacao();
@@ -112,6 +137,12 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     // Trocou para automático (ou mexeu nos filtros/limite) com o robô ligado: a fila é reavaliada na hora,
     // senão salvar a configuração não teria efeito nenhum até a próxima varredura.
     if (a && (filtrosMudaram || a.modo !== antes.modo || a.regimes.join() !== antes.regimes.join() || a.limiteDiario !== antes.limiteDiario)) enfileirarCompativeis('configuração salva');
+    // Mexeu no foco das plataformas: a fila obedece na hora, nos dois sentidos — desmarcou, sai da fila;
+    // marcou, volta. Sem isto a tela dizia uma coisa ("InHire fora") e a fila continuava com as vagas dele.
+    if (parcial.conexoes) {
+      limparForaDoFoco();
+      enfileirarCompativeis('foco das plataformas');
+    }
     json(res, 200, montarEstado());
   },
   // Login manual assistido (qualquer plataforma com `adapter.sessao`): a pessoa entra na janela do robô; o AutoCV
@@ -394,6 +425,8 @@ createServer(async (req, res) => {
   }
 }).listen(PORTA, '127.0.0.1', () => {
   console.log(`AutoCV núcleo em http://localhost:${PORTA} — dados em ${DIRS.curriculos.replace(/[\\/]curriculos$/, '')}`);
+  abrirDiario(`porta ${PORTA}`);
+  console.log(`Diário do robô: ${caminhoDoDia()}`);
   migrarTenantsAntigos(registrar);
   migrarModelo(registrar);
   if (ler.conexoes().inhire) importarSeed(registrar);
@@ -407,7 +440,17 @@ createServer(async (req, res) => {
   // Higiene da fila na subida: publicação repetida da mesma vaga pode ter entrado antes desta regra existir,
   // e com o robô pausado o enfileiramento (que também limpa) nem roda.
   limparDuplicatasDaFila();
+  resgatarInterrompidas(); // candidatura que ficou pela metade: fica visível, nunca reenviada às escondidas
+  limparForaDoFoco(); // o foco pode ter mudado com o núcleo desligado
   iniciarLaco();
+});
+
+// Erro que ninguem pegou e justamente o que faz falta depois. Some no console e o processo morre sem deixar
+// rastro; no diario ele fica, com pilha, para a proxima analise.
+process.on('unhandledRejection', (e: unknown) => registrar('erro', `promessa sem tratamento: ${((e as Error)?.stack ?? String(e)).slice(0, 900)}`));
+process.on('uncaughtException', (e: Error) => {
+  registrar('erro', `erro fatal: ${(e.stack ?? e.message).slice(0, 900)}`);
+  process.exit(1); // mesmo desfecho de antes; a diferenca e que agora ficou escrito
 });
 
 process.on('SIGINT', async () => {
