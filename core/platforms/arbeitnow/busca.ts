@@ -1,6 +1,7 @@
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
 import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
+import { passo, vistas } from '../../varredura.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { extrairSkills } from '../../resume/texto.ts';
 import { filtrosDaAutomacao } from '../../estado.ts';
@@ -106,6 +107,7 @@ export async function buscarNoArbeitnow(perfil: PerfilBusca, cfg: ConfigAutomaca
   const novas: Vaga[] = [];
 
   try {
+    passo('consultando a API pública');
     log('info', 'Arbeitnow: consultando API pública...');
     const resp = await fetch(ARBEITNOW.api, {
       headers: {
@@ -125,9 +127,11 @@ export async function buscarNoArbeitnow(perfil: PerfilBusca, cfg: ConfigAutomaca
 
     const json = (await resp.json()) as ArbeitnowApiResponse;
     const lista = json.data || [];
+    vistas(lista.length);
     log('info', `Arbeitnow: ${lista.length} vaga(s) recebidas da API.`);
 
-    for (const raw of lista) {
+    for (const [n, raw] of lista.entries()) {
+      passo('avaliando as vagas recebidas', n + 1, lista.length);
       if (novas.length >= MAX_VAGAS_POR_VARREDURA) break;
       if (!raw.slug) continue;
 

@@ -4,6 +4,7 @@ import { candidaturas, empresas, kv, log, vagas } from './storage/db.ts';
 import { emitir } from './events.ts';
 import { iaParaFront } from './ia.ts';
 import { descobertaParaFront } from './platforms/inhire/discovery.ts';
+import { lerVarredura } from './varredura.ts';
 import { SENSIVEIS_PADRAO, type ConfigSensiveis } from '../src/sensiveis.ts';
 import { lerDeteccoes } from './extensao.ts';
 import { PAISES_REMOTO_PADRAO, type PreferenciasLocalizacao } from '../src/paises.ts';
@@ -114,6 +115,7 @@ export function montarEstado(): Estado {
     ia: iaParaFront(),
     empresas: empresas.listar(),
     descoberta: descobertaParaFront(),
+    varredura: lerVarredura(),
     robo: ler.robo(),
     envios,
     candidaturas: lista,

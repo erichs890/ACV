@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
+  CircleCheck,
   ExternalLink,
   FileDown,
   FileText,
@@ -19,7 +20,7 @@ import {
   Terminal,
   X,
 } from 'lucide-react';
-import type { LinhaLog, Vaga } from '../types';
+import type { LinhaLog, ProgressoVarredura, Vaga } from '../types';
 import Panel from '../components/Panel';
 import VerMais from '../components/VerMais';
 import { BotaoSalvar } from '../components/BotaoSalvar';
@@ -113,6 +114,8 @@ export default function Automacao() {
   const abertas = estado.vagas.filter(v => v.status !== 'encerrada');
   // Vaga já enviada sai da lista: o trabalho com ela acabou, e ficar olhando currículo que já foi só atrapalha
   // quem procura o que ainda falta. O histórico completo fica no Painel, em "Últimas candidaturas".
+  const v = estado.varredura;
+  const varrendo = v.rodando || estado.descoberta.varrendo;
   const noFoco = (v: Vaga) => plataformaNoFoco(estado.conexoes, v.plataforma);
   // Plataforma fora do foco sai da lista junto com a fila: focar sem limpar a tela não seria foco nenhum.
   // Nada é apagado — o rodapé tem um botão para mostrá-las.
@@ -208,9 +211,9 @@ export default function Automacao() {
               {estado.automacao.ensaio && ' · modo ensaio (nada é enviado)'}
             </p>
           </div>
-          <button type="button" className="btn btn-secondary" disabled={buscando || estado.descoberta.varrendo} onClick={buscar}>
+          <button type="button" className="btn btn-primary" disabled={buscando || varrendo} onClick={buscar}>
             <Search size={16} aria-hidden />
-            {estado.descoberta.varrendo ? 'Varrendo...' : 'Buscar vagas agora'}
+            {varrendo ? 'Procurando...' : 'Procurar vagas'}
           </button>
           {/* O score por competências conta palavras; a IA lê o currículo e a vaga e separa função de função */}
           <button
@@ -297,6 +300,8 @@ export default function Automacao() {
             </div>
           </div>
         )}
+
+        {(varrendo || v.feitas.length > 0) && <PainelVarredura varredura={v} />}
 
         <Panel
           icon={Target}
@@ -1025,5 +1030,81 @@ function Passo({ n, titulo, children }: { n: number; titulo: string; children: R
       </legend>
       {children}
     </fieldset>
+  );
+}
+
+/**
+ * O que está acontecendo durante a varredura, plataforma por plataforma.
+ *
+ * Antes só o InHire dava sinal de vida, e numa tela diferente do botão que dispara a busca: clicar em
+ * "Procurar vagas" parecia não fazer nada por minutos. `conhecidas` é o número que responde à pergunta
+ * "clicar de novo vai repetir vaga?" — ele mostra, a cada rodada, quantas o robô já tinha e não regravou.
+ */
+function PainelVarredura({ varredura }: { varredura: ProgressoVarredura }) {
+  const { rodando, plataforma, etapa, atual, total, feitas, restantes, novas, conhecidas } = varredura;
+  const nome = (id: string) => PLATAFORMAS.find(p => p.id === id)?.nome ?? id;
+  const percentual = total > 0 ? Math.round((atual / total) * 100) : null;
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-panel-border bg-panel p-3.5">
+      <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+        <p className="text-[13px] font-bold">
+          {rodando ? (
+            <>
+              Procurando em <span className="text-blue-dark">{nome(plataforma)}</span>
+              {etapa && <span className="font-normal text-ink-soft"> — {etapa}</span>}
+            </>
+          ) : (
+            'Varredura concluída'
+          )}
+        </p>
+        <p className="text-[11px] text-ink-soft tabular-nums">
+          <strong className="text-green-deep">{novas}</strong> vaga(s) nova(s)
+          {conhecidas > 0 && <> · {conhecidas} que o robô já tinha (não duplicadas)</>}
+        </p>
+      </div>
+
+      {rodando && (
+        <div
+          role="progressbar"
+          aria-label={`Varrendo ${nome(plataforma)}`}
+          aria-valuemin={0}
+          aria-valuemax={total || undefined}
+          aria-valuenow={percentual === null ? undefined : atual}
+          className="h-1.5 w-full overflow-hidden rounded-full bg-page-bg"
+        >
+          {/* Sem total conhecido a barra não pode fingir uma porcentagem: vira uma faixa que anda */}
+          <div
+            className={percentual === null ? 'h-full w-1/3 animate-pulse rounded-full bg-blue-dark' : 'h-full rounded-full bg-blue-dark transition-all'}
+            style={percentual === null ? undefined : { width: `${percentual}%` }}
+          />
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-1.5">
+        {feitas.map(id => (
+          <span key={id} className="inline-flex items-center gap-1 rounded-[9px] border border-panel-border bg-page-bg px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+            <CircleCheck size={10} aria-hidden />
+            {nome(id)}
+          </span>
+        ))}
+        {rodando && plataforma && (
+          <span className="inline-flex items-center gap-1 rounded-[9px] bg-blue-dark px-2 py-0.5 text-[10px] font-bold text-white">
+            {nome(plataforma)}
+            {total > 0 && (
+              <span className="tabular-nums">
+                {' '}
+                {atual}/{total}
+              </span>
+            )}
+          </span>
+        )}
+        {restantes.map(id => (
+          <span key={id} className="rounded-[9px] border border-dashed border-panel-border px-2 py-0.5 text-[10px] font-bold text-ink-soft opacity-60">
+            {nome(id)}
+          </span>
+        ))}
+      </div>
+    </div>
   );
 }

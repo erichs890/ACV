@@ -1,6 +1,7 @@
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
 import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
+import { passo } from '../../varredura.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { extrairSkills } from '../../resume/texto.ts';
 import { filtrosDaAutomacao } from '../../estado.ts';
@@ -168,6 +169,7 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
   const novas: Vaga[] = [];
 
   try {
+    passo('lendo o índice de empresas');
     log('info', 'Quickin: obtendo índice público de empresas...');
     const indexXml = await baixar(QUICKIN.sitemapIndex);
     const empresas = extrairEmpresasDoSitemapIndex(indexXml);
@@ -181,7 +183,8 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
     const shuffled = [...empresas].sort(() => 0.5 - Math.random()).slice(0, 15);
     const vagasParaAbrir: ItemVagaQuickin[] = [];
 
-    for (const emp of shuffled) {
+    for (const [n, emp] of shuffled.entries()) {
+      passo('lendo as vagas de cada empresa', n + 1, shuffled.length);
       if (vagasParaAbrir.length >= MAX_VAGAS_POR_VARREDURA) break;
       try {
         await dormir(200);
@@ -200,6 +203,7 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
     log('info', `Quickin: ${vagasParaAbrir.length} vaga(s) nova(s) para analisar em ${shuffled.length} empresas.`);
 
     for (const [k, item] of vagasParaAbrir.slice(0, MAX_VAGAS_POR_VARREDURA).entries()) {
+      passo('abrindo as vagas novas', k + 1, Math.min(vagasParaAbrir.length, MAX_VAGAS_POR_VARREDURA));
       if (k > 0) await dormir(PAUSA_ENTRE_PAGINAS_MS);
       try {
         const html = await baixar(item.url);

@@ -3,6 +3,7 @@ import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF } from './platforms/adapter.ts'
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { filtrosDaAutomacao, ler } from './estado.ts';
 import { emitir } from './events.ts';
+import { iniciarVarredura, plataformaAtual, terminarPlataforma, terminarVarredura } from './varredura.ts';
 import { chaveDaVaga, executarCandidatura, jaCandidatado, jaEnviada, PERGUNTA_LINKEDIN, PERGUNTA_PRETENSAO, PERGUNTA_REGIME } from './candidatura.ts';
 import { avaliarVagas, iaAtiva, lerIA, responderPergunta } from './ia.ts';
 import { descobrirEmpresas, lerDescoberta } from './platforms/inhire/discovery.ts';
@@ -124,10 +125,28 @@ export async function buscarVagas(manual = false): Promise<number> {
     registrar('alerta', 'Varredura cancelada: envie um currículo para o AutoCV montar o perfil de busca.');
     return 0;
   }
+  const conectadas = Object.keys(ler.conexoes()).filter(id => adapters[id]);
+  if (!conectadas.length) {
+    registrar('alerta', 'Varredura cancelada: nenhuma plataforma conectada. Conecte uma em Plataformas.');
+    return 0;
+  }
   let novas: Vaga[] = [];
-  for (const id of Object.keys(ler.conexoes())) {
-    const adapter = adapters[id];
-    if (adapter) novas = novas.concat(await adapter.buscarVagas(principal.perfilBusca, cfg, registrar, { manual }));
+  iniciarVarredura(conectadas);
+  try {
+    for (const id of conectadas) {
+      plataformaAtual(id);
+      const antes = vagas.listar().length;
+      try {
+        const achadas = await adapters[id].buscarVagas(principal.perfilBusca, cfg, registrar, { manual });
+        novas = novas.concat(achadas);
+        terminarPlataforma(id, vagas.listar().length - antes);
+      } catch (e) {
+        registrar('erro', `${id}: a varredura falhou (${(e as Error).message.slice(0, 90)}).`);
+        terminarPlataforma(id, 0);
+      }
+    }
+  } finally {
+    terminarVarredura();
   }
 
   // Com IA configurada, ela lê o currículo e pontua cada vaga nova (o léxico já gravado fica de reserva)

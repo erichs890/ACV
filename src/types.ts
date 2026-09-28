@@ -144,6 +144,20 @@ export interface EmpresaInHire {
   criadaEm: string;
 }
 
+/** Progresso da varredura em todas as plataformas (core/varredura.ts). Uma barra só, para o botão de buscar. */
+export interface ProgressoVarredura {
+  rodando: boolean;
+  plataforma: string; // id da plataforma sendo varrida agora
+  etapa: string; // o que está acontecendo, em português ("lendo o feed", "abrindo a vaga 12 de 40")
+  atual: number;
+  total: number; // 0 = tamanho desconhecido; a barra fica indeterminada
+  feitas: string[];
+  restantes: string[];
+  novas: number; // vagas inéditas achadas nesta varredura
+  conhecidas: number; // vagas que o robô já tinha: é o que garante que clicar de novo não repete
+  iniciadaEm: string | null;
+}
+
 export interface ConfigDescoberta {
   intervaloHoras: number; // revarredura da lista de empresas (Fonte A)
   fonteB: boolean; // descoberta ativa de novas empresas via API de busca (1x/dia)
@@ -269,6 +283,7 @@ export interface Estado {
   ia: ConfigIA;
   empresas: EmpresaInHire[];
   descoberta: ConfigDescoberta;
+  varredura: ProgressoVarredura;
   robo: EstadoRobo;
   envios: Envio[];
   candidaturas: Candidatura[];

@@ -419,6 +419,51 @@ kv.set('conexoes', { inhire: { conectadaEm: new Date().toISOString() }, indeed: 
 assert.ok(!algumaPlataformaVencida(6), 'InHire e Indeed têm agenda própria; não podem disparar por esta regra');
 console.log('✓ Varredura agendada: regra única, serve para qualquer adapter novo');
 
+// ─── 13) Progresso da varredura: a barra do botão "Procurar vagas" ───────────────────────────────
+// Só o InHire dava sinal de vida, e numa tela diferente do botão. As outras seis varriam em silêncio.
+const { lerVarredura, iniciarVarredura, plataformaAtual, passo, vistas, terminarPlataforma, terminarVarredura } = await import('./varredura.ts');
+cenario();
+assert.equal(lerVarredura().rodando, false, 'parada por padrão');
+
+iniciarVarredura(['inhire', 'vagaspj', 'teste']);
+let prog = lerVarredura();
+assert.equal(prog.rodando, true);
+assert.deepEqual(prog.restantes, ['inhire', 'vagaspj', 'teste'], 'a fila inteira aparece desde o início: a tela mostra o tamanho do trabalho');
+assert.deepEqual(prog.feitas, []);
+
+plataformaAtual('inhire');
+prog = lerVarredura();
+assert.equal(prog.plataforma, 'inhire');
+assert.deepEqual(prog.restantes, ['vagaspj', 'teste'], 'quem está sendo varrida sai da fila de espera');
+
+passo('abrindo as vagas novas', 3, 40);
+prog = lerVarredura();
+assert.deepEqual([prog.etapa, prog.atual, prog.total], ['abrindo as vagas novas', 3, 40]);
+passo('lendo o feed');
+assert.equal(lerVarredura().total, 0, 'total 0 = tamanho desconhecido; a barra não finge uma porcentagem');
+
+// `conhecidas` é o número que responde "clicar de novo vai repetir vaga?"
+vistas(50);
+terminarPlataforma('inhire', 8);
+prog = lerVarredura();
+assert.deepEqual(prog.feitas, ['inhire']);
+assert.equal(prog.novas, 8);
+assert.equal(prog.conhecidas, 42, '50 examinadas menos 8 inéditas = 42 que o robô já tinha');
+
+// A contagem de examinadas não vaza de uma plataforma para a outra
+plataformaAtual('vagaspj');
+terminarPlataforma('vagaspj', 2);
+prog = lerVarredura();
+assert.equal(prog.conhecidas, 42, 'sem `vistas`, a plataforma seguinte não inventa conhecidas');
+assert.equal(prog.novas, 10, 'as novas somam entre plataformas');
+
+terminarVarredura();
+prog = lerVarredura();
+assert.equal(prog.rodando, false);
+assert.deepEqual(prog.feitas, ['inhire', 'vagaspj'], 'o resumo continua legível depois de terminar');
+assert.equal(prog.novas, 10);
+console.log('✓ Progresso da varredura: fila, etapa, e o contador de já-conhecidas');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');

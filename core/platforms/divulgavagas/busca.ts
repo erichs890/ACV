@@ -6,6 +6,7 @@ import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
+import { passo, vistas } from '../../varredura.ts';
 import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
@@ -147,7 +148,8 @@ export async function buscarNoDivulgaVagas(perfil: PerfilBusca, cfg: ConfigAutom
     }
     let total = 0;
     const candidatas: ItemSitemap[] = [];
-    for (const sm of DIVULGA.sitemaps) {
+    for (const [n, sm] of DIVULGA.sitemaps.entries()) {
+      passo('lendo os sitemaps', n + 1, DIVULGA.sitemaps.length);
       try {
         const itens = lerSitemap(await baixar(sm));
         total += itens.length;
@@ -159,10 +161,12 @@ export async function buscarNoDivulgaVagas(perfil: PerfilBusca, cfg: ConfigAutom
     // O id cresce com o tempo: ordenar por ele decrescente faz o limite da varredura pegar as MAIS NOVAS,
     // e não as primeiras na ordem do arquivo (os sitemaps não vêm por data).
     const escolhidas = candidatas.sort((a, b) => Number(b.id) - Number(a.id)).slice(0, MAX_VAGAS_POR_VARREDURA);
+    vistas(candidatas.length);
     log('info', `Divulga Vagas: ${total} vaga(s) no sitemap, ${candidatas.length} com o seu perfil no título, ${escolhidas.length} nova(s) para abrir.`);
 
     let semDados = 0;
     for (const [k, item] of escolhidas.entries()) {
+      passo('abrindo as vagas do seu perfil', k + 1, escolhidas.length);
       if (k > 0) await dormir(PAUSA_ENTRE_PAGINAS_MS);
       try {
         const v = montarVaga(item, await baixar(item.url), perfil, cfg, pref);
