@@ -3,6 +3,7 @@ import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { extrairSkills } from '../../resume/texto.ts';
+import { filtrosDaAutomacao } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
@@ -127,7 +128,7 @@ export function montarVaga(item: ItemVagaQuickin, html: string, perfil: PerfilBu
     skills,
   };
 
-  const { score, motivo } = calcularScore(base, perfil, { ...cfg, localizacao: pref });
+  const { score, motivo } = calcularScore(base, perfil, filtrosDaAutomacao(cfg, pref));
   const lugar = vagaCompativelComLocalizacao({ modelo, local, pais }, pref);
   const motivoCompleto = [motivo, lugar.compativel ? '' : lugar.motivo].filter(Boolean).join(' · ');
 

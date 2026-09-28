@@ -244,6 +244,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
   const p = estado.perfil!;
   const [sujo, setSujo] = useState(false);
   const [paises, setPaises] = useState<string[]>(p.paisesRemoto ?? PAISES_REMOTO_PADRAO);
+  const [excluir, setExcluir] = useState<string[]>(estado.automacao.excluir ?? []);
 
   const perfilBusca = estado.curriculos[0]?.perfilBusca;
 
@@ -260,6 +261,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
         senioridade,
         area,
         cargoRigido: cargoRigido === 'sim',
+        excluir,
       },
     });
     setSujo(false);
@@ -273,6 +275,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
       onReset={() => {
         setSujo(false);
         setPaises(p.paisesRemoto ?? PAISES_REMOTO_PADRAO);
+        setExcluir(estado.automacao.excluir ?? []);
       }}
       onSubmit={enviar}
     >
@@ -361,6 +364,20 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
               <option value="sim">Rígido — só a minha área de atuação</option>
             </select>
           </Campo>
+          <div className="col-span-2 max-md:col-span-1">
+            <span className="label">Nichos que você NÃO quer</span>
+            <ListaTermos
+              valor={excluir}
+              onChange={v => {
+                setExcluir(v);
+                setSujo(true);
+              }}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              Vaga com um destes termos no <strong>título</strong> é zerada e sai da lista, mesmo sendo da sua função. Só o título: uma vaga full stack que cita SAP numa linha de integração não é uma
+              vaga de SAP.
+            </p>
+          </div>
         </div>
         {perfilBusca && (
           <p className="rounded-lg border border-panel-border bg-page-bg p-2.5 text-[11px] text-ink-soft">
@@ -582,6 +599,48 @@ function AbaPrivacidade() {
           Apagar todos os dados
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lista de termos livre (os nichos a evitar). Enter ou vírgula adiciona; clique no × remove.
+ * Guardado em minúsculas e sem repetir, porque quem compara é `termoExcluido` no score.
+ */
+function ListaTermos({ valor, onChange }: { valor: string[]; onChange: (v: string[]) => void }) {
+  const [texto, setTexto] = useState('');
+  const adicionar = () => {
+    const novos = texto
+      .split(',')
+      .map(t => t.trim().toLowerCase())
+      .filter(t => t.length >= 2 && !valor.includes(t));
+    if (novos.length) onChange([...valor, ...novos]);
+    setTexto('');
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-panel-border bg-panel p-1.5">
+      {valor.map(t => (
+        <span key={t} className="inline-flex items-center gap-1 rounded-[7px] bg-orange-deep px-2 py-0.5 text-[11px] font-bold text-white">
+          {t}
+          <button type="button" aria-label={`Voltar a aceitar vagas de ${t}`} className="leading-none hover:opacity-70" onClick={() => onChange(valor.filter(x => x !== t))}>
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            adicionar();
+          }
+        }}
+        onBlur={adicionar}
+        placeholder={valor.length ? 'mais um...' : 'ex.: sap, cobol, salesforce'}
+        aria-label="Nicho a evitar"
+        className="min-w-[140px] flex-1 bg-transparent px-1 py-0.5 text-xs outline-none"
+      />
     </div>
   );
 }

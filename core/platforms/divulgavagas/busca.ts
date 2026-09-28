@@ -6,7 +6,7 @@ import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { ler } from '../../estado.ts';
+import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
 import { extrairSkills, normalizar } from '../../resume/texto.ts';
@@ -118,7 +118,7 @@ export function montarVaga(item: ItemSitemap, html: string, perfil: PerfilBusca,
     encontradaEm: agora,
     atualizadaEm: agora,
   };
-  const a = calcularScore(vaga, perfil, { area: cfg.area, cargo: ler.perfil()?.cargo ?? '', senioridade: cfg.senioridade, localizacao: pref });
+  const a = calcularScore(vaga, perfil, filtrosDaAutomacao(cfg, pref));
   vaga.score = a.score;
   vaga.motivo = a.motivo;
   if (!vagaCompativelComLocalizacao(vaga, pref).compativel || vaga.score < cfg.scoreMinimo) vaga.status = 'ignorada';

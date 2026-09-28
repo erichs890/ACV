@@ -7,7 +7,7 @@ import { calcularScore } from '../../resume/score.ts';
 import { paisDoLocal, vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { ler } from '../../estado.ts';
+import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_CONSULTAS_MS, WORKABLE } from './seletores.ts';
 
 export interface WorkableJobItem {
@@ -85,7 +85,7 @@ export function montarVaga(raw: WorkableJobItem, perfil: PerfilBusca, cfg: Confi
     skills: skillsTexto,
   };
 
-  const { score, motivo } = calcularScore(base, perfil, { ...cfg, localizacao: pref });
+  const { score, motivo } = calcularScore(base, perfil, filtrosDaAutomacao(cfg, pref));
   const lugar = vagaCompativelComLocalizacao({ modelo, local, pais }, pref);
   const compatibilidadeLugar = lugar.compativel ? '' : lugar.motivo;
   const motivoCompleto = [motivo, compatibilidadeLugar].filter(Boolean).join(' · ');

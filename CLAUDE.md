@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas, Quickin, Work
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\AutoCV`.
-Antes de commitar: `npm run check` (85 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (86 verificações) e `npm run build` (biome + tsc + vite).
 
 ## Fluxo
 
@@ -34,7 +34,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | Dado | Dono |
 |---|---|
 | nome, e-mail, celular, LinkedIn, CPF, cidade, pretensão, **cargo desejado** | `perfil` (Configurações › Meus Dados) |
-| senioridade, área, rigor de função | `automacao` — editável **só** em Configurações; Automação espelha |
+| senioridade, área, rigor de função, **nichos a evitar** (`excluir`) | `automacao` — editável **só** em Configurações; Automação espelha |
 | cidade (presencial/híbrida) e países aceitos (remota) | `perfil.cidade` + `perfil.paisesRemoto` → `ler.localizacao()` |
 | ritmo, limite, janela, modo, ensaio, adaptação, modo de perguntas (`manual` · `duvida` · `sem_piedade`) | `automacao` (Automação) |
 | plataforma ligada **e se está no foco da automação** (`enviar`) | `conexoes` — editável **só** em Automação; Plataformas espelha |
@@ -53,6 +53,8 @@ Competências (60) + título (40), multiplicado por função, área, senioridade
 - Competência conta dos **dois lados**: vaga genérica que cita "sql, rest, testes" não pode dar 100%.
 - Senioridade do currículo é o nível **mais alto** (`inferirSenioridadeDoCurriculo`) — `inferirSenioridade` é para vaga e pega o mais baixo.
 - Localização não se duplica: use `vagaCompativelComLocalizacao` de `core/localizacao.ts`.
+- **Nichos a evitar** (`automacao.excluir`): termo no **título** zera a vaga, mesmo ela sendo da função certa — "Pessoa Desenvolvedora SAP ABAP" tirava 69. Só o título, com borda de palavra: buscar no texto todo excluiria uma vaga full stack que cita SAP numa integração, e exclusão errada é invisível.
+- Os filtros do score saem de `filtrosDaAutomacao(cfg, localizacao)` em `core/estado.ts`. Nunca monte esse objeto na mão: era assim, e `excluir` entraria em uns adapters e não em outros.
 - Mexeu no score? Suba `SCORE_VERSAO` em `core/server.ts`.
 
 ## Ao mexer

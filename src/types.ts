@@ -119,6 +119,12 @@ export interface ConfigAutomacao {
   navegador: 'edge' | 'firefox'; // firefox = build do Playwright (não o Firefox instalado); o PDF é sempre via Chromium oculto
   scoreMinimo: number; // 0–100
   cargoRigido: boolean; // só vagas da mesma função que a sua passam com nota cheia
+  /**
+   * Nichos que você não quer, mesmo sendo da sua função: "sap", "salesforce", "cobol"...
+   * Vaga com um destes termos no TÍTULO é zerada e sai da lista. Só o título de propósito — uma vaga
+   * full stack que cita SAP numa linha de integração não é uma vaga de SAP.
+   */
+  excluir: string[];
   presencialSoNaMinhaCidade: boolean; // presencial/híbrido fora da sua cidade nem entra na lista
   // manual: toda pergunta nova pausa · duvida: a IA resolve o que o currículo e o conhecimento técnico
   // sustentam e devolve o resto · sem_piedade: a IA responde tudo e nunca devolve

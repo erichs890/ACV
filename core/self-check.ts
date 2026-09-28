@@ -1061,5 +1061,36 @@ assert.ok(existsSync(caminhoPdfEn));
 assert.ok(statSync(caminhoPdfEn).size > 1000);
 console.log('✓ Currículo em inglês: tradução preserva markdown e gera PDF A4 diagramado');
 
+// 13) Nichos a evitar: vaga da sua função que você mesmo recusa
+const { termoExcluido } = await import('./resume/score.ts');
+
+// Caso real (28/09/2026): "Pessoa Desenvolvedora SAP ABAP Pleno" tirou 69 e entrou na fila. É dev, é da área,
+// é da senioridade — nada no score reprovava. O que reprova é a vontade de quem procura.
+assert.equal(termoExcluido('Pessoa Desenvolvedora SAP ABAP Pleno', ['sap']), 'sap');
+assert.equal(termoExcluido('Desenvolvedor SAP ABAP', ['cobol', 'sap']), 'sap', 'acha em qualquer posição da lista');
+assert.equal(termoExcluido('ANALISTA SAP MM', ['sap']), 'sap', 'maiúsculas não escapam');
+assert.equal(termoExcluido('Desenvolvedor Sap Basis', ['SAP']), 'SAP', 'o termo volta como a pessoa escreveu');
+assert.equal(termoExcluido('Consultor SAP/ABAP', ['abap']), 'abap', 'barra separa palavra');
+
+// Borda de palavra: sem isso, "sap" casaria com "sapataria" e a pessoa perderia vagas sem saber
+assert.equal(termoExcluido('Desenvolvedor para rede de sapatarias', ['sap']), null);
+assert.equal(termoExcluido('Engenheiro de Dados - Sapiens', ['sap']), null);
+assert.equal(termoExcluido('Desenvolvedor Full Stack', ['sap']), null);
+
+// Só o TÍTULO decide: vaga full stack que cita SAP numa integração continua valendo
+const cfgSemSap = { excluir: ['sap'] };
+const fullstack = calcularScore({ titulo: 'Desenvolvedor Full Stack Pleno', skills: ['java', 'sql', 'sap'], descricao: 'Integrações com SAP e outros ERPs.' }, perfil, cfgSemSap);
+assert.ok(fullstack.score > 0, 'citar SAP no texto não pode excluir uma vaga full stack');
+const sapDeVerdade = calcularScore({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno', skills: ['java', 'sql'], descricao: 'ABAP' }, perfil, cfgSemSap);
+assert.equal(sapDeVerdade.score, 0, 'vaga de SAP no título é zerada');
+assert.ok(/sap/i.test(sapDeVerdade.motivo) && /evitar|Configura/i.test(sapDeVerdade.motivo), `o motivo tem de dizer por quê: "${sapDeVerdade.motivo}"`);
+
+// Lista vazia (o padrão) não muda nada
+const semLista = calcularScore({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno', skills: ['java', 'sql'], descricao: 'ABAP' }, perfil, {});
+assert.ok(semLista.score > 0, 'sem lista de exclusão, nada é cortado');
+assert.equal(termoExcluido('Qualquer coisa', []), null);
+assert.equal(termoExcluido('Qualquer coisa', ['  ']), null, 'termo em branco não exclui o mundo');
+console.log('✓ Nichos a evitar: corta pelo título, com borda de palavra, e não mexe no resto');
+
 await fecharNavegador();
 console.log('\nTudo certo.');

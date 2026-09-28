@@ -1,4 +1,5 @@
 import type { Arquivo, ConfigAutomacao, Conexao, Envio, Estado, EstadoRobo, Perfil, Pergunta, Vaga } from '../src/types.ts';
+import type { FiltrosScore } from './resume/score.ts';
 import { candidaturas, empresas, kv, log, vagas } from './storage/db.ts';
 import { emitir } from './events.ts';
 import { iaParaFront } from './ia.ts';
@@ -24,9 +25,26 @@ export const AUTOMACAO_PADRAO: ConfigAutomacao = {
   navegador: 'edge',
   scoreMinimo: 30,
   cargoRigido: false,
+  excluir: [],
   presencialSoNaMinhaCidade: true,
   modoPerguntas: 'manual',
 };
+
+/**
+ * Os filtros que o score usa, montados num lugar só.
+ *
+ * Três adapters montavam este objeto na mão e dois de outro jeito: filtro novo (como `excluir`) entrava em
+ * uns e não em outros, sem ninguém perceber. Quem chama passa `localizacao` porque alguns adapters já a têm
+ * em mãos; o resto sai de `automacao` e do perfil.
+ */
+export const filtrosDaAutomacao = (cfg: ConfigAutomacao, localizacao: PreferenciasLocalizacao): FiltrosScore => ({
+  area: cfg.area,
+  cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
+  senioridade: cfg.senioridade,
+  cargoRigido: cfg.cargoRigido,
+  excluir: cfg.excluir,
+  localizacao,
+});
 
 const PERGUNTAS_PADRAO: Pergunta[] = [
   { id: 1, icone: 'salario', pergunta: 'Pretensão salarial', resposta: '', personalizada: false },

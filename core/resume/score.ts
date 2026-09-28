@@ -1,5 +1,5 @@
 import type { PerfilBusca, Vaga } from '../../src/types.ts';
-import { SOFT, similaridade } from './texto.ts';
+import { SOFT, normalizar, similaridade } from './texto.ts';
 import { vagaCompativelComLocalizacao } from '../localizacao.ts';
 import type { PreferenciasLocalizacao } from '../../src/paises.ts';
 import { familiaDoCargo, familiasAfins, inferirArea, inferirSenioridade, NIVEIS, type Nivel } from './analyzer.ts';
@@ -10,6 +10,24 @@ export interface FiltrosScore {
   senioridade?: string; // senioridade escolhida na Automação (sobrepõe a do currículo)
   localizacao?: PreferenciasLocalizacao; // cidade (presencial/híbrida) e países (remota) que a pessoa aceita
   cargoRigido?: boolean; // true = vaga com cargo fora da sua função é cortada com força
+  excluir?: string[]; // nichos que a pessoa não quer, mesmo sendo da função dela (Configurações)
+}
+
+/**
+ * O termo de exclusão que bate no título desta vaga, ou null.
+ *
+ * Só o TÍTULO: é onde mora a identidade da vaga. Procurar no texto inteiro excluiria uma vaga full stack
+ * que cita SAP numa linha de integração — e exclusão errada é invisível, a pessoa nunca saberia o que perdeu.
+ * Com borda de palavra, para "sap" não casar com "sapataria" nem "sapiens".
+ */
+export function termoExcluido(titulo: string, excluir: string[] = []): string | null {
+  const t = normalizar(titulo);
+  for (const bruto of excluir) {
+    const termo = normalizar(bruto).trim();
+    if (!termo) continue;
+    if (new RegExp(`(^|[^a-z0-9])${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t)) return bruto.trim();
+  }
+  return null;
 }
 
 // Quantas competências técnicas suas uma vaga precisa citar para ser considerada do seu ramo
@@ -33,6 +51,10 @@ export function calcularScore(
   perfil: PerfilBusca,
   filtros: FiltrosScore = {},
 ): { score: number; motivo: string } {
+  // Antes de qualquer conta: nicho que a pessoa recusou não é questão de nota, é de vontade dela.
+  const excluido = termoExcluido(vaga.titulo, filtros.excluir);
+  if (excluido) return { score: 0, motivo: `"${excluido}" está na sua lista de nichos a evitar (Configurações)` };
+
   const cv = new Set(perfil.skills);
   const tecnicas = vaga.skills.filter(s => !SOFT.has(s));
   const soft = vaga.skills.filter(s => SOFT.has(s));

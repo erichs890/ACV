@@ -1,7 +1,7 @@
 import type { Vaga } from '../src/types.ts';
 import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
-import { ler } from './estado.ts';
+import { filtrosDaAutomacao, ler } from './estado.ts';
 import { emitir } from './events.ts';
 import { chaveDaVaga, executarCandidatura, jaCandidatado, jaEnviada, PERGUNTA_LINKEDIN, PERGUNTA_PRETENSAO, PERGUNTA_REGIME } from './candidatura.ts';
 import { avaliarVagas, iaAtiva, lerIA, responderPergunta } from './ia.ts';
@@ -36,13 +36,7 @@ export function repontuar(): number {
   const cfg = ler.automacao();
   const perfil = ler.curriculos()[0]?.perfilBusca;
   if (!perfil) return 0;
-  const filtros = {
-    area: cfg.area,
-    cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
-    senioridade: cfg.senioridade,
-    localizacao: ler.localizacao(), // cidade e países aceitos: regra compartilhada com o Indeed
-    cargoRigido: cfg.cargoRigido,
-  };
+  const filtros = filtrosDaAutomacao(cfg, ler.localizacao());
   const abertas = vagas.listar().filter(v => v.status === 'encontrada' || v.status === 'ignorada');
   for (const v of abertas) {
     const a = calcularScore(v, perfil, filtros);

@@ -27,7 +27,7 @@ import { migrarModelo, salvarIA, testarIA } from './ia.ts';
 import { adicionarEmpresa, importarSeed, migrarTenantsAntigos, salvarDescoberta } from './platforms/inhire/discovery.ts';
 import { empresas } from './storage/db.ts';
 
-const SCORE_VERSAO = 10; // suba ao mudar calcularScore: as vagas abertas são repontuadas ao iniciar
+const SCORE_VERSAO = 11; // suba ao mudar calcularScore: as vagas abertas são repontuadas ao iniciar
 import { buscarEmpresas } from './queue.ts';
 
 const registrar = log.registrar;
