@@ -15,4 +15,4 @@ export const ARBEITNOW = {
 };
 
 export const ESPERA_ENVIO_MS = 25_000;
-export const MAX_VAGAS_POR_VARREDURA = 30;
+export const MAX_VAGAS_POR_VARREDURA = 100;

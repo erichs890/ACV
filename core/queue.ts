@@ -8,7 +8,7 @@ import { chaveDaVaga, executarCandidatura, jaCandidatado, jaEnviada, PERGUNTA_LI
 import { avaliarVagas, iaAtiva, lerIA, responderPergunta } from './ia.ts';
 import { descobrirEmpresas, lerDescoberta } from './platforms/inhire/discovery.ts';
 import { empresas } from './storage/db.ts';
-import { calcularScore } from './resume/score.ts';
+import { calcularScore, termoExcluido } from './resume/score.ts';
 import { vagaCompativelComLocalizacao } from './localizacao.ts';
 import { indeedVencido } from './platforms/indeed/busca.ts';
 import { inferirSenioridade } from './resume/analyzer.ts';
@@ -245,6 +245,24 @@ export function resgatarInterrompidas(): number {
   }
   if (presas.length) emitir({ tipo: 'estado' });
   return presas.length;
+}
+
+/**
+ * A vaga que está na frente da fila ainda passa nos filtros de AGORA?
+ *
+ * Nota e nicho a evitar eram conferidos só na entrada da fila, como o foco das plataformas era. Resultado real
+ * (28/09/2026): o usuário colocou "sap" na lista de nichos e, minutos depois, saiu uma candidatura para
+ * "Pessoa Desenvolvedora SAP ABAP Pleno" — a vaga já estava na fila com a nota velha.
+ *
+ * `repontuar` tira essas vagas da fila quando o filtro muda; esta função é a rede embaixo: se algum caminho
+ * futuro esquecer de repontuar, o envio não acontece do mesmo jeito. Vaga que VOCÊ pediu passa sempre.
+ */
+function filtroAindaVale(v: Vaga, cfg: ReturnType<typeof ler.automacao>): string {
+  if (v.pedidaPorVoce) return '';
+  const excluido = termoExcluido(v.titulo, cfg.excluir);
+  if (excluido) return `"${excluido}" está na sua lista de nichos a evitar`;
+  if (v.score < cfg.scoreMinimo) return `a compatibilidade dela (${v.score}%) ficou abaixo do seu mínimo (${cfg.scoreMinimo}%)`;
+  return '';
 }
 
 export function limparForaDoFoco(): number {
@@ -619,6 +637,14 @@ async function girarFila(forcar: boolean) {
     if (!proxima) {
       await liberarNavegador();
       return;
+    }
+    // Filtro de agora, não o de quando ela entrou na fila
+    const desatualizada = filtroAindaVale(proxima, cfg);
+    if (desatualizada) {
+      vagas.atualizar(proxima.id, { status: 'ignorada', posicao: undefined, pendencia: undefined });
+      registrar('alerta', `"${proxima.titulo}" saiu da fila sem ser enviada: ${desatualizada}.`);
+      emitir({ tipo: 'estado' });
+      continue;
     }
     if (cfg.ensaio) registrar('alerta', `Modo ensaio LIGADO: "${proxima.titulo}" será preenchida mas NÃO enviada. Desligue o ensaio em Automação para candidatar de verdade.`);
     if (!(await processarUma(proxima))) return;

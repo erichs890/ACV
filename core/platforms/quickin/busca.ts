@@ -9,7 +9,7 @@ import { calcularScore } from '../../resume/score.ts';
 import { vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, QUICKIN } from './seletores.ts';
+import { EMPRESAS_POR_VARREDURA, MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, QUICKIN } from './seletores.ts';
 
 export interface ItemVagaQuickin {
   empresa: string;
@@ -178,9 +178,10 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
       return [];
     }
 
-    // Amostra rotativa de empresas para cada varredura (evita varrer 628 sitemaps de uma vez)
-    // Sorteia 15 empresas a cada varredura para acompanhar ativamente o ecossistema
-    const shuffled = [...empresas].sort(() => 0.5 - Math.random()).slice(0, 15);
+    // Amostra rotativa de empresas para cada varredura (evita varrer 628 sitemaps de uma vez).
+    // `EMPRESAS_POR_VARREDURA` mora nos seletores junto dos outros tetos: número solto no meio da busca era
+    // o tipo de limite que ninguém acha quando a pergunta é "por que só vêm 2 vagas daqui?".
+    const shuffled = [...empresas].sort(() => 0.5 - Math.random()).slice(0, EMPRESAS_POR_VARREDURA);
     const vagasParaAbrir: ItemVagaQuickin[] = [];
 
     for (const [n, emp] of shuffled.entries()) {

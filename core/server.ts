@@ -131,7 +131,18 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     const cargoAntes = ler.perfil()?.cargo ?? '';
     salvarParcial(parcial);
     const a = parcial.automacao;
-    const filtrosMudaram = a && (a.area !== antes.area || a.senioridade !== antes.senioridade || a.scoreMinimo !== antes.scoreMinimo || a.cargoRigido !== antes.cargoRigido);
+    // Todo filtro que o score usa entra aqui. `excluir` e `senioridadeRigida` ficaram de fora quando nasceram,
+    // e o resultado foi uma candidatura real enviada para "Pessoa Desenvolvedora SAP ABAP Pleno" (28/09/2026)
+    // depois de o usuário colocar "sap" na lista de nichos a evitar: a lista valia para vaga nova, e as que já
+    // estavam na fila seguiam com a nota velha. Regra: mexeu num filtro do score, repontua tudo.
+    const filtrosMudaram =
+      a &&
+      (a.area !== antes.area ||
+        a.senioridade !== antes.senioridade ||
+        a.scoreMinimo !== antes.scoreMinimo ||
+        a.cargoRigido !== antes.cargoRigido ||
+        a.senioridadeRigida !== antes.senioridadeRigida ||
+        a.excluir.join('') !== antes.excluir.join(''));
     // Mudou o perfil profissional, a localização ou o cargo: a compatibilidade de todas as vagas muda junto
     if (filtrosMudaram || (parcial.perfil && JSON.stringify(ler.localizacao()) !== localAntes) || (parcial.perfil && (parcial.perfil.cargo ?? '') !== cargoAntes)) repontuar();
     // Trocou para automático (ou mexeu nos filtros/limite) com o robô ligado: a fila é reavaliada na hora,

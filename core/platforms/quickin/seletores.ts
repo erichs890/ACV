@@ -42,5 +42,6 @@ export const QUICKIN = {
 };
 
 export const ESPERA_ENVIO_MS = 25_000;
-export const MAX_VAGAS_POR_VARREDURA = 30;
-export const PAUSA_ENTRE_PAGINAS_MS = 1_000;
+export const MAX_VAGAS_POR_VARREDURA = 100;
+export const PAUSA_ENTRE_PAGINAS_MS = 600;
+export const EMPRESAS_POR_VARREDURA = 60; // amostra rotativa das 628 do índice: a volta completa sai em ~10 rodadas

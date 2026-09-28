@@ -482,4 +482,36 @@ console.log('✓ Progresso da varredura: fila, etapa, e o contador de já-conhec
 
 apagarTudo();
 log.listar(0);
+
+// ─── Filtro de agora, não o de quando a vaga entrou na fila ──────────────────────────────────────
+// Bug real (28/09/2026): "sap" entrou na lista de nichos a evitar e, minutos depois, saiu uma candidatura
+// para "Pessoa Desenvolvedora SAP ABAP Pleno" — a vaga já estava na fila com a nota antiga.
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const comSap = enfileirar({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno' });
+assert.equal(st(comSap), 'na_fila');
+kv.set('automacao', { ...ler.automacao(), excluir: ['sap'] }); // o nicho entra DEPOIS
+await processarProxima();
+assert.equal(chamadas.get(comSap), undefined, 'vaga de nicho recusado não pode ser enviada');
+assert.equal(st(comSap), 'ignorada', 'e sai da fila');
+
+// A mesma rede pega a nota que caiu abaixo do mínimo
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const notaBaixa = enfileirar({ score: 55 });
+kv.set('automacao', { ...ler.automacao(), scoreMinimo: 80 });
+await processarProxima();
+assert.equal(chamadas.get(notaBaixa), undefined, 'vaga abaixo do mínimo de agora não é enviada');
+assert.equal(st(notaBaixa), 'ignorada');
+
+// Mas o que VOCÊ pediu vai, mesmo fora dos filtros: o filtro é do robô, não seu
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const pedida = enfileirar({ titulo: 'Desenvolvedor SAP ABAP', status: 'encontrada', posicao: undefined });
+kv.set('automacao', { ...ler.automacao(), excluir: ['sap'] });
+candidatarAgora(pedida);
+await new Promise(r => setTimeout(r, 150));
+assert.equal(st(pedida), 'enviada', 'clique seu passa por cima dos filtros do robô');
+console.log('✓ Filtros valem na hora do envio: nicho e nota novos tiram da fila, e o seu clique passa');
+
 console.log('\nFila: tudo certo.');
