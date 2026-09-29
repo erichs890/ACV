@@ -360,10 +360,10 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
               ))}
             </select>
           </Campo>
-          <Campo label="Rigor de senioridade" ajuda="Rígido corta quem pede outro nível. Vaga que não declara o nível continua aparecendo.">
+          <Campo label="Rigor de senioridade" ajuda="Rígido corta vaga ACIMA do seu nível. Vaga que não declara o nível continua aparecendo.">
             <select name="senioridadeRigida" defaultValue={estado.automacao.senioridadeRigida ? 'sim' : 'nao'} className="field">
-              <option value="nao">Equilibrado — um nível acima ou abaixo ainda conta</option>
-              <option value="sim">Rígido — só vagas de {estado.automacao.senioridade || 'o meu nível'}</option>
+              <option value="nao">Equilibrado — vaga um nível acima ainda conta</option>
+              <option value="sim">Rígido — nada acima de {estado.automacao.senioridade || 'o meu nível'}</option>
             </select>
           </Campo>
           <Campo label="Rigor na função" ajuda="Rígido mantém o mundo da tecnologia (dev, IA, QA, dados, segurança) e corta o resto.">

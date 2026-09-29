@@ -5,6 +5,7 @@ import type { PreferenciasLocalizacao } from '../../src/paises.ts';
 import { familiaDoCargo, familiasAfins, inferirArea, inferirSenioridade, NIVEIS, type Nivel } from './analyzer.ts';
 
 import { termoExcluido } from '../../src/dados.ts';
+import { grupoQueNaoEhSeu } from '../../src/sensiveis.ts';
 
 // Reexportado porque o score é o dono conceitual do corte; a regra em si mora em src/ para a tela usar a mesma.
 export { termoExcluido };
@@ -15,7 +16,8 @@ export interface FiltrosScore {
   senioridade?: string; // senioridade escolhida na Automação (sobrepõe a do currículo)
   localizacao?: PreferenciasLocalizacao; // cidade (presencial/híbrida) e países (remota) que a pessoa aceita
   cargoRigido?: boolean; // true = vaga com cargo fora da sua função é cortada com força
-  senioridadeRigida?: boolean; // true = só o seu nível exato passa (vaga sem nível declarado continua passando)
+  senioridadeRigida?: boolean; // true = vaga ACIMA do seu nível é cortada (sem nível declarado continua passando)
+  autodeclaracoes?: Record<string, string>; // respostas de `sensiveis` — só para recusar vaga reservada a outro grupo
   excluir?: string[]; // nichos que a pessoa não quer, mesmo sendo da função dela (Configurações)
 }
 
@@ -43,6 +45,11 @@ export function calcularScore(
   // Antes de qualquer conta: nicho que a pessoa recusou não é questão de nota, é de vontade dela.
   const excluido = termoExcluido(vaga.titulo, filtros.excluir);
   if (excluido) return { score: 0, motivo: `"${excluido}" está na sua lista de nichos a evitar (Configurações)` };
+
+  // Vaga reservada a um grupo do qual você não declarou fazer parte: concorrer nela ocupa o lugar de quem ela
+  // existe para alcançar. Sai da autodeclaração explícita, nunca de inferência (invariante 3).
+  const reservada = grupoQueNaoEhSeu(vaga.titulo, filtros.autodeclaracoes ?? {});
+  if (reservada) return { score: 0, motivo: reservada };
 
   const cv = new Set(perfil.skills);
   const tecnicas = vaga.skills.filter(s => !SOFT.has(s));
@@ -99,8 +106,12 @@ export function calcularScore(
   const fatorSenioridade = !senioridadeConhecida ? 1 : degraus >= 2 ? 0.35 : degraus === 1 ? 0.9 : degraus <= -2 ? 0.5 : 1;
   // Rigor de senioridade é corte, não desconto: quem pediu "só Pleno" não quer ver Sênior com nota menor,
   // quer não ver. Vaga que não declara o nível (`Indefinida`) escapa do corte de propósito.
-  if (filtros.senioridadeRigida && senioridadeConhecida && degraus !== 0) {
-    return { score: 0, motivo: `pede ${nivelVaga} e você marcou "só ${nivelCv}" (Configurações › Rigor de senioridade)` };
+  // Rigor de senioridade é corte, não desconto — e só para CIMA. "Sou Pleno, ainda não posso" é sobre a vaga
+  // Sênior, não sobre a Júnior: cortar para baixo também tirava 843 vagas de uma vez, entre elas muita coisa
+  // que o usuário já vinha se candidatando. Vaga que não declara o nível escapa: o anúncio não disse, o robô
+  // não inventa.
+  if (filtros.senioridadeRigida && senioridadeConhecida && degraus >= 1) {
+    return { score: 0, motivo: `pede ${nivelVaga}, acima do seu nível (${nivelCv}) — você marcou o rigor de senioridade em Configurações` };
   }
 
   // Localização é regra compartilhada (core/localizacao.ts): fora do estado/país zera, outra cidade do estado

@@ -47,6 +47,11 @@ export const paisPorNome = (nome: string) => PAISES.find(p => p.nome === nome);
 export interface PreferenciasLocalizacao {
   localizacaoPresencial: string; // uma cidade/região, ex.: "Fortaleza - CE" (é o mesmo campo que preenche "cidade" nos formulários)
   paisesRemoto: string[]; // nomes de PAISES, ex.: ["Brasil", "Portugal"]
+  /**
+   * Presencial/híbrida só na sua cidade (Automação). Ligado, vaga presencial em qualquer outra cidade é
+   * incompatível — nem a de outra cidade do seu estado passa com desconto.
+   */
+  presencialSoNaMinhaCidade?: boolean;
 }
 
 export const PAISES_REMOTO_PADRAO = ['Brasil'];

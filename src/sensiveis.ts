@@ -137,3 +137,90 @@ export function decidirSensivel(
   }
   return null;
 }
+
+/**
+ * Vaga reservada a um grupo específico (afirmativa/exclusiva) e a regra para saber se ela é sua.
+ *
+ * Caso real (28/09/2026): saíram candidaturas para "Vaga Afirmativa para PCD | Analista de Desenvolvimento
+ * Full Stack" e para "Software Engineer (afirmativa para mulheres)" — o usuário declarou PcD "Não" e
+ * "Homem Cisgênero". Concorrer numa vaga reservada a um grupo do qual você não faz parte não é agressivo só
+ * com a empresa: ocupa o lugar de quem a vaga existe para alcançar, e o processo cai na primeira triagem.
+ *
+ * A decisão sai SÓ da autodeclaração explícita (invariante 3): nada de inferir de nome, currículo ou IA.
+ * Sem resposta declarada para a categoria, a vaga passa — o robô não adivinha o que você não disse.
+ *
+ * `soTambem` é o detalhe que muda tudo: "vaga afirmativa TAMBÉM para pessoas com deficiência" é aberta a
+ * todo mundo, e reprovar essas cortaria vaga boa por engano.
+ */
+interface GrupoReservado {
+  id: string; // categoria de CATEGORIAS_SENSIVEIS
+  rotulo: string;
+  /** No título: exclusividade declarada para o grupo. */
+  marca: RegExp;
+  /** Faz parte do grupo? Recebe a resposta declarada (já em minúsculas, sem acento). */
+  pertence: (resposta: string) => boolean;
+}
+
+/**
+ * Marca de exclusividade no título. Regex literal de propósito: montar isto com `new RegExp` e template
+ * literal já custou caro — `\b` dentro de uma template string é um backspace, não uma borda de palavra, e a
+ * regra passou a não casar com nada em silêncio.
+ */
+const RESERVA = /afirmativ[ao]s?|exclusiv[ao]s?|inclusiv[ao]s?|reservad[ao]s?|destinad[ao]s?/;
+const TAMBEM = /\btambem\b/; // "afirmativa TAMBÉM para..." é aberta a todos
+
+const GRUPOS_RESERVADOS: GrupoReservado[] = [
+  {
+    id: 'pcd',
+    rotulo: 'pessoas com deficiência',
+    marca: /\b(pcds?|deficiencia|deficientes?)\b/,
+    pertence: r => r.startsWith('sim'),
+  },
+  {
+    id: 'genero',
+    rotulo: 'mulheres',
+    marca: /\b(mulher|mulheres|femini[nc][oa]s?)\b/,
+    pertence: r => r.includes('mulher'),
+  },
+  {
+    id: 'genero',
+    rotulo: 'pessoas trans',
+    marca: /\b(trans|transgener[oa]s?|travestis?)\b/,
+    pertence: r => r.includes('trans') || r.includes('travesti') || r.includes('nao binari'),
+  },
+  {
+    id: 'raca',
+    rotulo: 'pessoas negras',
+    marca: /\b(negr[ao]s?|pret[ao]s?|pard[ao]s?|racial)\b/,
+    pertence: r => r.startsWith('pret') || r.startsWith('pard') || r.startsWith('negr'),
+  },
+  {
+    id: 'raca',
+    rotulo: 'pessoas indígenas',
+    marca: /\bindigenas?\b/,
+    pertence: r => r.startsWith('indigena'),
+  },
+  {
+    id: 'orientacao',
+    rotulo: 'pessoas LGBTQIA+',
+    marca: /\blgbt\w*\b/,
+    pertence: r => !!r && !r.startsWith('hetero') && !PREFIRO_NAO.test(r),
+  },
+];
+
+/**
+ * A vaga é reservada a um grupo do qual você NÃO declarou fazer parte? Devolve o motivo, ou '' se pode ir.
+ * Só o título, como os nichos a evitar: o corpo do anúncio fala de diversidade em toda vaga.
+ */
+export function grupoQueNaoEhSeu(titulo: string, padroes: Record<string, string>): string {
+  const t = normalizarSensivel(titulo);
+  if (!RESERVA.test(t)) return '';
+  for (const g of GRUPOS_RESERVADOS) {
+    if (!g.marca.test(t)) continue;
+    if (TAMBEM.test(t)) continue; // "afirmativa TAMBÉM para..." é aberta a todos
+    const declarado = normalizarSensivel(padroes[g.id] ?? '');
+    if (!declarado || PREFIRO_NAO.test(declarado)) continue; // você não disse: o robô não adivinha
+    if (!g.pertence(declarado)) return `vaga reservada a ${g.rotulo}, e você declarou "${padroes[g.id]}" em Configurações`;
+  }
+  return '';
+}

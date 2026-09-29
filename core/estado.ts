@@ -46,6 +46,7 @@ export const filtrosDaAutomacao = (cfg: ConfigAutomacao, localizacao: Preferenci
   cargoRigido: cfg.cargoRigido,
   senioridadeRigida: cfg.senioridadeRigida,
   excluir: cfg.excluir,
+  autodeclaracoes: ler.sensiveis().padroes,
   localizacao,
 });
 
@@ -78,7 +79,7 @@ export const ler = {
   perguntas: () => kv.get<Pergunta[]>('perguntas', PERGUNTAS_PADRAO),
   localizacao: (): PreferenciasLocalizacao => {
     const p = kv.get<Perfil | null>('perfil', null);
-    return { localizacaoPresencial: p?.cidade ?? '', paisesRemoto: p?.paisesRemoto ?? PAISES_REMOTO_PADRAO };
+    return { localizacaoPresencial: p?.cidade ?? '', paisesRemoto: p?.paisesRemoto ?? PAISES_REMOTO_PADRAO, presencialSoNaMinhaCidade: ler.automacao().presencialSoNaMinhaCidade };
   },
   sensiveis: () => ({ ...SENSIVEIS_PADRAO, ...kv.get<Partial<ConfigSensiveis>>('sensiveis', {}) }),
   notificacoes: () => kv.get<Record<string, boolean>>('notificacoes', {}),
