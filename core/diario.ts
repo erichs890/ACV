@@ -18,7 +18,13 @@ const ARQUIVO = /^autocv-(\d{4}-\d{2}-\d{2})\.log$/;
 
 if (LIGADO) mkdirSync(DIR_DIARIO, { recursive: true });
 
-const dia = (d = new Date()) => d.toISOString().slice(0, 10);
+/**
+ * Data LOCAL em AAAA-MM-DD.
+ *
+ * `toISOString` é UTC: às 21h de Brasília ele já diz "amanhã", então o diário trocava de arquivo às 21h e
+ * gravava a data de amanhã ao lado da hora de hoje. Bug visto no primeiro dia de uso (28/09/2026).
+ */
+const dia = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 export const caminhoDoDia = (d = new Date()) => join(DIR_DIARIO, `autocv-${dia(d)}.log`);
 
 /** Apaga os diários velhos. Roda uma vez por dia, na primeira linha escrita. */
@@ -26,7 +32,7 @@ let ultimaFaxina = '';
 function faxina(hoje: string) {
   if (ultimaFaxina === hoje) return;
   ultimaFaxina = hoje;
-  const limite = new Date(Date.now() - DIAS_GUARDADOS * 86_400_000).toISOString().slice(0, 10);
+  const limite = dia(new Date(Date.now() - DIAS_GUARDADOS * 86_400_000));
   try {
     for (const nome of readdirSync(DIR_DIARIO)) {
       const m = ARQUIVO.exec(nome);

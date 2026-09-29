@@ -1,4 +1,4 @@
-import type { Conexao, Plataforma, StatusVaga } from './types.ts';
+import type { Conexao, Envio, Plataforma, StatusVaga } from './types.ts';
 
 // Catálogo do produto: só plataformas em que vale a pena automatizar. O critério que decidiu a poda de
 // 21/09/2026 é um só — **a candidatura tem de acontecer dentro da plataforma**. Site que redireciona para o
@@ -297,6 +297,20 @@ export const STATUS_VAGA: Record<StatusVaga, { rotulo: string; classe: string }>
   ignorada: { rotulo: 'Baixa compatibilidade', classe: 'border border-panel-border bg-page-bg text-ink-soft' },
   encerrada: { rotulo: 'Encerrada', classe: 'border border-panel-border bg-page-bg text-ink-soft line-through' },
 };
+
+/**
+ * Currículos REALMENTE enviados no mês corrente.
+ *
+ * Uma regra só, porque havia duas e uma estava errada: o menu comparava `"09"` (mês da data DD/MM) com
+ * `"20"` (dois primeiros dígitos do ano) e por isso mostrava 0 para sempre. Ensaio não entra: ele preenche
+ * o formulário e não envia nada.
+ */
+export const enviosDoMes = (envios: Envio[], quando = new Date()): Envio[] =>
+  envios.filter(e => {
+    if (e.status !== 'Enviado') return false;
+    const d = new Date(e.enviadaEm);
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === quando.getFullYear() && d.getMonth() === quando.getMonth();
+  });
 
 export const tempoAtras = (iso: string | null) => {
   if (!iso) return 'nunca';

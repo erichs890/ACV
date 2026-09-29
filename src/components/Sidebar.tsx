@@ -3,6 +3,7 @@ import { Bot, FileText, Gauge, Plug, Settings, type LucideIcon } from 'lucide-re
 import type { EstadoRobo } from '../types';
 import Logo from './Logo';
 import { useEstado } from '../estado';
+import { enviosDoMes } from '../dados';
 
 export const navItens: { to: string; label: string; curto: string; icon: LucideIcon }[] = [
   { to: '/painel', label: 'Painel', curto: 'Painel', icon: Gauge },
@@ -26,8 +27,7 @@ interface Props {
 export default function Sidebar({ aberto, onFechar }: Props) {
   const { estado } = useEstado();
   const status = statusRobo[estado.robo];
-  const mesAtual = new Date().toLocaleDateString('pt-BR', { month: '2-digit', year: 'numeric' }).slice(3);
-  const enviosNoMes = estado.envios.filter(e => e.data.slice(3) === mesAtual.slice(0, 2)).length;
+  const enviosNoMes = enviosDoMes(estado.envios).length;
 
   return (
     <>

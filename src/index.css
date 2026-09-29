@@ -284,6 +284,45 @@
   }
 }
 
+/* Grafico do mes (src/components/GraficoDoMes.tsx).
+   O estado BASE e o desenho pronto (dashoffset 0) e a animacao vem DE 1 ate 0: assim, quando o bloco de
+   prefers-reduced-motion desliga as animacoes, a linha aparece inteira em vez de desaparecer. */
+.grafico-mes-linha {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 0;
+  animation: grafico-mes-tracar 1.1s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes grafico-mes-tracar {
+  from {
+    stroke-dashoffset: 1;
+  }
+}
+
+.grafico-mes-area {
+  opacity: 1;
+  animation: grafico-mes-surgir 1.4s ease-out;
+}
+
+@keyframes grafico-mes-surgir {
+  0%,
+  35% {
+    opacity: 0;
+  }
+}
+
+/* A ponta do dia de hoje: respira devagar, para dizer que ainda esta acontecendo */
+.grafico-mes-pulso {
+  animation: grafico-mes-respirar 2.6s ease-in-out infinite;
+}
+
+@keyframes grafico-mes-respirar {
+  50% {
+    transform: translate(-50%, -50%) scale(1.9);
+    opacity: 0.15;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* biome-ignore-start lint/complexity/noImportantStyles: quem pede menos movimento tem de vencer qualquer animacao de componente */
   *,

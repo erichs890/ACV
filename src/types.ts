@@ -22,6 +22,7 @@ export interface Envio {
   vaga: string;
   empresa: string;
   plataforma: string; // Plataforma.id
+  enviadaEm: string; // ISO — a data crua; `data`/`hora` são só a formatação para a tela
   data: string; // DD/MM
   hora: string; // HH:MM
   status: StatusEnvio;

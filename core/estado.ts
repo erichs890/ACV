@@ -104,6 +104,7 @@ export function montarEstado(): Estado {
       vaga: c.titulo,
       empresa: c.empresa,
       plataforma: c.plataforma,
+      enviadaEm: c.enviadaEm,
       data: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
       hora: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       status: c.resultado === 'ensaio' ? 'Pendente' : 'Enviado',
