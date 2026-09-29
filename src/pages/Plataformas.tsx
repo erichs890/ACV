@@ -7,6 +7,7 @@ import { useEstado } from '../estado';
 import { api, post } from '../api';
 import { PLATAFORMAS, REGIOES, tempoAtras } from '../dados';
 import type { Plataforma } from '../types';
+import Orbe from '../components/Orbe';
 
 /** Quantas vagas dessa plataforma estão vivas na lista (o card mostra isso quando ela está conectada). */
 const contarVagas = (vagas: { plataforma: string; status: string }[], id: string) => vagas.filter(v => v.plataforma === id && v.status !== 'encerrada').length;
@@ -448,16 +449,19 @@ function ModalLogin({ plataforma, onFechar }: { plataforma: string | null; onFec
             Cancelar
           </button>
           <button type="button" className="btn btn-primary" onClick={entrar} disabled={esperando}>
+            {esperando && <Orbe estado="esperando" />}
             {esperando ? 'Aguardando o seu login...' : 'Abrir a janela de login'}
           </button>
         </>
       }
     >
       {esperando ? (
-        <p role="status" className="flex items-center gap-2 text-sm">
-          <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-blue-dark border-t-transparent" />
+        <div role="status" className="flex items-center gap-3.5 text-sm">
+          <span className="text-blue-dark">
+            <Orbe estado="esperando" tamanho={64} />
+          </span>
           Faça login na janela que abriu. Assim que terminar, vamos continuar automaticamente.
-        </p>
+        </div>
       ) : (
         <p className="text-xs text-ink-soft">
           Vai abrir uma janela do navegador do robô, identificada como do AutoCV, na página de login de {p?.nome}. Entre como sempre — senha, código por e-mail, captcha, o que {p?.nome} pedir. O

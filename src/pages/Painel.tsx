@@ -5,10 +5,11 @@ import Panel from '../components/Panel';
 import Badge from '../components/Badge';
 import StatCard from '../components/StatCard';
 import BarChart from '../components/BarChart';
+import EtiquetaStatus from '../components/EtiquetaStatus';
 import GraficoDoMes from '../components/GraficoDoMes';
 import { useEstado } from '../estado';
 import { post } from '../api';
-import { STATUS_VAGA, enviosDoMes, getPlataforma, plataformaNoFoco, tempoAtras } from '../dados';
+import { enviosDoMes, getPlataforma, plataformaNoFoco, tempoAtras } from '../dados';
 
 const POR_PAGINA = 10;
 const pg = 'flex h-6 w-[26px] items-center justify-center rounded border text-xs font-bold tabular-nums aria-disabled:cursor-not-allowed aria-disabled:opacity-40';
@@ -92,7 +93,7 @@ export default function Painel() {
                     <p className="truncate text-xs font-bold">{v.titulo}</p>
                     <p className="text-[11px] text-ink-soft">{v.empresa}</p>
                   </div>
-                  <span className={`rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${STATUS_VAGA[v.status].classe}`}>{STATUS_VAGA[v.status].rotulo}</span>
+                  <EtiquetaStatus status={v.status} />
                 </li>
               ))}
             </ol>

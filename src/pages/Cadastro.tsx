@@ -6,6 +6,7 @@ import { useEstadoBruto } from '../estado';
 import { enviarCurriculo } from '../api';
 import { formatarTamanho, validarCurriculo } from '../dados';
 import { TELEFONE_PATTERN, mascaraTelefone, mascarar } from '../mascaras';
+import Orbe from '../components/Orbe';
 
 export default function Cadastro() {
   const { salvar } = useEstadoBruto();
@@ -147,6 +148,7 @@ export default function Cadastro() {
           )}
 
           <button type="submit" className="btn btn-primary btn-lg" disabled={enviando}>
+            {enviando && <Orbe estado="lendo" />}
             {enviando ? 'Analisando o currículo...' : 'Entrar no AutoCV'}
             <ArrowRight size={18} aria-hidden />
           </button>

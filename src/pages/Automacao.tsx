@@ -1,7 +1,6 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
-  CheckCircle2,
   CircleCheck,
   ExternalLink,
   FileDown,
@@ -22,13 +21,15 @@ import {
 } from 'lucide-react';
 import type { LinhaLog, ProgressoVarredura, Vaga } from '../types';
 import Panel from '../components/Panel';
+import Orbe from '../components/Orbe';
+import EtiquetaStatus from '../components/EtiquetaStatus';
 import VerMais from '../components/VerMais';
 import { BotaoSalvar } from '../components/BotaoSalvar';
 import Modal from '../components/Modal';
 import { statusRobo } from '../components/Sidebar';
 import { useEstado, type ConfigAutomacao } from '../estado';
 import { post, urlArquivo } from '../api';
-import { MODELO, PLATAFORMAS, REGIMES, plataformaNoFoco, REGIME_VAGA, STATUS_VAGA, formatarTamanho, getPlataforma, perguntaSoDestaVaga, textoIntervalo } from '../dados';
+import { MODELO, PLATAFORMAS, REGIMES, plataformaNoFoco, REGIME_VAGA, formatarTamanho, getPlataforma, perguntaSoDestaVaga, textoIntervalo } from '../dados';
 
 const titulos = { ativo: 'Robô ligado', pausado: 'Robô parado', erro: 'Robô com erro' };
 const coresLog: Record<LinhaLog['tipo'], string> = { sucesso: 'text-aqua', info: 'text-white/85', aguardo: 'text-amber', erro: 'text-orange-light', alerta: 'text-amber' };
@@ -232,7 +233,7 @@ export default function Automacao() {
             </p>
           </div>
           <button type="button" className="btn btn-primary" disabled={buscando || varrendo} onClick={buscar}>
-            <Search size={16} aria-hidden />
+            {varrendo ? <Orbe estado="procurando" /> : <Search size={16} aria-hidden />}
             {varrendo ? 'Procurando...' : 'Procurar vagas'}
           </button>
           {/* O score por competências conta palavras; a IA lê o currículo e a vaga e separa função de função */}
@@ -637,6 +638,7 @@ export default function Automacao() {
             </Passo>
             <div className="sticky bottom-0 flex items-center gap-2.5 rounded-lg border border-panel-border bg-panel px-3.5 py-3">
               <p role="status" className={`flex-1 text-xs ${sujo ? 'font-bold text-amber-ink' : 'text-ink-soft'}`}>
+                {sujo && <Orbe estado="escrevendo" className="mr-1 inline-block align-[-5px]" />}
                 {sujo ? 'Salvando...' : 'Tudo salvo — esta tela grava sozinha. As mudanças valem para as próximas candidaturas.'}
               </p>
               <button type="button" className="btn btn-secondary" disabled={!sujo} onClick={() => setCfg(base)}>
@@ -667,7 +669,7 @@ export default function Automacao() {
                         <p className="truncate text-xs font-bold">{v.titulo}</p>
                         <p className="truncate text-[10px] text-ink-soft">{v.empresa}</p>
                       </div>
-                      <span className={`rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${STATUS_VAGA[v.status].classe}`}>{STATUS_VAGA[v.status].rotulo}</span>
+                      <EtiquetaStatus status={v.status} />
                       <button
                         type="button"
                         aria-label={`Tirar ${v.titulo} da fila`}
@@ -726,7 +728,6 @@ function origemDaVaga(v: Vaga): string {
 }
 
 function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga; manual: boolean; pdfEnviado?: string; onVerAdaptacao: () => void }) {
-  const st = STATUS_VAGA[v.status];
   const plataforma = getPlataforma(v.plataforma);
   const podeCandidatar = ['encontrada', 'erro', 'ensaio'].includes(v.status);
   return (
@@ -741,10 +742,7 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
             {v.titulo}
             <ExternalLink size={12} aria-hidden />
           </a>
-          <span className={`inline-flex items-center gap-1 rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${st.classe}`}>
-            {v.status === 'enviada' && <CheckCircle2 size={12} aria-hidden />}
-            {st.rotulo}
-          </span>
+          <EtiquetaStatus status={v.status} />
           {/* Origem: em qual plataforma o robô achou a vaga (e, no título, a página exata) */}
           <span className={`inline-flex items-center gap-1 rounded-[9px] px-2 py-0.5 text-[10px] font-bold text-white ${plataforma.cor}`} title={`Encontrada em ${origemDaVaga(v)}`}>
             {plataforma.nome}
@@ -860,7 +858,12 @@ function Adaptacao({ vaga, onFechar }: { vaga: Vaga; onFechar: () => void }) {
           {erro}
         </p>
       )}
-      {!dados && !erro && <p className="py-6 text-center text-xs text-ink-soft">{ocupado ? 'Gerando a adaptação...' : ''}</p>}
+      {!dados && !erro && ocupado && (
+        <div className="flex flex-col items-center gap-2 py-6 text-blue-dark">
+          <Orbe estado="escrevendo" tamanho={64} rotulo="Gerando a adaptação do currículo" />
+          <p className="text-xs text-ink-soft">Gerando a adaptação...</p>
+        </div>
+      )}
       {dados && (
         <>
           <div className="rounded-lg border border-panel-border bg-page-bg p-3">
@@ -1077,7 +1080,12 @@ function PainelVarredura({ varredura }: { varredura: ProgressoVarredura }) {
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-panel-border bg-panel p-3.5">
       <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
-        <p className="text-[13px] font-bold">
+        <p className="flex items-center gap-2 text-[13px] font-bold">
+          {rodando && (
+            <span className="text-blue-dark">
+              <Orbe estado="procurando" />
+            </span>
+          )}
           {rodando ? (
             <>
               Procurando em <span className="text-blue-dark">{nome(plataforma)}</span>
