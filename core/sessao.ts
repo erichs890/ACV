@@ -41,15 +41,23 @@ function gravarSessao(id: string, valida: boolean) {
   salvarParcial({ conexoes: { ...ler.conexoes(), [id]: { ...atual, conectadaEm: atual?.conectadaEm ?? new Date().toISOString(), sessao: { validadaEm: new Date().toISOString(), valida } } } });
 }
 
-/** Abre a URL de prova no navegador do robô e diz se a sessão está logada. */
-export async function validarSessao(id: string): Promise<boolean> {
+/**
+ * Abre a URL de prova no navegador do robô e diz se a sessão está logada.
+ *
+ * Qualquer tropeço aqui (a pessoa fechou a janela, a rede caiu, a plataforma respondeu outra coisa) vale como
+ * "não consegui confirmar" — sem prova não se conecta, e um erro de Playwright cru não ajuda ninguém.
+ * `mostrar` só é false na verificação automática, para não abrir janela na cara de quem estiver no computador.
+ */
+export async function validarSessao(id: string, mostrar = true): Promise<boolean> {
   const prova = provaDe(id);
-  const ctx = await navegador(true);
+  const ctx = await navegador(mostrar);
   const page = await ctx.newPage();
   try {
     await page.goto(prova.urlProva, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.waitForTimeout(1500); // cabeçalhos com o nome da pessoa costumam vir por JS
     return await prova.logado(page);
+  } catch {
+    return false;
   } finally {
     await page.close().catch(() => {});
   }
@@ -71,11 +79,11 @@ const AVISO = (nome: string) =>
  * telas de login e ficar fora por 3 checagens seguidas; então a prova de "logado" decide. Espera generosa
  * (2FA, captcha, digitação lenta): ${MINUTOS_PARA_ENTRAR} min. Devolve o motivo quando não conecta.
  */
-export async function entrarNaJanela(id: string): Promise<{ ok: true } | { ok: false; motivo: string }> {
+export async function entrarNaJanela(id: string, mostrar = true): Promise<{ ok: true } | { ok: false; motivo: string }> {
   if (cancelar) return { ok: false, motivo: 'já existe um login em andamento' };
   const prova = provaDe(id);
   const nome = adapters[id].nome;
-  const ctx = await navegador(true);
+  const ctx = await navegador(mostrar);
   const aviso = await ctx.newPage();
   const page = await ctx.newPage();
   let cancelado = false;
@@ -99,7 +107,7 @@ export async function entrarNaJanela(id: string): Promise<{ ok: true } | { ok: f
     }
     if (fora < 3) return { ok: false, motivo: `tempo esgotado (${MINUTOS_PARA_ENTRAR} min) sem sair da tela de login do ${nome}. Tente de novo.` };
     await page.close().catch(() => {});
-    if (!(await validarSessao(id))) return { ok: false, motivo: `você saiu da tela de login, mas o ${nome} não mostrou a sessão ativa. Tente de novo.` };
+    if (!(await validarSessao(id, mostrar))) return { ok: false, motivo: `você saiu da tela de login, mas o ${nome} não mostrou a sessão ativa. Tente de novo.` };
     gravarSessao(id, true);
     log.registrar('sucesso', `${nome} conectado: a sessão fica no perfil do navegador do robô.`);
     return { ok: true };

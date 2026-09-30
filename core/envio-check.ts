@@ -198,7 +198,7 @@ registrarAdapter({
 const { navegador } = await import('./browser.ts');
 /** Faz o papel da pessoa: acha a aba de login na janela do robô e clica em "Entrar com senha". */
 const pessoaEntra = async () => {
-  const ctx = await navegador(true);
+  const ctx = await navegador(false);
   for (let i = 0; i < 20; i++) {
     const aba = ctx.pages().find(p => p.url().startsWith(`${base}/login`));
     if (aba) return aba.click('#ok');
@@ -208,7 +208,7 @@ const pessoaEntra = async () => {
 };
 try {
   // Cancelar: a janela fecha, nada é gravado
-  const cancelada = entrarNaJanela('falsa');
+  const cancelada = entrarNaJanela('falsa', false);
   await new Promise(r => setTimeout(r, 1500));
   cancelarLogin();
   const rc = await cancelada;
@@ -217,7 +217,7 @@ try {
   assert.equal(ler.conexoes().falsa, undefined, 'cancelado = nada gravado');
 
   // Caminho feliz: a pessoa entra, a página sai do login, a prova confirma
-  const entrada = entrarNaJanela('falsa');
+  const entrada = entrarNaJanela('falsa', false);
   await pessoaEntra();
   const re = await entrada;
   assert.equal(re.ok, true, `esperava conectar, veio: ${re.ok ? '' : re.motivo}`);

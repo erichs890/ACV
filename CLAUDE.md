@@ -1,11 +1,11 @@
 # AutoCV
 
-App local que acha vagas (InHire, Indeed, Vagas PJ) e candidata sozinho. Front Vite/React (`src/`) + núcleo Node/Playwright/SQLite (`core/`). PT-BR em tudo: código, comentários, UI, commits.
+App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata sozinho. Front Vite/React (`src/`) + núcleo Node/Playwright/SQLite (`core/`). PT-BR em tudo: código, comentários, UI, commits.
 
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\AutoCV`.
-Antes de commitar: `npm run check` (62 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (83 verificações) e `npm run build` (biome + tsc + vite).
 
 ## Fluxo
 

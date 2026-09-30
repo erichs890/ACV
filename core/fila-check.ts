@@ -287,6 +287,9 @@ const primeira = enfileirar({ empresa: 'BIX', titulo: 'Banco de Talentos - Desen
 const irma = enfileirar({ status: 'encontrada', posicao: undefined, empresa: 'BIX', titulo: 'Banco de talentos - desenvolvedor(a) back end' });
 await processarProxima();
 assert.equal(st(primeira), 'enviada');
+// A irmã sai da lista NA HORA do envio. Antes ela ficava em 'encontrada' para sempre: a fila nunca a pega
+// (`jaCandidatado` barra) e ela seguia na tela como se ainda fosse acontecer alguma coisa.
+assert.equal(st(irma), 'encerrada', 'enviou = a publicação irmã é descartada na hora');
 assert.throws(() => candidatarAgora(irma), /outra publica/, 'clique manual na publicação irmã tem de ser recusado');
 vagas.atualizar(irma, { status: 'na_fila', posicao: vagas.proximaPosicao() }); // forçado por fora
 await processarProxima(true); // o intervalo alto seguraria a fila; aqui o que se testa e a trava
@@ -400,6 +403,18 @@ assert.equal(enviadas(), 1, 'o ensaio não contava como envio; agora existe uma 
 // e depois de enviada de verdade, continua valendo a trava de duplicidade
 assert.throws(() => candidatarAgora(ensaiada), /já se candidatou/);
 console.log('✓ Vaga ensaiada volta à fila ao desligar o ensaio (e nunca com ele ligado)');
+
+// Ligar o robô fora da janela tem de DIZER isso na hora: sem o aviso, a pessoa liga, pausa e liga de novo
+// achando que o robô quebrou (aconteceu em 24/09/2026, às 23h, com a janela em 08:00-20:00). Fica por último
+// porque `ligarRobo` dispara um envio que não dá para esperar daqui, e ele vazaria para o cenário seguinte.
+cenario({ janela: '03:00-03:01' });
+enfileirar();
+ligarRobo(true);
+assert.ok(
+  log.listar().some(l => /janela de envio é 03:00-03:01/.test(l.msg)),
+  'ligar fora da janela precisa avisar na hora',
+);
+console.log('✓ Ligar o robô fora da janela avisa na hora, em vez de ficar parado em silêncio');
 
 apagarTudo();
 log.listar(0);

@@ -117,6 +117,33 @@ export const chaveDaVaga = (v: { empresa: string; titulo: string }) => `${normal
 /** Já existe candidatura ENVIADA para esta vaga? (ensaio não conta: é justamente o passo antes do envio real) */
 export const jaEnviada = (vagaId: string) => candidaturas.listar().some(c => c.vagaId === vagaId && c.resultado === 'enviada');
 
+/**
+ * Fecha as publicações irmãs de algo já enviado (mesma empresa + título, outro id — o InHire e o Divulga Vagas
+ * republicam a mesma vaga).
+ *
+ * Elas ficavam abertas para sempre: `enfileirarCompativeis` nunca as pega (`jaCandidatado` barra) e só seriam
+ * encerradas se a fila tentasse mandar de novo. Resultado na tela: vaga que parece esperando e nunca anda.
+ * Como "uma vaga, uma candidatura" (invariante 4) já decidiu que elas não serão enviadas, o lugar delas é
+ * `encerrada`, não a lista de pendentes.
+ */
+export function encerrarIrmasEnviadas(): number {
+  const enviadas = new Set(
+    candidaturas
+      .listar()
+      .filter(c => c.resultado === 'enviada')
+      .map(chaveDaVaga),
+  );
+  if (!enviadas.size) return 0;
+  const abertas = vagas.listar().filter(v => v.status !== 'encerrada' && v.status !== 'enviada' && v.status !== 'ignorada');
+  let fechadas = 0;
+  for (const v of abertas) {
+    if (!enviadas.has(chaveDaVaga(v))) continue;
+    vagas.atualizar(v.id, { status: 'encerrada', posicao: undefined, pendencia: undefined, motivo: 'você já se candidatou a esta vaga (outra publicação da mesma empresa e título)' });
+    fechadas++;
+  }
+  return fechadas;
+}
+
 /** Já se candidatou a esta vaga OU a outra com o mesmo título na mesma empresa. */
 export function jaCandidatado(vaga: { id: string; empresa: string; titulo: string }): boolean {
   const chave = chaveDaVaga(vaga);
@@ -261,6 +288,8 @@ export async function executarCandidatura(id: string) {
   } else {
     registrar('sucesso', `Candidatura confirmada: "${vaga.titulo}" em ${vaga.empresa} — currículo ${versao}, regime ${regime ?? 'não pedido'}.`);
     emitir({ tipo: 'aviso', nivel: 'sucesso', msg: `Candidatura enviada: ${vaga.titulo} (${vaga.empresa})` });
+    const irmas = encerrarIrmasEnviadas();
+    if (irmas) registrar('info', `${irmas} publicação(ões) repetida(s) da mesma vaga saíram da lista — o currículo já foi para essa empresa.`);
   }
   kv.set('proximoEnvioEm', new Date(Date.now() + cfg.intervaloSegundos * 1000).toISOString());
 }

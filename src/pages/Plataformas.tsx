@@ -1,11 +1,26 @@
 import { useState, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
-import { Building2, KeyRound, Plug, Plus, Puzzle, RadarIcon, Search, Trash2, Unplug } from 'lucide-react';
+import { Building2, ExternalLink, KeyRound, Plug, Plus, Puzzle, RadarIcon, Search, Trash2, Unplug } from 'lucide-react';
 import Modal from '../components/Modal';
 import Panel from '../components/Panel';
 import { useEstado } from '../estado';
 import { api, post } from '../api';
 import { PLATAFORMAS, REGIOES, tempoAtras } from '../dados';
+import type { Plataforma } from '../types';
+
+/** Quantas vagas dessa plataforma estão vivas na lista (o card mostra isso quando ela está conectada). */
+const contarVagas = (vagas: { plataforma: string; status: string }[], id: string) => vagas.filter(v => v.plataforma === id && v.status !== 'encerrada').length;
+
+/**
+ * O texto do card. Era um ternário aninhado por id que ia crescer a cada plataforma nova — agora o caso
+ * específico fica aqui e o resto cai na `nota` do catálogo, que toda plataforma já tem.
+ */
+function descricaoDoCard(p: Plataforma, conectada: boolean, vagas: number, empresasInhire: number): string {
+  if (!conectada) return p.nota ?? 'Integração ainda não implementada.';
+  if (p.id === 'inhire') return `${empresasInhire} empresa(s) monitoradas · ${vagas} vagas ativas`;
+  if (p.id === 'indeed') return `${vagas} vagas com candidatura simplificada · o robô usa janela visível`;
+  return `${vagas} vaga(s) acompanhada(s) · candidatura no próprio site`;
+}
 
 export default function Plataformas() {
   const { estado, salvar, registrar } = useEstado();
@@ -70,6 +85,7 @@ export default function Plataformas() {
 
       {REGIOES.map(r => {
         const doGrupo = PLATAFORMAS.filter(p => p.regiao === r.id);
+        const quantasVagas = (id: string) => contarVagas(estado.vagas, id);
         if (!doGrupo.length) return null;
         const ligadas = doGrupo.filter(p => estado.conexoes[p.id]).length;
         return (
@@ -102,30 +118,23 @@ export default function Plataformas() {
                         </span>
                       </div>
                     </div>
-                    <p className="text-xs text-ink-soft">
-                      {p.id === 'inhire'
-                        ? conexao
-                          ? `${ativas.length} empresa(s) monitoradas · ${vagasAtivas} vagas ativas`
-                          : 'Páginas de vagas públicas, sem login. O robô descobre as empresas que usam InHire e acompanha as vagas delas.'
-                        : p.id === 'indeed'
-                          ? conexao
-                            ? `${estado.vagas.filter(v => v.plataforma === 'indeed' && v.status !== 'encerrada').length} vagas com candidatura simplificada · o robô usa janela visível`
-                            : 'Só vagas com "Candidatar-se facilmente". Você entra na sua conta numa janela do robô; o AutoCV não vê a senha. O Indeed bloqueia navegador oculto, então a janela sempre aparece.'
-                          : p.id === 'vagaspj'
-                            ? conexao
-                              ? `${estado.vagas.filter(v => v.plataforma === 'vagaspj' && v.status !== 'encerrada').length} vagas PJ acompanhadas · candidatura no próprio site`
-                              : 'Vagas de contratação PJ, sem login. A lista vem do feed público do site e o formulário de candidatura é curto (nome, WhatsApp, e-mail, LinkedIn, tipo de CNPJ e o PDF).'
-                            : (p.nota ?? 'Integração ainda não implementada.')}
-                    </p>
+                    <p className="text-xs text-ink-soft">{descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}</p>
                     {conexao?.sessao?.valida === false && (
                       <p role="alert" className="text-[11px] font-bold text-orange-deep">
                         A sessão caiu: as vagas de {p.nome} ficam paradas até você entrar de novo.
                       </p>
                     )}
-                    {!p.disponivel && p.site && (
-                      <a href={p.site} target="_blank" rel="noreferrer" className="text-xs font-bold text-blue-deep underline underline-offset-2">
-                        Abrir o site
-                        <span className="sr-only"> de {p.nome}</span>
+                    {p.site && (
+                      <a
+                        href={p.site}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex max-w-full items-center gap-1 truncate text-[11px] font-bold text-blue-deep underline underline-offset-2"
+                        title={p.site}
+                      >
+                        <ExternalLink size={12} aria-hidden className="shrink-0" />
+                        {p.site.replace(/^https?:\/\//, '')}
+                        <span className="sr-only"> — abrir o site de {p.nome}</span>
                       </a>
                     )}
                     {/* Espelho: quem edita o foco é a Automação (uma fonte por campo) */}

@@ -8,6 +8,10 @@ import './platforms/indeed/index.ts';
 import { cancelarLogin, entrarNaJanela } from './sessao.ts';
 import { autorizado, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } from './extensao.ts';
 import './platforms/vagaspj/index.ts';
+import './platforms/divulgavagas/index.ts';
+import './platforms/workable/index.ts';
+import './platforms/quickin/index.ts';
+import './platforms/arbeitnow/index.ts';
 import { PORTA, DIRS } from './config.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';
@@ -16,7 +20,8 @@ import { buscarVagas, candidatarAgora, decidirPreview, enfileirarCompativeis, in
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
 import { markdownParaPdf } from './resume/mdToPdf.ts';
-import { gerarAdaptacao } from './candidatura.ts';
+import { traduzirCurriculoParaIngles } from './resume/traducao.ts';
+import { encerrarIrmasEnviadas, gerarAdaptacao } from './candidatura.ts';
 import { fecharNavegador } from './browser.ts';
 import { migrarModelo, salvarIA, testarIA } from './ia.ts';
 import { adicionarEmpresa, importarSeed, migrarTenantsAntigos, salvarDescoberta } from './platforms/inhire/discovery.ts';
@@ -168,8 +173,85 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     const caminho = url.searchParams.get('caminho') ?? '';
     const permitido = Object.values(DIRS).some(d => caminho.startsWith(d));
     if (!permitido || !existsSync(caminho)) return json(res, 404, { erro: 'arquivo não encontrado' });
-    res.writeHead(200, { 'content-type': caminho.endsWith('.png') ? 'image/png' : 'application/pdf' });
+    const baixar = url.searchParams.get('baixar') === '1' || url.searchParams.get('download') === '1';
+    const nome = url.searchParams.get('nome') || (caminho.endsWith('.png') ? 'imagem.png' : 'curriculo.pdf');
+    const headers: Record<string, string> = {
+      'content-type': caminho.endsWith('.png') ? 'image/png' : 'application/pdf',
+    };
+    if (baixar) {
+      headers['content-disposition'] = `attachment; filename="${encodeURIComponent(nome)}"`;
+    }
+    res.writeHead(200, headers);
     res.end(readFileSync(caminho));
+  },
+  'POST /curriculo/ingles': async (req, res) => {
+    const { id, refazer } = JSON.parse((await corpo(req)).toString('utf8') || '{}');
+    const lista = ler.curriculos();
+    const alvo = id ? lista.find(c => c.id === Number(id)) : lista[0];
+    if (!alvo?.markdown) {
+      return json(res, 400, { erro: 'nenhum currículo com texto encontrado para traduzir' });
+    }
+
+    if (alvo.inglesMarkdown && alvo.inglesPdf && existsSync(alvo.inglesPdf) && !refazer) {
+      return json(res, 200, {
+        ok: true,
+        inglesMarkdown: alvo.inglesMarkdown,
+        pdf: alvo.inglesPdf,
+        caminho: alvo.inglesPdf,
+        nome: `${alvo.nome.replace(/\.[^.]+$/, '')}-EN.pdf`,
+      });
+    }
+
+    registrar('info', `Iniciando tradução do currículo ${alvo.nome} para inglês...`);
+    const inglesMarkdown = await traduzirCurriculoParaIngles(alvo.markdown);
+    if (!inglesMarkdown.trim()) {
+      return json(res, 500, { erro: 'não foi possível traduzir o currículo' });
+    }
+
+    const caminhoPdf = join(DIRS.curriculos, `${alvo.id}-en.pdf`);
+    await markdownParaPdf(inglesMarkdown, caminhoPdf, false);
+
+    alvo.inglesMarkdown = inglesMarkdown;
+    alvo.inglesPdf = caminhoPdf;
+    alvo.traduzidoEm = new Date().toISOString();
+
+    kv.set(
+      'curriculos',
+      lista.map(c => (c.id === alvo.id ? alvo : c)),
+    );
+    registrar('sucesso', `Currículo ${alvo.nome} traduzido para inglês com sucesso.`);
+    emitir({ tipo: 'estado' });
+
+    json(res, 200, {
+      ok: true,
+      inglesMarkdown,
+      pdf: caminhoPdf,
+      caminho: caminhoPdf,
+      nome: `${alvo.nome.replace(/\.[^.]+$/, '')}-EN.pdf`,
+    });
+  },
+  'POST /curriculo/salvar-markdown': async (req, res) => {
+    const { nome, markdown } = JSON.parse((await corpo(req)).toString('utf8') || '{}');
+    if (!markdown?.trim()) return json(res, 400, { erro: 'markdown ausente' });
+    const nomeFinal = `${(nome?.trim() || 'curriculo-en.pdf').replace(/\.pdf$/i, '')}.pdf`;
+    const id = Date.now();
+    const caminho = join(DIRS.curriculos, `${id}-${nomeFinal.replace(/[^\w.-]+/g, '_')}`);
+    await markdownParaPdf(markdown, caminho, false);
+    const bytes = readFileSync(caminho);
+    const perfilBusca = analisarCurriculo(markdown);
+    const arquivo: Arquivo = {
+      id,
+      nome: nomeFinal,
+      tamanho: bytes.length,
+      enviadoEm: new Date().toISOString(),
+      caminho,
+      markdown,
+      perfilBusca,
+    };
+    kv.set('curriculos', [arquivo, ...ler.curriculos()]);
+    registrar('sucesso', `Currículo ${nomeFinal} salvo como novo arquivo.`);
+    emitir({ tipo: 'estado' });
+    json(res, 200, arquivo);
   },
   'POST /buscar': async (_r, res) => {
     // Varredura forçada; roda em segundo plano e o front acompanha por eventos/log
@@ -325,6 +407,8 @@ createServer(async (req, res) => {
   // Higiene da fila na subida: publicação repetida da mesma vaga pode ter entrado antes desta regra existir,
   // e com o robô pausado o enfileiramento (que também limpa) nem roda.
   limparDuplicatasDaFila();
+  const irmas = encerrarIrmasEnviadas(); // vagas repetidas de algo já enviado, de antes desta regra existir
+  if (irmas) registrar('info', `${irmas} vaga(s) repetida(s) de candidaturas já enviadas saíram da lista.`);
   iniciarLaco();
 });
 

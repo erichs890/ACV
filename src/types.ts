@@ -62,6 +62,9 @@ export interface Arquivo {
   caminho?: string; // no disco (núcleo)
   markdown?: string; // texto extraído do PDF
   perfilBusca?: PerfilBusca;
+  inglesMarkdown?: string; // versão traduzida para inglês
+  inglesPdf?: string; // caminho do PDF traduzido no disco
+  traduzidoEm?: string; // ISO
 }
 
 // ─── Usuário ─────────────────────────────────────────────────

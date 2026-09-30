@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
+  Clock,
   ExternalLink,
   FileDown,
   FileText,
@@ -27,7 +28,7 @@ import Modal from '../components/Modal';
 import { statusRobo } from '../components/Sidebar';
 import { useEstado, type ConfigAutomacao } from '../estado';
 import { post, urlArquivo } from '../api';
-import { MODELO, PLATAFORMAS, REGIMES, plataformaNoFoco, REGIME_VAGA, STATUS_VAGA, formatarTamanho, getPlataforma, perguntaSoDestaVaga, textoIntervalo } from '../dados';
+import { MODELO, PLATAFORMAS, REGIMES, plataformaNoFoco, REGIME_VAGA, STATUS_VAGA, dentroDaJanela, formatarTamanho, getPlataforma, perguntaSoDestaVaga, textoIntervalo } from '../dados';
 
 const titulos = { ativo: 'Robô ligado', pausado: 'Robô parado', erro: 'Robô com erro' };
 const coresLog: Record<LinhaLog['tipo'], string> = { sucesso: 'text-aqua', info: 'text-white/85', aguardo: 'text-amber', erro: 'text-orange-light', alerta: 'text-amber' };
@@ -169,6 +170,14 @@ export default function Automacao() {
   }
 
   /** Troca fora do formulário: grava na hora, senão o usuário mudaria e ligaria o robô com o modo antigo. */
+  /** Tira o relógio do caminho: grava na hora, como a troca de modo — quem clica nisto quer enviar agora. */
+  async function abrirJanelaDeVez() {
+    set({ janela: '00:00-23:59' });
+    setBase(b => ({ ...b, janela: '00:00-23:59' }));
+    await salvar({ automacao: { ...estado.automacao, janela: '00:00-23:59' } });
+    registrar('sucesso', 'Janela de envio agora é o dia inteiro (00:00-23:59): o robô pode enviar a qualquer hora.');
+  }
+
   async function trocarModoPerguntas(m: ConfigAutomacao['modoPerguntas']) {
     if (m === estado.automacao.modoPerguntas) return;
     set({ modoPerguntas: m });
@@ -237,6 +246,21 @@ export default function Automacao() {
             </button>
           )}
         </section>
+
+        {/* Robô ligado e parado pelo relógio: é o motivo nº 1 de "liguei e não acontece nada" (24/09/2026, 23h,
+            janela 08:00-20:00). O aviso vale pouco sem o conserto junto, então o botão está aqui. */}
+        {ativo && estado.automacao.modo === 'automatico' && !dentroDaJanela(estado.automacao.janela) && (
+          <section aria-label="Fora da janela de envio" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-amber bg-amber/15 px-3.5 py-2.5">
+            <Clock size={16} aria-hidden className="shrink-0 text-amber-ink" />
+            <p className="min-w-[240px] flex-1 text-xs text-amber-ink">
+              <strong>O robô está ligado, mas não vai enviar agora:</strong> são {new Date().toTimeString().slice(0, 5)} e a janela de envio é {estado.automacao.janela}. Ele volta a enviar às{' '}
+              {estado.automacao.janela.split('-')[0]}.
+            </p>
+            <button type="button" className="btn btn-secondary btn-sm" onClick={abrirJanelaDeVez}>
+              Enviar a qualquer hora
+            </button>
+          </section>
+        )}
 
         {/* Antes de ligar: qual é a regra quando uma empresa faz uma pergunta que você nunca respondeu */}
         <section aria-label="Perguntas das empresas" className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-lg border border-panel-border bg-panel px-3.5 py-2.5">

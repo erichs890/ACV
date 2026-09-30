@@ -2,6 +2,7 @@
 //   node core/self-check.ts
 // Cobre: Markdown → PDF → Markdown, análise do currículo, score, adaptação sem invenção, similaridade de perguntas.
 import assert from 'node:assert/strict';
+import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -838,6 +839,227 @@ assert.equal(casadas.length, 2, 'as duas opções corretas têm de ser reconheci
 assert.deepEqual(casadas, [OPC[0], OPC[1]]);
 assert.equal(casarComOpcao(OPC, 'Isso não existe na lista desta vaga'), null, 'opção inventada é recusada');
 console.log('✓ Marcar várias: a IA pode escolher mais de uma opção');
+
+// 12) Divulga Vagas: peneira pelo slug, JSON-LD e a trava de vaga PcD
+const { lerSitemap, termosDoPerfil, slugInteressa, lerJobPosting: lerJP, modeloDe: modeloDV, montarVaga: montarDV } = await import('./platforms/divulgavagas/busca.ts');
+const { DIVULGA, EMPRESA_OCULTA } = await import('./platforms/divulgavagas/seletores.ts');
+
+const SITEMAP = `<?xml version="1.0"?><urlset>
+<url><loc>https://divulgavagas.com.br/vaga-de-emprego/desenvolvedor-python-senior-home-office-rs-34541421</loc><lastmod>2026-09-23</lastmod></url>
+<url><loc>https://divulgavagas.com.br/vaga-de-emprego/motorista-de-carreta-34296295</loc></url>
+<url><loc>https://divulgavagas.com.br/vagas-de-home-office</loc></url></urlset>`;
+const doSitemap = lerSitemap(SITEMAP);
+assert.equal(doSitemap.length, 2, 'só entram URLs de vaga, não páginas de categoria');
+assert.deepEqual({ id: doSitemap[0].id, slug: doSitemap[0].slug }, { id: '34541421', slug: 'desenvolvedor-python-senior-home-office-rs' });
+
+// A peneira é o que torna viável um acervo de 41 mil vagas quase todo fora da área
+const termos = termosDoPerfil({ area: 'TI', cargos: ['Desenvolvedor Full Stack'], skills: ['python', 'react'], senioridade: 'Pleno' }, 'Desenvolvedor');
+assert.ok(slugInteressa('desenvolvedor-python-senior-home-office-rs', termos));
+assert.ok(!slugInteressa('motorista-de-carreta', termos), 'vaga de outra área não pode custar um download');
+assert.ok(!slugInteressa('auxiliar-administrativo', termos));
+assert.ok(!termos.includes('ia'), 'termo de 2 letras casaria com qualquer slug');
+
+const paginaDV = (jp: object) => `<html><body><script type="application/ld+json">${JSON.stringify({ '@context': 'https://schema.org/', '@type': 'JobPosting', ...jp })}</script></body></html>`;
+const JP = { title: 'Desenvolvedor Python Sênior – Home Office - Rs | Vaga #34541421', description: 'Vaga de Python', skills: ['Python', 'SQL'], employmentType: 'FULL_TIME' };
+assert.equal(lerJP(paginaDV(JP))?.title, JP.title);
+assert.equal(modeloDV({ jobLocationType: 'TELECOMMUTE' }, 'Dev'), 'remoto');
+assert.equal(modeloDV({}, 'Dev Pleno | Híbrido em Fortaleza'), 'hibrido');
+assert.equal(modeloDV({}, 'Dev'), 'indefinido', 'sem endereço e sem marca não invento presencial');
+
+const itemDV = { id: '34541421', slug: 'desenvolvedor-python-senior', url: 'https://divulgavagas.com.br/vaga-de-emprego/desenvolvedor-python-senior-34541421' };
+const cfgDV = { area: '', senioridade: '', scoreMinimo: 30 } as unknown as Parameters<typeof montarDV>[3];
+const prefDV = { localizacaoPresencial: 'Fortaleza - CE', paisesRemoto: ['Brasil'] };
+const vDV = montarDV(itemDV, paginaDV({ ...JP, jobLocationType: 'TELECOMMUTE' }), perfil, cfgDV, prefDV)!;
+assert.equal(vDV.id, 'divulgavagas:34541421');
+assert.equal(vDV.titulo, 'Desenvolvedor Python Sênior – Home Office - Rs', 'o sufixo "| Vaga #id" é ruído do site');
+assert.equal(vDV.empresa, EMPRESA_OCULTA, 'o site nunca diz de quem é a vaga');
+assert.equal(vDV.modelo, 'remoto');
+assert.ok(vDV.requisitos.includes('Python'), 'as skills do JSON-LD viram requisitos');
+assert.equal(montarDV(itemDV, paginaDV({ ...JP, validThrough: '2020-01-01T00:00:00-03:00' }), perfil, cfgDV, prefDV), null, 'vaga vencida não entra');
+assert.equal(montarDV(itemDV, '<html>sem json-ld</html>', perfil, cfgDV, prefDV), null);
+
+// A caixa de PcD é uma declaração sobre a pessoa: o robô a detecta pelo CONTÊINER, não pelo input
+assert.notEqual(DIVULGA.pcdContainer, DIVULGA.pcd, 'o input fica sempre escondido; quem revela a vaga PcD é o contêiner');
+assert.ok(DIVULGA.sucesso.test('Currículo enviado com sucesso!'));
+assert.ok(!DIVULGA.sucesso.test('Enviar Currículo Li e aceito os Termos'), 'o formulário por enviar não é sucesso');
+// 13) Workable: modelo de trabalho, regime, montagem de vaga e rotas de envio
+const { modeloDe: modeloWK, regimeDe: regimeWK, montarVaga: montarWK } = await import('./platforms/workable/busca.ts');
+const { idDaVaga: idWK } = await import('./platforms/workable/index.ts');
+const { WORKABLE } = await import('./platforms/workable/seletores.ts');
+
+assert.equal(modeloWK('remote'), 'remoto');
+assert.equal(modeloWK('hybrid'), 'hibrido');
+assert.equal(modeloWK('on_site'), 'presencial');
+assert.equal(modeloWK(''), 'indefinido');
+assert.equal(regimeWK('Full-time'), 'CLT');
+assert.equal(regimeWK('Contract'), 'PJ');
+assert.equal(regimeWK(''), 'indefinido');
+
+assert.equal(idWK({ id: 'workable:abc-123', url: 'https://jobs.workable.com/view/abc-123/slug' }), 'abc-123');
+assert.equal(idWK({ id: '', url: 'https://jobs.workable.com/view/def-456/slug-da-vaga' }), 'def-456');
+
+const rawWK = {
+  id: 'abc-123',
+  title: 'Java Backend Developer',
+  description: '<p>Requisitos: Java, Spring Boot e SQL</p>',
+  requirementsSection: '<p>2 anos de experiência</p>',
+  benefitsSection: '<p>Plano de saúde</p>',
+  workplace: 'remote' as const,
+  employmentType: 'Full-time',
+  url: 'https://jobs.workable.com/view/abc-123/java-backend-developer',
+  location: { city: 'São Paulo', subregion: 'SP', countryName: 'Brazil' },
+  company: { id: 'acme-corp', title: 'Acme Corp' },
+  created: '2026-09-24T00:00:00Z',
+};
+const vWK = montarWK(rawWK, perfil, { area: '', senioridade: '', scoreMinimo: 30 } as unknown as Parameters<typeof montarWK>[2], {
+  localizacaoPresencial: 'São Paulo - SP',
+  paisesRemoto: ['Brasil'],
+})!;
+assert.equal(vWK.id, 'workable:abc-123');
+assert.equal(vWK.plataforma, 'workable');
+assert.equal(vWK.titulo, 'Java Backend Developer');
+assert.equal(vWK.empresa, 'Acme Corp');
+assert.equal(vWK.modelo, 'remoto');
+assert.equal(vWK.regime, 'CLT');
+assert.ok(vWK.score >= 50, `score Workable deveria ser alto: ${vWK.score}`);
+assert.ok(WORKABLE.rotaEnvio.test('https://jobs.workable.com/api/v1/jobs/abc-123/apply?lng=en'));
+assert.ok(!WORKABLE.rotaEnvio.test('https://jobs.workable.com/api/v1/jobs/abc-123/form'));
+assert.ok(WORKABLE.sucesso.test('Thank you for applying!'));
+assert.ok(WORKABLE.sucesso.test('Your application has been received'));
+console.log(`✓ Workable: modelo/regime, extração de ID, API e prova de envio (${vWK.score}%)`);
+
+// 14) Quickin: sitemaps, extração por ID, JSON-LD e convenções
+const { extrairEmpresasDoSitemapIndex, lerSitemapEmpresa, lerJobPosting: lerJPQK, modeloDe: modeloQK, regimeDe: regimeQK, montarVaga: montarQK } = await import('./platforms/quickin/busca.ts');
+const { extrairEmpresaEId } = await import('./platforms/quickin/index.ts');
+const { QUICKIN } = await import('./platforms/quickin/seletores.ts');
+
+const SITEMAP_INDEX_QK = `<?xml version="1.0" encoding="UTF-8"?>
+<sitemapindex xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <sitemap><loc>https://jobs.quickin.io/sitemaps/empresa-alpha-jobs.xml</loc><lastmod>2026-09-24</lastmod></sitemap>
+  <sitemap><loc>https://jobs.quickin.io/sitemaps/beta-tech-jobs.xml</loc></sitemap>
+</sitemapindex>`;
+const empresasQK = extrairEmpresasDoSitemapIndex(SITEMAP_INDEX_QK);
+assert.deepEqual(empresasQK, ['empresa-alpha', 'beta-tech']);
+
+const SITEMAP_EMP_QK = `<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>https://jobs.quickin.io/empresa-alpha/jobs/6ab06d193299af0013c75f37</loc></url>
+</urlset>`;
+const itensQK = lerSitemapEmpresa(SITEMAP_EMP_QK, 'empresa-alpha');
+assert.equal(itensQK.length, 1);
+assert.equal(itensQK[0].id, '6ab06d193299af0013c75f37');
+assert.equal(itensQK[0].empresa, 'empresa-alpha');
+
+const infoQK = extrairEmpresaEId({ id: 'quickin:6ab06d193299af0013c75f37', url: 'https://jobs.quickin.io/empresa-alpha/jobs/6ab06d193299af0013c75f37' });
+assert.deepEqual(infoQK, { empresa: 'empresa-alpha', jobId: '6ab06d193299af0013c75f37' });
+
+const JP_QK = {
+  title: 'Desenvolvedora Back-end Java Jr',
+  description: '<p>Requisitos: Java, Spring Boot e SQL</p>',
+  employmentType: 'FULL_TIME',
+  jobLocationType: 'TELECOMMUTE',
+  hiringOrganization: { name: 'Empresa Alpha' },
+  jobLocation: { address: { addressLocality: 'São Paulo', addressRegion: 'SP', addressCountry: 'Brasil' } },
+};
+const htmlQK = `<html><head><script type="application/ld+json">${JSON.stringify({ '@context': 'http://schema.org/', '@type': 'JobPosting', ...JP_QK })}</script></head><body></body></html>`;
+assert.equal(lerJPQK(htmlQK)?.title, JP_QK.title);
+assert.equal(modeloQK(JP_QK, JP_QK.title, JP_QK.description), 'remoto');
+assert.equal(regimeQK(JP_QK), 'CLT');
+
+const vQK = montarQK(itensQK[0], htmlQK, perfil, { area: '', senioridade: '', scoreMinimo: 30 } as unknown as Parameters<typeof montarQK>[3], {
+  localizacaoPresencial: 'São Paulo - SP',
+  paisesRemoto: ['Brasil'],
+})!;
+assert.equal(vQK.id, 'quickin:6ab06d193299af0013c75f37');
+assert.equal(vQK.plataforma, 'quickin');
+assert.equal(vQK.titulo, 'Desenvolvedora Back-end Java Jr');
+assert.equal(vQK.empresa, 'Empresa Alpha');
+assert.equal(vQK.modelo, 'remoto');
+assert.equal(vQK.regime, 'CLT');
+assert.ok(vQK.score >= 50, `score Quickin deveria ser alto: ${vQK.score}`);
+assert.ok(QUICKIN.rotaEnvio.test('https://api.quickin.io/public/66c6006c637e170013d1509b/apply'));
+assert.ok(QUICKIN.sucesso.test('Candidatura enviada com sucesso!'));
+assert.ok(QUICKIN.sucesso.test('Recebemos sua candidatura'));
+console.log(`✓ Quickin: sitemaps de 628 empresas, JSON-LD, formulário por ID e envio (${vQK.score}%)`);
+
+// 15) Arbeitnow: modelo de trabalho, regime, montagem de vaga e convenções multilíngues
+const { modeloDe: modeloAN, regimeDe: regimeAN, montarVaga: montarAN } = await import('./platforms/arbeitnow/busca.ts');
+const { ARBEITNOW } = await import('./platforms/arbeitnow/seletores.ts');
+
+const itemAN = {
+  slug: 'backend-java-developer-remote-12345',
+  company_name: 'Tech Berlin GmbH',
+  title: 'Junior Java Backend Developer',
+  description: '<p>Requirements: Java, Spring Boot, SQL, Git</p>',
+  remote: true,
+  url: 'https://www.arbeitnow.com/jobs/companies/tech-berlin-gmbh/backend-java-developer-remote-12345',
+  tags: ['Java', 'Spring', 'Backend'],
+  job_types: ['Full-time'],
+  location: 'Berlin',
+  created_at: Math.floor(Date.now() / 1000),
+};
+
+assert.equal(modeloAN(itemAN), 'remoto');
+assert.equal(modeloAN({ ...itemAN, remote: false, location: 'Berlin' }), 'presencial');
+assert.equal(regimeAN(itemAN), 'CLT');
+assert.equal(regimeAN({ ...itemAN, job_types: ['Contract'] }), 'PJ');
+
+const vAN = montarAN(itemAN, perfil, { area: '', senioridade: '', scoreMinimo: 30 } as unknown as Parameters<typeof montarAN>[2], { localizacaoPresencial: '', paisesRemoto: ['Alemanha', 'Brasil'] })!;
+assert.equal(vAN.id, 'arbeitnow:backend-java-developer-remote-12345');
+assert.equal(vAN.plataforma, 'arbeitnow');
+assert.equal(vAN.titulo, 'Junior Java Backend Developer');
+assert.equal(vAN.empresa, 'Tech Berlin GmbH');
+assert.equal(vAN.modelo, 'remoto');
+assert.ok(vAN.score >= 50, `score Arbeitnow deveria ser alto: ${vAN.score}`);
+
+// Convenções multilíngues (Inglês, Alemão e Português) para formulários internacionais
+assert.ok(ARBEITNOW.convencoes.proximo.test('Next'));
+assert.ok(ARBEITNOW.convencoes.proximo.test('Continue'));
+assert.ok(ARBEITNOW.convencoes.proximo.test('Weiter'));
+assert.ok(ARBEITNOW.convencoes.final.test('Submit application'));
+assert.ok(ARBEITNOW.convencoes.final.test('Bewerbung absenden'));
+assert.ok(ARBEITNOW.convencoes.final.test('Apply now'));
+assert.ok(ARBEITNOW.convencoes.sucesso.test('Thank you for your application'));
+assert.ok(ARBEITNOW.convencoes.sucesso.test('Vielen Dank für Ihre Bewerbung'));
+assert.ok(ARBEITNOW.convencoes.sucesso.test('Application received'));
+console.log(`✓ Arbeitnow: API, modelo/regime, pontuação e convenções EN/DE/PT (${vAN.score}%)`);
+
+// 16) Tradução de currículo para inglês e geração de PDF A4
+const { traduzirCurriculoParaIngles } = await import('./resume/traducao.ts');
+
+const cvExemploPt = `# Marina Pitanga
+Desenvolvedora Back-End Júnior | Campinas - SP
+
+## Resumo Profissional
+Desenvolvedora Back-End com foco em Java e Spring Boot.
+
+## Experiência Profissional
+### Acme Corp — Desenvolvedora Back-End
+Janeiro de 2023 – Presente
+• Desenvolvimento de microsserviços em Java e Spring Boot.
+
+## Formação Acadêmica
+Bacharelado em Ciência da Computação
+
+## Competências Técnicas
+Java, Spring Boot, PostgreSQL, Docker, Git.
+`;
+
+const cvTraduzidoEn = await traduzirCurriculoParaIngles(cvExemploPt);
+assert.ok(cvTraduzidoEn.includes('# Marina Pitanga'));
+assert.ok(cvTraduzidoEn.includes('Professional Summary') || cvTraduzidoEn.includes('Summary'));
+assert.ok(cvTraduzidoEn.includes('Professional Experience') || cvTraduzidoEn.includes('Experience'));
+assert.ok(cvTraduzidoEn.includes('Education'));
+assert.ok(cvTraduzidoEn.includes('Technical Skills') || cvTraduzidoEn.includes('Skills'));
+assert.ok(cvTraduzidoEn.includes('Java'));
+assert.ok(cvTraduzidoEn.includes('Spring Boot'));
+
+// Geração do PDF em inglês a partir do Markdown traduzido
+const caminhoPdfEn = join(tmpdir(), `curriculo-en-teste-${Date.now()}.pdf`);
+await markdownParaPdf(cvTraduzidoEn, caminhoPdfEn);
+assert.ok(existsSync(caminhoPdfEn));
+assert.ok(statSync(caminhoPdfEn).size > 1000);
+console.log('✓ Currículo em inglês: tradução preserva markdown e gera PDF A4 diagramado');
 
 await fecharNavegador();
 console.log('\nTudo certo.');

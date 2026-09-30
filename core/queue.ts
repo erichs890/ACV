@@ -11,21 +11,16 @@ import { calcularScore } from './resume/score.ts';
 import { vagaCompativelComLocalizacao } from './localizacao.ts';
 import { indeedVencido } from './platforms/indeed/busca.ts';
 import { vagaspjVencido } from './platforms/vagaspj/busca.ts';
+import { divulgaVencido } from './platforms/divulgavagas/busca.ts';
 import { inferirSenioridade } from './resume/analyzer.ts';
 import { esperaDaTentativa, falhaRepetivel, MAX_TENTATIVAS } from './falhas.ts';
 import { fecharNavegador } from './browser.ts';
 import { sessaoValida } from './sessao.ts';
 import { DADO_PESSOAL, categoriaSensivel } from '../src/sensiveis.ts';
-import { perguntaSoDestaVaga, textoIntervalo } from '../src/dados.ts';
+import { dentroDaJanela, perguntaSoDestaVaga, textoIntervalo } from '../src/dados.ts';
 
 const registrar = log.registrar;
 let ocupado = false; // uma candidatura por vez, sempre
-
-function dentroDaJanela(janela: string) {
-  const [ini, fim] = janela.split('-');
-  const agora = new Date().toTimeString().slice(0, 5);
-  return agora >= ini && agora <= fim;
-}
 
 function enviosHoje() {
   const hoje = new Date().toDateString();
@@ -572,6 +567,8 @@ export function iniciarLaco() {
         } else if (ler.conexoes().vagaspj && vagaspjVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
           // Idem para o Vagas PJ: quem está conectado sozinho também precisa que a varredura role
           await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
+        } else if (ler.conexoes().divulgavagas && divulgaVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
+          await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
         }
       } finally {
         agendando = false;
@@ -594,6 +591,13 @@ export function ligarRobo(ligar: boolean) {
   if (ligar && cfg.ensaio)
     registrar('alerta', 'Atenção: o modo ensaio está LIGADO. O robô preenche o formulário inteiro mas NÃO envia nada. Desligue o ensaio em Automação para candidatar de verdade.');
   if (ligar && cfg.modo !== 'automatico') registrar('info', 'Modo manual: a fila só anda quando você clica em "Quero me candidatar". Mude para automático em Automação para o robô andar sozinho.');
+  // "Liguei o robô às 23h e não aconteceu nada": a janela fechada só aparecia num info no meio do log, e a pessoa
+  // ligava e pausava sem entender. Quem liga o robô precisa ouvir isto na hora.
+  if (ligar && cfg.modo === 'automatico' && !dentroDaJanela(cfg.janela))
+    registrar(
+      'alerta',
+      `Atenção: são ${new Date().toTimeString().slice(0, 5)} e a janela de envio é ${cfg.janela}. O robô fica parado até as ${cfg.janela.split('-')[0]}. Para enviar agora, mude a janela em Automação.`,
+    );
   emitir({ tipo: 'estado' });
   ultimaEspera = '';
   if (!ligar) return;

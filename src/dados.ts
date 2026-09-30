@@ -1,7 +1,5 @@
 import type { Conexao, Plataforma, StatusVaga } from './types.ts';
 
-// Catálogo fixo do produto. InHire e Indeed têm adapter no núcleo; as outras ficam "Indisponível" até alguém
-// escrever o adapter (ver agentlog.md §5). `site` e `nota` ficam reservados aqui para quando chegar a vez delas.
 // Catálogo do produto: só plataformas em que vale a pena automatizar. O critério que decidiu a poda de
 // 21/09/2026 é um só — **a candidatura tem de acontecer dentro da plataforma**. Site que redireciona para o
 // formulário da empresa não tem "um adapter": tem um adapter por empresa, para sempre. Saíram daqui os
@@ -38,8 +36,29 @@ export const PLATAFORMAS: Plataforma[] = [
     cor: 'bg-blue-dark',
     disponivel: false,
     site: 'https://portal.gupy.io',
-    nota: 'A próxima a valer o esforço: maior fatia das vagas de tecnologia no Brasil, candidatura dentro da plataforma e uma conta só reaproveitada em todas as empresas. O formulário é longo e tem pergunta eliminatória — que é justamente o que o motor adaptativo e o Sem Piedade já resolvem.',
+    nota: 'Maior fatia das vagas de tecnologia no Brasil e a listagem é pública, mas verificado em 23/09/2026: candidatar EXIGE conta (o botão nasce desabilitado e o fluxo chama a tela de login). Fica atrás das que não pedem login.',
   },
+  {
+    id: 'divulgavagas',
+    regiao: 'brasil',
+    nome: 'Divulga Vagas',
+    sigla: 'dv',
+    cor: 'bg-aqua',
+    disponivel: true,
+    site: 'https://divulgavagas.com.br',
+    nota: 'Sem login e sem captcha. A candidatura é SÓ o PDF: o site preenche nome e e-mail com texto de enfeite, então seus dados de perfil não vão. ~41 mil vagas, quase nenhuma de tecnologia — o robô peneira pelo título antes de abrir.',
+  },
+  {
+    id: 'quickin',
+    regiao: 'brasil',
+    nome: 'Quickin',
+    sigla: 'qk',
+    cor: 'bg-purple',
+    disponivel: true,
+    site: 'https://jobs.quickin.io',
+    nota: 'ATS brasileiro com 628 empresas em sitemap público, sem login. Os campos usam id em vez de name. Formulário direto com anexo de currículo e envio confirmado na API.',
+  },
+
   {
     id: 'vagas',
     regiao: 'brasil',
@@ -81,6 +100,27 @@ export const PLATAFORMAS: Plataforma[] = [
     site: 'https://br.indeed.com',
     login: true,
     nota: 'Login manual uma vez; a sessão fica no perfil do navegador do robô. Semiautomático por construção: o Indeed bloqueia navegador oculto e desafia cargas seguidas, então é uma varredura por dia, em janela visível, e o robô para e chama você diante de um bloqueio.',
+  },
+
+  {
+    id: 'workable',
+    regiao: 'internacional',
+    nome: 'Workable',
+    sigla: 'wk',
+    cor: 'bg-green-deep',
+    disponivel: true,
+    site: 'https://jobs.workable.com',
+    nota: 'Busca pública via API REST com suporte a vagas remotas internacionais e no Brasil. Schema de formulário por vaga para perguntas prévias, e candidatura via modal com confirmação de rede.',
+  },
+  {
+    id: 'arbeitnow',
+    regiao: 'internacional',
+    nome: 'Arbeitnow',
+    sigla: 'an',
+    cor: 'bg-amber',
+    disponivel: true,
+    site: 'https://www.arbeitnow.com',
+    nota: 'API pública com vagas de tecnologia europeias e remotas. Candidatura adaptativa em múltiplos formatos (Personio, Ashby, Greenhouse) com preenchimento automático.',
   },
 
   {
@@ -197,6 +237,16 @@ export function perguntaSoDestaVaga(rotulo: string, empresa = ''): boolean {
     .split(/[^a-z0-9]+/)
     .filter(t => t.length >= 4);
   return marcas.some(t => r.includes(t));
+}
+
+/**
+ * Estamos dentro da janela de envio ("08:00-20:00")? Regra única: o núcleo decide a fila por ela e a tela avisa
+ * por ela — duas cópias divergiriam, e o sintoma seria a tela dizer que está tudo certo com o robô parado.
+ */
+export function dentroDaJanela(janela: string): boolean {
+  const [ini, fim] = janela.split('-');
+  const agora = new Date().toTimeString().slice(0, 5);
+  return agora >= ini && agora <= fim;
 }
 
 /** "10 s", "1 min", "8 min", "1 min 30 s": rótulo legível para uma espera em segundos. */
