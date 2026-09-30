@@ -1,4 +1,4 @@
-import type { Conexao, Plataforma, StatusVaga } from './types.ts';
+import type { Conexao, Envio, Plataforma, StatusVaga } from './types.ts';
 
 // Catálogo do produto: só plataformas em que vale a pena automatizar. O critério que decidiu a poda de
 // 21/09/2026 é um só — **a candidatura tem de acontecer dentro da plataforma**. Site que redireciona para o
@@ -35,6 +35,7 @@ export const PLATAFORMAS: Plataforma[] = [
     sigla: 'gu',
     cor: 'bg-blue-dark',
     disponivel: false,
+    login: true,
     site: 'https://portal.gupy.io',
     nota: 'Maior fatia das vagas de tecnologia no Brasil e a listagem é pública, mas verificado em 23/09/2026: candidatar EXIGE conta (o botão nasce desabilitado e o fluxo chama a tela de login). Fica atrás das que não pedem login.',
   },
@@ -66,6 +67,7 @@ export const PLATAFORMAS: Plataforma[] = [
     sigla: 'vg',
     cor: 'bg-green-deep',
     disponivel: false,
+    login: true,
     site: 'https://www.vagas.com.br',
     nota: 'Candidatura no próprio site, sem assinatura, com volume brasileiro real. Exige conta.',
   },
@@ -76,6 +78,7 @@ export const PLATAFORMAS: Plataforma[] = [
     sigla: 'ij',
     cor: 'bg-blue-dark',
     disponivel: false,
+    login: true,
     site: 'https://www.infojobs.com.br',
     nota: 'Candidatura no próprio site, com conta gratuita. Volume menor que Gupy e Vagas.com.',
   },
@@ -86,6 +89,7 @@ export const PLATAFORMAS: Plataforma[] = [
     sigla: 'tr',
     cor: 'bg-orange-deep',
     disponivel: false,
+    login: true,
     site: 'https://trampos.co',
     nota: 'A confirmar: nicho de tecnologia e design, volume pequeno. Falta checar se a candidatura é no site ou se redireciona para a empresa — se redirecionar, sai daqui.',
   },
@@ -259,6 +263,28 @@ export const textoIntervalo = (s: number) => (s < 60 ? `${s} s` : s % 60 === 0 ?
  * Focar em uma plataforma sem limpar a tela não seria foco nenhum. Nada é apagado — a lista tem um botão para
  * mostrar as que ficaram de fora. Conexão sem o campo = no foco (as conexões criadas antes disto continuam valendo).
  */
+/**
+ * O termo de exclusão que bate no título desta vaga, ou null. Fonte única: o score (`core/resume/score.ts`)
+ * corta por aqui e a tela de Configurações conta por aqui — se fossem duas regras, a prévia mentiria.
+ *
+ * Só o TÍTULO, com borda de palavra. Procurar no texto inteiro excluiria uma vaga full stack que cita SAP
+ * numa linha de integração; sem borda, "sap" casaria com "Sapucaia do Sul" (caso real do acervo).
+ */
+export function termoExcluido(titulo: string, excluir: string[] = []): string | null {
+  const limpar = (t: string) =>
+    t
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '');
+  const t = limpar(titulo);
+  for (const bruto of excluir) {
+    const termo = limpar(bruto).trim();
+    if (!termo) continue;
+    if (new RegExp(`(^|[^a-z0-9])${termo.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}([^a-z0-9]|$)`).test(t)) return bruto.trim();
+  }
+  return null;
+}
+
 export const plataformaNoFoco = (conexoes: Record<string, Conexao>, plataforma: string) => conexoes[plataforma]?.enviar !== false;
 
 export const NIVEIS = ['Estágio', 'Júnior', 'Pleno', 'Sênior', 'Liderança'];
@@ -281,6 +307,20 @@ export const STATUS_VAGA: Record<StatusVaga, { rotulo: string; classe: string }>
   ignorada: { rotulo: 'Baixa compatibilidade', classe: 'border border-panel-border bg-page-bg text-ink-soft' },
   encerrada: { rotulo: 'Encerrada', classe: 'border border-panel-border bg-page-bg text-ink-soft line-through' },
 };
+
+/**
+ * Currículos REALMENTE enviados no mês corrente.
+ *
+ * Uma regra só, porque havia duas e uma estava errada: o menu comparava `"09"` (mês da data DD/MM) com
+ * `"20"` (dois primeiros dígitos do ano) e por isso mostrava 0 para sempre. Ensaio não entra: ele preenche
+ * o formulário e não envia nada.
+ */
+export const enviosDoMes = (envios: Envio[], quando = new Date()): Envio[] =>
+  envios.filter(e => {
+    if (e.status !== 'Enviado') return false;
+    const d = new Date(e.enviadaEm);
+    return !Number.isNaN(d.getTime()) && d.getFullYear() === quando.getFullYear() && d.getMonth() === quando.getMonth();
+  });
 
 export const tempoAtras = (iso: string | null) => {
   if (!iso) return 'nunca';

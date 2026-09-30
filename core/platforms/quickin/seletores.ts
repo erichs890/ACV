@@ -21,6 +21,12 @@ export const QUICKIN = {
     resumo: 'textarea#summary',
     curriculo: 'input#validatedCustomFile, input[type="file"]',
     termos: 'input#consent, input[type="checkbox"][id*="consent" i]',
+    /**
+     * Perguntas da empresa. O Quickin as marca com `job_question_<id>` no `id` do campo, e elas podem ser
+     * obrigatórias — a vaga da elaw pergunta "Tem disponibilidade para presencial 3x por semana na Pechincha
+     * RJ?". Responder isso sozinho seria declarar disponibilidade em nome da pessoa para um empregador real.
+     */
+    perguntas: '[id*="job_question_"]',
     submit: 'button[type="submit"]:has-text("Finalizar"), button:has-text("Finalizar"), button[type="submit"]',
   },
 
@@ -36,5 +42,6 @@ export const QUICKIN = {
 };
 
 export const ESPERA_ENVIO_MS = 25_000;
-export const MAX_VAGAS_POR_VARREDURA = 30;
-export const PAUSA_ENTRE_PAGINAS_MS = 1_000;
+export const MAX_VAGAS_POR_VARREDURA = 100;
+export const PAUSA_ENTRE_PAGINAS_MS = 600;
+export const EMPRESAS_POR_VARREDURA = 60; // amostra rotativa das 628 do índice: a volta completa sai em ~10 rodadas

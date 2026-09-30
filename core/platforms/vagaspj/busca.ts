@@ -5,7 +5,8 @@ import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { ler } from '../../estado.ts';
+import { passo, vistas } from '../../varredura.ts';
+import { filtrosDaAutomacao } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
 import { extrairSkills } from '../../resume/texto.ts';
@@ -113,7 +114,7 @@ export function montarVaga(item: ItemFeed, html: string, perfil: PerfilBusca, cf
     encontradaEm: agora,
     atualizadaEm: agora,
   };
-  const a = calcularScore(vaga, perfil, { area: cfg.area, cargo: ler.perfil()?.cargo ?? '', senioridade: cfg.senioridade, localizacao: pref });
+  const a = calcularScore(vaga, perfil, filtrosDaAutomacao(cfg, pref));
   vaga.score = a.score;
   vaga.motivo = a.motivo;
   if (!vagaCompativelComLocalizacao(vaga, pref).compativel || vaga.score < cfg.scoreMinimo) vaga.status = 'ignorada';
@@ -126,15 +127,6 @@ const baixar = async (url: string) => {
   return r.text();
 };
 
-/**
- * Hora de varrer o Vagas PJ de novo? O feed é uma requisição e as vagas novas são poucas, então o ritmo é o mesmo
- * da revarredura do InHire (Plataformas › intervalo de varredura) em vez de um número escondido aqui.
- */
-export function vagaspjVencido(horas: number): boolean {
-  const ultima = kv.get<string | null>('vagaspj:ultimaBusca', null);
-  return !ultima || Date.now() - new Date(ultima).getTime() >= horas * 3_600_000;
-}
-
 let buscando = false;
 
 export async function buscarNoVagasPJ(perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao, log: Log): Promise<Vaga[]> {
@@ -142,16 +134,19 @@ export async function buscarNoVagasPJ(perfil: PerfilBusca, cfg: ConfigAutomacao,
   buscando = true;
   const novas: Vaga[] = [];
   try {
+    passo('lendo o feed de vagas');
     const itens = lerFeed(await baixar(VAGASPJ.feed));
     if (!itens.length) {
       log('alerta', 'Vagas PJ: o feed não devolveu nenhuma vaga (o formato pode ter mudado).');
       return [];
     }
     const ineditas = itens.filter(i => !vagas.get(`vagaspj:${i.id}`)).slice(0, MAX_VAGAS_POR_VARREDURA);
+    vistas(itens.length);
     log('info', `Vagas PJ: ${itens.length} vaga(s) no feed, ${ineditas.length} ainda não conhecida(s).`);
 
     let descartadas = 0;
     for (const [k, item] of ineditas.entries()) {
+      passo('abrindo as vagas novas', k + 1, ineditas.length);
       if (k > 0) await dormir(PAUSA_ENTRE_PAGINAS_MS);
       try {
         const v = montarVaga(item, await baixar(item.url), perfil, cfg, pref);

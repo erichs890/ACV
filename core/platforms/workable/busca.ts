@@ -1,13 +1,14 @@
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
 import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
+import { passo } from '../../varredura.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { extrairSkills } from '../../resume/texto.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { paisDoLocal, vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { ler } from '../../estado.ts';
+import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_CONSULTAS_MS, WORKABLE } from './seletores.ts';
 
 export interface WorkableJobItem {
@@ -85,7 +86,7 @@ export function montarVaga(raw: WorkableJobItem, perfil: PerfilBusca, cfg: Confi
     skills: skillsTexto,
   };
 
-  const { score, motivo } = calcularScore(base, perfil, { ...cfg, localizacao: pref });
+  const { score, motivo } = calcularScore(base, perfil, filtrosDaAutomacao(cfg, pref));
   const lugar = vagaCompativelComLocalizacao({ modelo, local, pais }, pref);
   const compatibilidadeLugar = lugar.compativel ? '' : lugar.motivo;
   const motivoCompleto = [motivo, compatibilidadeLugar].filter(Boolean).join(' · ');
@@ -174,7 +175,8 @@ export async function buscarNoWorkable(perfil: PerfilBusca, cfg: ConfigAutomacao
     let totalEncontradas = 0;
     const vistosIds = new Set<string>();
 
-    for (const termo of termosBusca) {
+    for (const [n, termo] of termosBusca.entries()) {
+      passo(`buscando "${termo}"`, n + 1, termosBusca.length);
       for (const loc of locais.slice(0, 3)) {
         if (novas.length >= MAX_VAGAS_POR_VARREDURA) break;
         try {

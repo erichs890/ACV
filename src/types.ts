@@ -22,6 +22,7 @@ export interface Envio {
   vaga: string;
   empresa: string;
   plataforma: string; // Plataforma.id
+  enviadaEm: string; // ISO — a data crua; `data`/`hora` são só a formatação para a tela
   data: string; // DD/MM
   hora: string; // HH:MM
   status: StatusEnvio;
@@ -119,6 +120,18 @@ export interface ConfigAutomacao {
   navegador: 'edge' | 'firefox'; // firefox = build do Playwright (não o Firefox instalado); o PDF é sempre via Chromium oculto
   scoreMinimo: number; // 0–100
   cargoRigido: boolean; // só vagas da mesma função que a sua passam com nota cheia
+  /**
+   * Só vagas do seu nível exato. Escolheu Pleno: vaga que pede Júnior ou Sênior é zerada e sai da lista.
+   * Vaga que NÃO diz o nível continua passando — o robô não tem como inventar o que o anúncio não escreveu,
+   * e cortá-las apagaria metade do mercado.
+   */
+  senioridadeRigida: boolean;
+  /**
+   * Nichos que você não quer, mesmo sendo da sua função: "sap", "salesforce", "cobol"...
+   * Vaga com um destes termos no TÍTULO é zerada e sai da lista. Só o título de propósito — uma vaga
+   * full stack que cita SAP numa linha de integração não é uma vaga de SAP.
+   */
+  excluir: string[];
   presencialSoNaMinhaCidade: boolean; // presencial/híbrido fora da sua cidade nem entra na lista
   // manual: toda pergunta nova pausa · duvida: a IA resolve o que o currículo e o conhecimento técnico
   // sustentam e devolve o resto · sem_piedade: a IA responde tudo e nunca devolve
@@ -136,6 +149,20 @@ export interface EmpresaInHire {
   totalVagas: number; // vagas publicadas na última verificação
   falhas: number; // verificações seguidas com erro
   criadaEm: string;
+}
+
+/** Progresso da varredura em todas as plataformas (core/varredura.ts). Uma barra só, para o botão de buscar. */
+export interface ProgressoVarredura {
+  rodando: boolean;
+  plataforma: string; // id da plataforma sendo varrida agora
+  etapa: string; // o que está acontecendo, em português ("lendo o feed", "abrindo a vaga 12 de 40")
+  atual: number;
+  total: number; // 0 = tamanho desconhecido; a barra fica indeterminada
+  feitas: string[];
+  restantes: string[];
+  novas: number; // vagas inéditas achadas nesta varredura
+  conhecidas: number; // vagas que o robô já tinha: é o que garante que clicar de novo não repete
+  iniciadaEm: string | null;
 }
 
 export interface ConfigDescoberta {
@@ -203,6 +230,7 @@ export interface Vaga {
   adaptado?: { markdown: string; diff: string[]; viaIA: boolean; pdf?: string }; // última adaptação gerada para esta vaga
   status: StatusVaga;
   posicao?: number;
+  pedidaPorVoce?: boolean; // você clicou em "Candidatar": nenhum filtro do robô (foco, score) tira esta da fila
   pendencia?: Pendencia;
   erro?: string;
   captura?: string; // captura de tela (ensaio/erro)
@@ -263,6 +291,7 @@ export interface Estado {
   ia: ConfigIA;
   empresas: EmpresaInHire[];
   descoberta: ConfigDescoberta;
+  varredura: ProgressoVarredura;
   robo: EstadoRobo;
   envios: Envio[];
   candidaturas: Candidatura[];

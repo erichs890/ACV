@@ -1,6 +1,7 @@
 import { DatabaseSync } from 'node:sqlite';
 import { DB_PATH } from '../config.ts';
 import { emitir } from '../events.ts';
+import { anotar } from '../diario.ts';
 import type { Candidatura, EmpresaInHire, LinhaLog, Vaga } from '../../src/types.ts';
 
 export const db = new DatabaseSync(DB_PATH);
@@ -104,6 +105,7 @@ export const log = {
     db.prepare('insert into log (hora, tipo, msg) values (?, ?, ?)').run(linha.hora, tipo, msg);
     db.exec('delete from log where id not in (select id from log order by id desc limit 300)');
     console.log(`[${linha.hora}] ${tipo}: ${msg}`);
+    anotar(linha); // e o diário em arquivo, que não é podado em 300 linhas
     emitir({ tipo: 'log', linha });
     return linha;
   },

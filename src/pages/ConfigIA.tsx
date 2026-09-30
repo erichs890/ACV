@@ -4,6 +4,7 @@ import type { ProvedorIA } from '../types';
 import { BotaoSalvar } from '../components/BotaoSalvar';
 import { useEstado } from '../estado';
 import { post } from '../api';
+import Orbe from '../components/Orbe';
 import { MODELOS_IA, SITUACAO_MODELO, faixaDeCusto, precoPorMilhao } from '../dados';
 
 // Aba "Inteligência artificial" das Configurações: provedor, modelo e chave usados na adaptação do currículo
@@ -173,6 +174,7 @@ export default function ConfigIA({ onSalvar }: { onSalvar: (t: string) => void }
         {provedor !== 'nenhum' && (
           <button type="button" className="btn btn-secondary" disabled={testando || precisaChave} onClick={testar}>
             <PlugZap size={16} aria-hidden />
+            {testando && <Orbe estado="conectando" />}
             {testando ? 'Testando...' : 'Testar conexão'}
           </button>
         )}

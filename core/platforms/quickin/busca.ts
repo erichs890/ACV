@@ -1,13 +1,15 @@
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
 import type { PreferenciasLocalizacao } from '../../../src/paises.ts';
 import type { Log } from '../adapter.ts';
+import { passo } from '../../varredura.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { extrairSkills } from '../../resume/texto.ts';
+import { filtrosDaAutomacao } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
-import { MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, QUICKIN } from './seletores.ts';
+import { EMPRESAS_POR_VARREDURA, MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, QUICKIN } from './seletores.ts';
 
 export interface ItemVagaQuickin {
   empresa: string;
@@ -127,7 +129,7 @@ export function montarVaga(item: ItemVagaQuickin, html: string, perfil: PerfilBu
     skills,
   };
 
-  const { score, motivo } = calcularScore(base, perfil, { ...cfg, localizacao: pref });
+  const { score, motivo } = calcularScore(base, perfil, filtrosDaAutomacao(cfg, pref));
   const lugar = vagaCompativelComLocalizacao({ modelo, local, pais }, pref);
   const motivoCompleto = [motivo, lugar.compativel ? '' : lugar.motivo].filter(Boolean).join(' · ');
 
@@ -167,6 +169,7 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
   const novas: Vaga[] = [];
 
   try {
+    passo('lendo o índice de empresas');
     log('info', 'Quickin: obtendo índice público de empresas...');
     const indexXml = await baixar(QUICKIN.sitemapIndex);
     const empresas = extrairEmpresasDoSitemapIndex(indexXml);
@@ -175,12 +178,14 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
       return [];
     }
 
-    // Amostra rotativa de empresas para cada varredura (evita varrer 628 sitemaps de uma vez)
-    // Sorteia 15 empresas a cada varredura para acompanhar ativamente o ecossistema
-    const shuffled = [...empresas].sort(() => 0.5 - Math.random()).slice(0, 15);
+    // Amostra rotativa de empresas para cada varredura (evita varrer 628 sitemaps de uma vez).
+    // `EMPRESAS_POR_VARREDURA` mora nos seletores junto dos outros tetos: número solto no meio da busca era
+    // o tipo de limite que ninguém acha quando a pergunta é "por que só vêm 2 vagas daqui?".
+    const shuffled = [...empresas].sort(() => 0.5 - Math.random()).slice(0, EMPRESAS_POR_VARREDURA);
     const vagasParaAbrir: ItemVagaQuickin[] = [];
 
-    for (const emp of shuffled) {
+    for (const [n, emp] of shuffled.entries()) {
+      passo('lendo as vagas de cada empresa', n + 1, shuffled.length);
       if (vagasParaAbrir.length >= MAX_VAGAS_POR_VARREDURA) break;
       try {
         await dormir(200);
@@ -199,6 +204,7 @@ export async function buscarNoQuickin(perfil: PerfilBusca, cfg: ConfigAutomacao,
     log('info', `Quickin: ${vagasParaAbrir.length} vaga(s) nova(s) para analisar em ${shuffled.length} empresas.`);
 
     for (const [k, item] of vagasParaAbrir.slice(0, MAX_VAGAS_POR_VARREDURA).entries()) {
+      passo('abrindo as vagas novas', k + 1, Math.min(vagasParaAbrir.length, MAX_VAGAS_POR_VARREDURA));
       if (k > 0) await dormir(PAUSA_ENTRE_PAGINAS_MS);
       try {
         const html = await baixar(item.url);

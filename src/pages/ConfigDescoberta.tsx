@@ -3,6 +3,7 @@ import { Eye, EyeOff, RadarIcon, Search } from 'lucide-react';
 import { BotaoSalvar } from '../components/BotaoSalvar';
 import { useEstado } from '../estado';
 import { post } from '../api';
+import Orbe from '../components/Orbe';
 import { tempoAtras } from '../dados';
 
 // Aba "Descoberta de vagas": ritmo da revarredura (Fonte A) e descoberta de empresas novas via Google (Fonte B)
@@ -130,6 +131,7 @@ export default function ConfigDescoberta({ onSalvar }: { onSalvar: (t: string) =
         </p>
         <button type="button" className="btn btn-secondary" disabled={buscando || d.descobrindo} onClick={buscarAgora}>
           <Search size={16} aria-hidden />
+          {d.descobrindo && <Orbe estado="procurando" />}
           {d.descobrindo ? 'Procurando...' : 'Descobrir empresas agora'}
         </button>
         <BotaoSalvar>Salvar</BotaoSalvar>

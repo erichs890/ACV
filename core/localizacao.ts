@@ -113,7 +113,20 @@ export function vagaCompativelComLocalizacao(vaga: Partial<Pick<Vaga, 'modelo' |
     if (pais && pais !== meuPais) return { compativel: false, fator: 0, motivo: `${tipo} em ${local || pais}, em outro país` };
     if (v.cidade && v.cidade === m.cidade && (!v.uf || !m.uf || v.uf === m.uf)) return { ...OK, motivo: `${tipo} na sua cidade` };
     if (v.uf && m.uf && v.uf !== m.uf) return { compativel: false, fator: 0, motivo: `${tipo} em ${local}, fora do seu estado` };
+    // "Só na minha cidade" (Automação): outra cidade é outra cidade, mesmo no seu estado. O campo existia na
+    // tela e ninguém no núcleo o lia — a tela dizia "fora de Fortaleza, só remotas" enquanto o robô mandava
+    // currículo para presencial em São Paulo (28/09/2026).
+    if (pref.presencialSoNaMinhaCidade && (v.cidade || v.uf)) return { compativel: false, fator: 0, motivo: `${tipo} em ${local}, e você só aceita presencial em ${pref.localizacaoPresencial}` };
     if (v.uf && v.uf === m.uf) return v.cidade && m.cidade ? { compativel: true, fator: 0.6, motivo: `${tipo} em ${local}, outra cidade do seu estado` } : { ...OK, motivo: `${tipo} no seu estado` };
+    /**
+     * A vaga diz o estado dela e a sua cidade não diz o seu: não dá para afirmar que é o mesmo estado.
+     *
+     * Antes isto caía no desconto de 40% logo abaixo ("outra cidade") e a vaga seguia viva. Com a cidade
+     * gravada como "Fortaleza" (sem o "CE"), foi assim que sete presenciais/híbridas fora do Ceará — São
+     * Paulo, Porto Alegre, Blumenau, Manaus, Recife — receberam currículo. Presencial em outra cidade é
+     * mudança de vida: na dúvida, não manda, e diz o que falta preencher.
+     */
+    if (v.uf && !m.uf) return { compativel: false, fator: 0, motivo: `${tipo} em ${local}; informe o estado na sua cidade (ex.: "${m.cidade || 'Fortaleza'} - CE") para o robô saber se é perto` };
     if (v.cidade && m.cidade && v.cidade !== m.cidade) return { compativel: true, fator: 0.6, motivo: `${tipo} em ${local}, outra cidade` };
     return OK;
   }

@@ -1,8 +1,10 @@
 import type { Arquivo, ConfigAutomacao, Conexao, Envio, Estado, EstadoRobo, Perfil, Pergunta, Vaga } from '../src/types.ts';
+import type { FiltrosScore } from './resume/score.ts';
 import { candidaturas, empresas, kv, log, vagas } from './storage/db.ts';
 import { emitir } from './events.ts';
 import { iaParaFront } from './ia.ts';
 import { descobertaParaFront } from './platforms/inhire/discovery.ts';
+import { lerVarredura } from './varredura.ts';
 import { SENSIVEIS_PADRAO, type ConfigSensiveis } from '../src/sensiveis.ts';
 import { lerDeteccoes } from './extensao.ts';
 import { PAISES_REMOTO_PADRAO, type PreferenciasLocalizacao } from '../src/paises.ts';
@@ -24,9 +26,29 @@ export const AUTOMACAO_PADRAO: ConfigAutomacao = {
   navegador: 'edge',
   scoreMinimo: 30,
   cargoRigido: false,
+  senioridadeRigida: false,
+  excluir: [],
   presencialSoNaMinhaCidade: true,
   modoPerguntas: 'manual',
 };
+
+/**
+ * Os filtros que o score usa, montados num lugar só.
+ *
+ * Três adapters montavam este objeto na mão e dois de outro jeito: filtro novo (como `excluir`) entrava em
+ * uns e não em outros, sem ninguém perceber. Quem chama passa `localizacao` porque alguns adapters já a têm
+ * em mãos; o resto sai de `automacao` e do perfil.
+ */
+export const filtrosDaAutomacao = (cfg: ConfigAutomacao, localizacao: PreferenciasLocalizacao): FiltrosScore => ({
+  area: cfg.area,
+  cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
+  senioridade: cfg.senioridade,
+  cargoRigido: cfg.cargoRigido,
+  senioridadeRigida: cfg.senioridadeRigida,
+  excluir: cfg.excluir,
+  autodeclaracoes: ler.sensiveis().padroes,
+  localizacao,
+});
 
 const PERGUNTAS_PADRAO: Pergunta[] = [
   { id: 1, icone: 'salario', pergunta: 'Pretensão salarial', resposta: '', personalizada: false },
@@ -57,7 +79,7 @@ export const ler = {
   perguntas: () => kv.get<Pergunta[]>('perguntas', PERGUNTAS_PADRAO),
   localizacao: (): PreferenciasLocalizacao => {
     const p = kv.get<Perfil | null>('perfil', null);
-    return { localizacaoPresencial: p?.cidade ?? '', paisesRemoto: p?.paisesRemoto ?? PAISES_REMOTO_PADRAO };
+    return { localizacaoPresencial: p?.cidade ?? '', paisesRemoto: p?.paisesRemoto ?? PAISES_REMOTO_PADRAO, presencialSoNaMinhaCidade: ler.automacao().presencialSoNaMinhaCidade };
   },
   sensiveis: () => ({ ...SENSIVEIS_PADRAO, ...kv.get<Partial<ConfigSensiveis>>('sensiveis', {}) }),
   notificacoes: () => kv.get<Record<string, boolean>>('notificacoes', {}),
@@ -83,6 +105,7 @@ export function montarEstado(): Estado {
       vaga: c.titulo,
       empresa: c.empresa,
       plataforma: c.plataforma,
+      enviadaEm: c.enviadaEm,
       data: d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' }),
       hora: d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
       status: c.resultado === 'ensaio' ? 'Pendente' : 'Enviado',
@@ -96,6 +119,7 @@ export function montarEstado(): Estado {
     ia: iaParaFront(),
     empresas: empresas.listar(),
     descoberta: descobertaParaFront(),
+    varredura: lerVarredura(),
     robo: ler.robo(),
     envios,
     candidaturas: lista,

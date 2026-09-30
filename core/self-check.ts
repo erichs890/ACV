@@ -99,6 +99,38 @@ const configurado = calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil
 assert.ok(configurado.score > pleno.score && /senioridade ok/.test(configurado.motivo), `senioridade configurada deve sobrepor a do currículo: ${configurado.score} (${configurado.motivo})`);
 console.log(`✓ Senioridade: júnior ${junior.score} · pleno ${pleno.score} · sênior ${senior.score}`);
 
+// Rigor de senioridade: corte, não desconto — e só para cima
+const soPleno2 = { senioridade: 'Pleno', senioridadeRigida: true };
+assert.equal(calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil, soPleno2).score, 0, 'com rigor, vaga acima do nível é zerada');
+assert.ok(calcularScore({ ...VAGA, titulo: `${BASE} Pleno` }, perfil, soPleno2).score > 0, 'o nível pedido continua passando');
+// Para BAIXO não corta: cortar os dois lados tirava 843 vagas de uma vez (medido no banco real em 28/09/2026)
+assert.ok(calcularScore({ ...VAGA, titulo: `${BASE} Júnior` }, perfil, soPleno2).score > 0, 'um nível abaixo continua passando');
+assert.ok(calcularScore({ ...VAGA, titulo: BASE }, perfil, soPleno2).score > 0, 'vaga sem nível declarado escapa do corte');
+assert.ok(/acima do seu nível/.test(calcularScore({ ...VAGA, titulo: `${BASE} Sênior` }, perfil, soPleno2).motivo), 'o motivo diz de onde veio o corte');
+console.log('✓ Rigor de senioridade: corta o que está acima do seu nível, e só isso');
+
+// ─── Vaga reservada a um grupo do qual a pessoa não faz parte ────────────────────────────────────
+// Caso real (28/09/2026): saiu candidatura para "Vaga Afirmativa para PCD | Analista de Desenvolvimento Full
+// Stack" com PcD declarado "Não", e para "Software Engineer (afirmativa para mulheres)" declarando-se homem.
+const euSou = { pcd: 'Não', genero: 'Homem Cisgênero', raca: 'Branca', orientacao: 'Heterossexual' };
+const comGrupo = (t: string) => calcularScore({ ...VAGA, titulo: t }, perfil, { autodeclaracoes: euSou });
+assert.equal(comGrupo('Vaga Afirmativa para PCD | Analista de Desenvolvimento Full Stack').score, 0);
+assert.equal(comGrupo('Engineering l Software Engineer (afirmativa para mulheres)').score, 0);
+assert.equal(comGrupo('Desenvolvedor Full Stack | Vaga afirmativa para pessoas negras').score, 0);
+assert.equal(comGrupo('Desenvolvedor Full Stack | Vagas Afirmativas | Pessoas Trans').score, 0);
+assert.match(comGrupo('Vaga Exclusiva para PCD | Full Stack').motivo, /reservada a pessoas com defici/);
+
+// "afirmativa TAMBÉM para" é aberta a todo mundo: reprovar essas cortaria vaga boa por engano
+assert.ok(comGrupo('Desenvolvedor Full Stack - Vaga Afirmativa Também Para O Público PCD').score > 0, '"também para" é aberta a todos');
+// Vaga normal não é afetada
+assert.ok(comGrupo(`${BASE} Pleno`).score > 0);
+// Quem É do grupo continua vendo a vaga
+const souPcd = calcularScore({ ...VAGA, titulo: 'Vaga Afirmativa para PCD | Full Stack' }, perfil, { autodeclaracoes: { pcd: 'Sim' } });
+assert.ok(souPcd.score > 0, 'quem declarou ser do grupo continua vendo a vaga');
+// Sem autodeclaração o robô NÃO adivinha (invariante 3)
+assert.ok(calcularScore({ ...VAGA, titulo: 'Vaga Afirmativa para PCD | Full Stack' }, perfil, {}).score > 0, 'sem declaração, não se supõe nada');
+console.log('✓ Vaga reservada a um grupo: só a sua autodeclaração decide, e "também para" não é exclusiva');
+
 // 3c) Localização: presencial/híbrida pela cidade, remota pelos países escolhidos
 const { lerLocal } = await import('./resume/score.ts');
 assert.deepEqual(lerLocal('São Paulo - SP'), { cidade: 'sao paulo', uf: 'SP' });
@@ -148,6 +180,28 @@ assert.equal(vagaCompativelComLocalizacao({ modelo: 'presencial', local: 'Lisboa
 assert.equal(vagaCompativelComLocalizacao({ modelo: 'remoto', local: '', pais: 'Portugal' }, pref).compativel, true, 'vaga.pais (domínio do Indeed) vale mesmo sem local');
 assert.equal(vagaCompativelComLocalizacao({ modelo: 'indefinido', local: 'Curitiba - PR' }, pref).compativel, true, 'modelo não informado: na dúvida, mostra');
 console.log(`✓ Localização: cidade ${naCidade.score} · estado ${noEstado.score} · outro estado ${foraEstado.score} · remota BR/PT ${remotaBR.score}/${remotaPT.score} · remota EUA ${remotaUS.score}`);
+
+// ─── Cidade sem UF: o buraco por onde saíram sete presenciais fora do estado ─────────────────────
+// Caso real (28/09/2026): o perfil tinha "Fortaleza" sem o "CE". Sem a UF da pessoa, a regra não conseguia
+// dizer "outro estado" e caía no desconto de 40% de "outra cidade" — e presencial em São Paulo, Porto
+// Alegre, Blumenau, Manaus e Recife receberam currículo.
+const semUf = { localizacao: { localizacaoPresencial: 'Fortaleza', paisesRemoto: ['Brasil'] } };
+const spSemUf = calcularScore({ ...VAGA, modelo: 'presencial', local: 'São Paulo, SP, BR' }, perfil, semUf);
+assert.equal(spSemUf.score, 0, 'vaga com UF + minha cidade sem UF: não dá para afirmar que é perto, então não vai');
+assert.match(spSemUf.motivo, /informe o estado na sua cidade/, 'e o motivo diz o que preencher');
+// Com a UF preenchida, a mesma vaga continua zerada — agora pela regra de sempre
+const comUf = { localizacao: { localizacaoPresencial: 'Fortaleza - CE', paisesRemoto: ['Brasil'] } };
+assert.equal(calcularScore({ ...VAGA, modelo: 'presencial', local: 'São Paulo, SP, BR' }, perfil, comUf).score, 0);
+// Na sua cidade continua passando, com ou sem UF no perfil
+assert.ok(calcularScore({ ...VAGA, modelo: 'presencial', local: 'Fortaleza, CE, BR' }, perfil, semUf).score > 0, 'a sua própria cidade sempre passa');
+
+// "Só presencial na minha cidade" (Automação) agora existe no núcleo: antes a tela prometia e ninguém lia
+const soMinhaCidade = { localizacao: { localizacaoPresencial: 'Fortaleza - CE', paisesRemoto: ['Brasil'], presencialSoNaMinhaCidade: true } };
+assert.equal(calcularScore({ ...VAGA, modelo: 'presencial', local: 'Sobral - CE' }, perfil, soMinhaCidade).score, 0, 'ligado, nem outra cidade do seu estado passa');
+assert.ok(calcularScore({ ...VAGA, modelo: 'presencial', local: 'Sobral - CE' }, perfil, comUf).score > 0, 'desligado, outra cidade do estado passa com desconto');
+assert.ok(calcularScore({ ...VAGA, modelo: 'remoto', local: 'São Paulo, SP, BR' }, perfil, soMinhaCidade).score > 0, 'remota não é afetada por isso');
+assert.ok(calcularScore({ ...VAGA, modelo: 'presencial', local: 'Fortaleza, CE, BR' }, perfil, soMinhaCidade).score > 0, 'a sua cidade continua passando');
+console.log('✓ Presencial: cidade sem UF não vira desconto, e "só na minha cidade" é lida pelo núcleo');
 
 // 3d) Indeed: plano de buscas por país, modelo de trabalho pelos atributos da vaga, filtro de candidatura simplificada
 const { planejarConsultas, modeloDe, montarVagaIndeed, urlDeBusca } = await import('./platforms/indeed/busca.ts');
@@ -1060,6 +1114,37 @@ await markdownParaPdf(cvTraduzidoEn, caminhoPdfEn);
 assert.ok(existsSync(caminhoPdfEn));
 assert.ok(statSync(caminhoPdfEn).size > 1000);
 console.log('✓ Currículo em inglês: tradução preserva markdown e gera PDF A4 diagramado');
+
+// 13) Nichos a evitar: vaga da sua função que você mesmo recusa
+const { termoExcluido } = await import('./resume/score.ts');
+
+// Caso real (28/09/2026): "Pessoa Desenvolvedora SAP ABAP Pleno" tirou 69 e entrou na fila. É dev, é da área,
+// é da senioridade — nada no score reprovava. O que reprova é a vontade de quem procura.
+assert.equal(termoExcluido('Pessoa Desenvolvedora SAP ABAP Pleno', ['sap']), 'sap');
+assert.equal(termoExcluido('Desenvolvedor SAP ABAP', ['cobol', 'sap']), 'sap', 'acha em qualquer posição da lista');
+assert.equal(termoExcluido('ANALISTA SAP MM', ['sap']), 'sap', 'maiúsculas não escapam');
+assert.equal(termoExcluido('Desenvolvedor Sap Basis', ['SAP']), 'SAP', 'o termo volta como a pessoa escreveu');
+assert.equal(termoExcluido('Consultor SAP/ABAP', ['abap']), 'abap', 'barra separa palavra');
+
+// Borda de palavra: sem isso, "sap" casaria com "sapataria" e a pessoa perderia vagas sem saber
+assert.equal(termoExcluido('Desenvolvedor para rede de sapatarias', ['sap']), null);
+assert.equal(termoExcluido('Engenheiro de Dados - Sapiens', ['sap']), null);
+assert.equal(termoExcluido('Desenvolvedor Full Stack', ['sap']), null);
+
+// Só o TÍTULO decide: vaga full stack que cita SAP numa integração continua valendo
+const cfgSemSap = { excluir: ['sap'] };
+const fullstack = calcularScore({ titulo: 'Desenvolvedor Full Stack Pleno', skills: ['java', 'sql', 'sap'], descricao: 'Integrações com SAP e outros ERPs.' }, perfil, cfgSemSap);
+assert.ok(fullstack.score > 0, 'citar SAP no texto não pode excluir uma vaga full stack');
+const sapDeVerdade = calcularScore({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno', skills: ['java', 'sql'], descricao: 'ABAP' }, perfil, cfgSemSap);
+assert.equal(sapDeVerdade.score, 0, 'vaga de SAP no título é zerada');
+assert.ok(/sap/i.test(sapDeVerdade.motivo) && /evitar|Configura/i.test(sapDeVerdade.motivo), `o motivo tem de dizer por quê: "${sapDeVerdade.motivo}"`);
+
+// Lista vazia (o padrão) não muda nada
+const semLista = calcularScore({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno', skills: ['java', 'sql'], descricao: 'ABAP' }, perfil, {});
+assert.ok(semLista.score > 0, 'sem lista de exclusão, nada é cortado');
+assert.equal(termoExcluido('Qualquer coisa', []), null);
+assert.equal(termoExcluido('Qualquer coisa', ['  ']), null, 'termo em branco não exclui o mundo');
+console.log('✓ Nichos a evitar: corta pelo título, com borda de palavra, e não mexe no resto');
 
 await fecharNavegador();
 console.log('\nTudo certo.');

@@ -1,4 +1,5 @@
-import { useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import { useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
+import type { Vaga } from '../types';
 import { useSearchParams } from 'react-router-dom';
 import { BotaoSalvar, SalvoEm } from '../components/BotaoSalvar';
 import {
@@ -24,7 +25,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useEstado, type Perfil } from '../estado';
-import { AREAS, NIVEIS, NOTIFICACOES, iniciais } from '../dados';
+import { AREAS, NIVEIS, NOTIFICACOES, iniciais, termoExcluido } from '../dados';
 import { CPF_PATTERN, TELEFONE_PATTERN, mascaraCPF, mascaraMoeda, mascaraTelefone, mascarar } from '../mascaras';
 import ConfigIA from './ConfigIA';
 import ConfigDescoberta from './ConfigDescoberta';
@@ -244,6 +245,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
   const p = estado.perfil!;
   const [sujo, setSujo] = useState(false);
   const [paises, setPaises] = useState<string[]>(p.paisesRemoto ?? PAISES_REMOTO_PADRAO);
+  const [excluir, setExcluir] = useState<string[]>(estado.automacao.excluir ?? []);
 
   const perfilBusca = estado.curriculos[0]?.perfilBusca;
 
@@ -251,7 +253,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
     e.preventDefault();
     const dados = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
     // senioridade/área/rigor moram na automação (o score usa); cargo, cidade e países ficam no perfil
-    const { regimePreferido, senioridade, area, cargoRigido, buscaPais: _fora, ...perfil } = dados;
+    const { regimePreferido, senioridade, area, cargoRigido, senioridadeRigida, buscaPais: _fora, ...perfil } = dados;
     await salvar({
       perfil: { ...p, ...(perfil as unknown as Perfil), paisesRemoto: paises },
       automacao: {
@@ -260,6 +262,8 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
         senioridade,
         area,
         cargoRigido: cargoRigido === 'sim',
+        senioridadeRigida: senioridadeRigida === 'sim',
+        excluir,
       },
     });
     setSujo(false);
@@ -273,6 +277,7 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
       onReset={() => {
         setSujo(false);
         setPaises(p.paisesRemoto ?? PAISES_REMOTO_PADRAO);
+        setExcluir(estado.automacao.excluir ?? []);
       }}
       onSubmit={enviar}
     >
@@ -355,12 +360,33 @@ function AbaDados({ onSalvar }: { onSalvar: (t: string) => void }) {
               ))}
             </select>
           </Campo>
+          <Campo label="Rigor de senioridade" ajuda="Rígido corta vaga ACIMA do seu nível. Vaga que não declara o nível continua aparecendo.">
+            <select name="senioridadeRigida" defaultValue={estado.automacao.senioridadeRigida ? 'sim' : 'nao'} className="field">
+              <option value="nao">Equilibrado — vaga um nível acima ainda conta</option>
+              <option value="sim">Rígido — nada acima de {estado.automacao.senioridade || 'o meu nível'}</option>
+            </select>
+          </Campo>
           <Campo label="Rigor na função" ajuda="Rígido mantém o mundo da tecnologia (dev, IA, QA, dados, segurança) e corta o resto.">
             <select name="cargoRigido" defaultValue={estado.automacao.cargoRigido ? 'sim' : 'nao'} className="field">
               <option value="nao">Equilibrado — aceita funções vizinhas</option>
               <option value="sim">Rígido — só a minha área de atuação</option>
             </select>
           </Campo>
+          <div className="col-span-2 max-md:col-span-1">
+            <span className="label">Nichos que você NÃO quer</span>
+            <ListaTermos
+              valor={excluir}
+              vagas={estado.vagas}
+              onChange={v => {
+                setExcluir(v);
+                setSujo(true);
+              }}
+            />
+            <p className="mt-1 text-[11px] text-ink-soft">
+              Vaga com um destes termos no <strong>título</strong> é zerada e sai da lista, mesmo sendo da sua função. Só o título: uma vaga full stack que cita SAP numa linha de integração não é uma
+              vaga de SAP.
+            </p>
+          </div>
         </div>
         {perfilBusca && (
           <p className="rounded-lg border border-panel-border bg-page-bg p-2.5 text-[11px] text-ink-soft">
@@ -582,6 +608,88 @@ function AbaPrivacidade() {
           Apagar todos os dados
         </button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Lista de termos livre (os nichos a evitar). Enter ou vírgula adiciona; clique no × remove.
+ * Guardado em minúsculas e sem repetir, porque quem compara é `termoExcluido` no score.
+ */
+function ListaTermos({ valor, vagas, onChange }: { valor: string[]; vagas: Vaga[]; onChange: (v: string[]) => void }) {
+  const [texto, setTexto] = useState('');
+
+  /**
+   * As opções saem das SUAS vagas, não de uma lista alfabética de tecnologias: cada `skill` que o núcleo já
+   * extraiu vira candidata, e ao lado dela vai quantas vagas o corte levaria — com a MESMA regra do score
+   * (`termoExcluido`), senão a prévia mentiria. Ordenado pelo que mais pesa.
+   */
+  const sugestoes = useMemo(() => {
+    const tecnologias = new Set<string>();
+    for (const v of vagas) for (const s of v.skills ?? []) tecnologias.add(s);
+    return [...tecnologias]
+      .map(t => ({ termo: t, quantas: vagas.filter(v => termoExcluido(v.titulo, [t])).length }))
+      .filter(o => o.quantas > 0 && !valor.includes(o.termo))
+      .sort((a, b) => b.quantas - a.quantas);
+  }, [vagas, valor]);
+
+  const atingidas = useMemo(() => vagas.filter(v => termoExcluido(v.titulo, valor)), [vagas, valor]);
+  const jaEnviadas = atingidas.filter(v => v.status === 'enviada').length;
+  const adicionar = () => {
+    const novos = texto
+      .split(',')
+      .map(t => t.trim().toLowerCase())
+      .filter(t => t.length >= 2 && !valor.includes(t));
+    if (novos.length) onChange([...valor, ...novos]);
+    setTexto('');
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 rounded-lg border border-panel-border bg-panel p-1.5">
+      {valor.map(t => (
+        <span key={t} className="inline-flex items-center gap-1 rounded-[7px] bg-orange-deep px-2 py-0.5 text-[11px] font-bold text-white">
+          {t}
+          <button type="button" aria-label={`Voltar a aceitar vagas de ${t}`} className="leading-none hover:opacity-70" onClick={() => onChange(valor.filter(x => x !== t))}>
+            ×
+          </button>
+        </span>
+      ))}
+      <input
+        value={texto}
+        onChange={e => setTexto(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ',') {
+            e.preventDefault();
+            adicionar();
+          }
+        }}
+        onBlur={adicionar}
+        placeholder={valor.length ? 'mais um...' : 'ex.: sap, cobol, salesforce'}
+        aria-label="Nicho a evitar"
+        className="min-w-[140px] flex-1 bg-transparent px-1 py-0.5 text-xs outline-none"
+      />
+      {sugestoes.length > 0 && (
+        <select
+          aria-label="Escolher uma tecnologia das suas vagas"
+          value=""
+          className="field h-7 w-full text-xs"
+          onChange={e => {
+            if (e.target.value) onChange([...valor, e.target.value]);
+          }}
+        >
+          <option value="">Escolher das suas vagas...</option>
+          {sugestoes.map(o => (
+            <option key={o.termo} value={o.termo}>
+              {o.termo} — {o.quantas} vaga(s)
+            </option>
+          ))}
+        </select>
+      )}
+      {valor.length > 0 && (
+        <p className={`w-full text-[11px] ${jaEnviadas ? 'font-bold text-orange-deep' : 'text-ink-soft'}`}>
+          Esta lista tira <strong>{atingidas.length}</strong> vaga(s) da sua lista
+          {jaEnviadas > 0 && ` — e ${jaEnviadas} dela(s) você já enviou currículo`}.
+        </p>
+      )}
     </div>
   );
 }

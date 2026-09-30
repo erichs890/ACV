@@ -4,6 +4,7 @@ import Panel from '../components/Panel';
 import { useEstado } from '../estado';
 import { api, enviarCurriculo, salvarCurriculoComoNovo, traduzirCurriculoIngles, urlDownloadArquivo } from '../api';
 import { LIMITE_MB, dataHora, formatarTamanho, validarCurriculo } from '../dados';
+import Orbe from '../components/Orbe';
 
 export default function Curriculo() {
   const { estado, salvar, registrar } = useEstado();
@@ -104,7 +105,7 @@ export default function Curriculo() {
             className={`flex flex-col items-center gap-1.5 rounded-[10px] border-2 border-dashed px-3.5 py-[18px] text-center ${arrastando ? 'border-blue-dark bg-blue/10' : 'border-blue/50 bg-panel'}`}
           >
             <span className="flex size-[52px] items-center justify-center rounded-full bg-blue-dark text-white">
-              <CloudUpload size={26} aria-hidden />
+              {enviando ? <Orbe estado="lendo" tamanho={64} className="scale-[0.72]" rotulo="Lendo o currículo" /> : <CloudUpload size={26} aria-hidden />}
             </span>
             <p className="text-[15px] font-bold">{enviando ? 'Lendo o currículo...' : 'Arraste um currículo aqui'}</p>
             <p className="text-xs text-ink-soft">PDF até {LIMITE_MB} MB — o AutoCV lê o texto e monta o perfil de busca</p>
@@ -202,7 +203,7 @@ export default function Curriculo() {
                     onClick={() => gerarVersaoIngles(true)}
                     title="Reexecuta a tradução do currículo principal"
                   >
-                    <RefreshCw size={13} aria-hidden className={traduzindo ? 'animate-spin' : ''} />
+                    {traduzindo ? <Orbe estado="escrevendo" /> : <RefreshCw size={13} aria-hidden />}
                     {traduzindo ? 'Traduzindo...' : 'Regenerar tradução'}
                   </button>
                   <button
@@ -212,7 +213,7 @@ export default function Curriculo() {
                     onClick={salvarComoSeparado}
                     title="Adiciona esta versão em inglês como um currículo independente na lista 'Meus currículos'"
                   >
-                    <FolderPlus size={14} aria-hidden />
+                    {salvandoNovo ? <Orbe estado="escrevendo" /> : <FolderPlus size={14} aria-hidden />}
                     {salvandoNovo ? 'Salvando...' : 'Adicionar aos Meus Currículos'}
                   </button>
                 </div>
@@ -244,7 +245,7 @@ export default function Curriculo() {
                 </p>
                 <div className="flex items-center gap-2 pt-1">
                   <button type="button" className="btn btn-primary btn-sm self-start" disabled={traduzindo || !principal.markdown} onClick={() => gerarVersaoIngles(false)}>
-                    <Languages size={15} aria-hidden className={traduzindo ? 'animate-spin' : ''} />
+                    {traduzindo ? <Orbe estado="escrevendo" /> : <Languages size={15} aria-hidden />}
                     {traduzindo ? 'Traduzindo currículo para inglês...' : 'Transformar currículo em Inglês'}
                   </button>
                 </div>

@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { Activity, Bot, CheckCircle2, Clock, FileText, ListOrdered, Pause, Play, Plug, RadarIcon, Send, Table, Target } from 'lucide-react';
+import { Activity, Bot, CheckCircle2, Clock, FileText, ListOrdered, Pause, Play, Plug, RadarIcon, Send, Table, Target, TrendingUp } from 'lucide-react';
 import Panel from '../components/Panel';
 import Badge from '../components/Badge';
 import StatCard from '../components/StatCard';
 import BarChart from '../components/BarChart';
+import EtiquetaStatus from '../components/EtiquetaStatus';
+import GraficoDoMes from '../components/GraficoDoMes';
 import { useEstado } from '../estado';
 import { post } from '../api';
-import { STATUS_VAGA, getPlataforma, plataformaNoFoco, tempoAtras } from '../dados';
+import { enviosDoMes, getPlataforma, plataformaNoFoco, tempoAtras } from '../dados';
 
 const POR_PAGINA = 10;
 const pg = 'flex h-6 w-[26px] items-center justify-center rounded border text-xs font-bold tabular-nums aria-disabled:cursor-not-allowed aria-disabled:opacity-40';
@@ -34,6 +36,13 @@ export default function Painel() {
       valor: envios.filter(e => e.data === dataCurta(d)).length,
     };
   });
+  // Só envio real: ensaio preenche o formulário e não manda nada, e contá-lo aqui inflaria o número que você
+  // usa para saber se está se candidatando o bastante.
+  // Ensaio preenche o formulário e não manda nada: contá-lo como candidatura faria a tela mentir para você,
+  // e era o que acontecia — o topo dizia 138 enquanto o gráfico do mês dizia 125.
+  const enviados = envios.filter(e => e.status === 'Enviado');
+  const ensaios = envios.length - enviados.length;
+  const enviadosNoMes = enviosDoMes(envios).length;
   const paginas = Math.max(1, Math.ceil(envios.length / POR_PAGINA));
   const visiveis = envios.slice((pagina - 1) * POR_PAGINA, pagina * POR_PAGINA);
   const irPara = (p: number) => p >= 1 && p <= paginas && setPagina(p);
@@ -41,8 +50,8 @@ export default function Painel() {
   return (
     <div className="stagger flex flex-col gap-4 max-md:gap-2.5">
       <section aria-label="Resumo" className="grid grid-cols-4 gap-4 max-md:grid-cols-2 max-md:gap-2.5">
-        <StatCard icon={Send} tom="bg-blue-dark" valor={envios.length} label="Candidaturas" />
-        <StatCard icon={Clock} tom="bg-green-dark" valor={envios.filter(e => e.data === hoje).length} label="Envios hoje" />
+        <StatCard icon={Send} tom="bg-blue-dark" valor={enviados.length} label="Candidaturas" nota={ensaios > 0 ? `${ensaios} ensaio(s) não contam: preenchem sem enviar` : undefined} />
+        <StatCard icon={Clock} tom="bg-green-dark" valor={enviados.filter(e => e.data === hoje).length} label="Envios hoje" />
         <StatCard icon={ListOrdered} tom="bg-orange" valor={fila.length} label="Vagas na fila" />
         <StatCard
           icon={Target}
@@ -84,7 +93,7 @@ export default function Painel() {
                     <p className="truncate text-xs font-bold">{v.titulo}</p>
                     <p className="text-[11px] text-ink-soft">{v.empresa}</p>
                   </div>
-                  <span className={`rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${STATUS_VAGA[v.status].classe}`}>{STATUS_VAGA[v.status].rotulo}</span>
+                  <EtiquetaStatus status={v.status} />
                 </li>
               ))}
             </ol>
@@ -101,6 +110,10 @@ export default function Painel() {
           </div>
         </Panel>
       </div>
+
+      <Panel icon={TrendingUp} title="Currículos enviados no mês" className="h-[215px] max-md:h-[190px]" bodyClassName="flex flex-col gap-1.5 p-3.5">
+        {enviadosNoMes === 0 ? <Vazio texto="Nenhum currículo enviado neste mês ainda. A linha começa a subir no primeiro envio e zera sozinha no dia 1º." /> : <GraficoDoMes envios={envios} />}
+      </Panel>
 
       <Panel icon={Table} title="Últimas candidaturas" tone="slate" aside={envios.length > 0 ? `${envios.length} no total` : undefined} bodyClassName="">
         {envios.length === 0 ? (

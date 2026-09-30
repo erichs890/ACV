@@ -202,7 +202,7 @@ const vagaDivulga = (url: string): Vaga => ({
 // ============================================================================
 console.log('\n--- Testando Adapter: Quickin ---');
 
-const paginaQuickin = (desfecho: 'sucesso' | 'redacao-nova' | 'recusa') => `<!doctype html>
+const paginaQuickin = (desfecho: 'sucesso' | 'redacao-nova' | 'recusa', comPergunta = false) => `<!doctype html>
 <html lang="pt-BR"><meta charset="utf-8"><title>Quickin Jobs - Apply</title>
 <body>
 <form id="applyForm">
@@ -214,6 +214,17 @@ const paginaQuickin = (desfecho: 'sucesso' | 'redacao-nova' | 'recusa') => `<!do
   <input id="address">
   <input type="file" id="validatedCustomFile" required>
   <input type="checkbox" id="consent" required>
+  ${
+    comPergunta
+      ? `<div class="form-group">
+    <label for="input-questio-job_question_abc123"> Tem disponibilidade para presencial 3x por semana na Pechincha RJ? <span title="Campo obrigatório">*</span></label>
+    <input id="radio-yes-questio-job_question_abc123" type="radio" name="q1" value="true" required>
+    <label for="radio-yes-questio-job_question_abc123">Sim</label>
+    <input id="radio-no-questio-job_question_abc123" type="radio" name="q1" value="false">
+    <label for="radio-no-questio-job_question_abc123">Não</label>
+  </div>`
+      : ''
+  }
   <button type="submit">Finalizar Inscrição</button>
 </form>
 <div id="status"></div>
@@ -234,7 +245,7 @@ document.getElementById('applyForm').addEventListener('submit', async (e) => {
 </script>
 </body></html>`;
 
-function subirQuickin(desfecho: 'sucesso' | 'redacao-nova' | 'recusa'): Promise<{ url: string; servidor: Server; posts: number }> {
+function subirQuickin(desfecho: 'sucesso' | 'redacao-nova' | 'recusa', comPergunta = false): Promise<{ url: string; servidor: Server; posts: number }> {
   const estado = { posts: 0 };
   const servidor = createServer((req, res) => {
     if (req.url?.includes('/public/acme/apply')) {
@@ -247,7 +258,7 @@ function subirQuickin(desfecho: 'sucesso' | 'redacao-nova' | 'recusa'): Promise<
       return res.end('{"id":"cand-123"}');
     }
     res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
-    res.end(paginaQuickin(desfecho));
+    res.end(paginaQuickin(desfecho, comPergunta));
   });
 
   return new Promise(resolve => {
@@ -340,6 +351,30 @@ const vagaQuickin = (url: string): Vaga => ({
 // 3. WORKABLE
 // ============================================================================
 console.log('\n--- Testando Adapter: Workable ---');
+
+// Pergunta da empresa: o adapter ia direto para o envio e a deixava em branco. A da vaga real da elaw é
+// "tem disponibilidade para presencial 3x por semana na Pechincha RJ?" — responder sozinho seria declarar
+// disponibilidade em nome da pessoa (que mora em Fortaleza) para um empregador de verdade.
+{
+  // `posts` é getter: desestruturar congela o valor. Guarde o objeto e leia `s.posts`, como os outros cenários.
+  const s = await subirQuickin('sucesso', true);
+  try {
+    const semResposta = await quickin.candidatar(vagaQuickin(s.url), { ...dadosBase, responder: () => null }, silencio);
+    assert.equal(semResposta.status, 'pergunta', 'sem resposta guardada, a vaga tem de voltar para a pessoa');
+    assert.ok(semResposta.status === 'pergunta' && /Pechincha/.test(semResposta.pergunta.rotulo), 'o rótulo vem do DOM, não inventado');
+    assert.deepEqual(semResposta.status === 'pergunta' ? semResposta.pergunta.opcoes : [], ['Sim', 'Não']);
+    assert.ok(semResposta.status === 'pergunta' && semResposta.pergunta.obrigatoria);
+    assert.equal(s.posts, 0, 'pergunta obrigatória sem resposta NÃO pode virar envio');
+    console.log('    ✓ Quickin: pergunta da empresa volta para a pessoa em vez de ir em branco (0 POST)');
+
+    const comResposta = await quickin.candidatar(vagaQuickin(s.url), { ...dadosBase, responder: () => 'Não' }, silencio);
+    assert.equal(comResposta.status, 'enviada', 'com a resposta guardada, a candidatura segue');
+    assert.equal(s.posts, 1);
+    console.log('    ✓ Quickin: resposta guardada preenche a pergunta e o envio segue (1 POST)');
+  } finally {
+    s.servidor.close();
+  }
+}
 
 const paginaWorkable = (desfecho: 'sucesso' | 'redacao-nova' | 'recusa') => `<!doctype html>
 <html lang="en"><meta charset="utf-8"><title>Workable Job Page</title>

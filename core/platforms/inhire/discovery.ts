@@ -10,6 +10,7 @@ import { inferirSenioridade } from '../../resume/analyzer.ts';
 import { paisDoLocal } from '../../localizacao.ts';
 import { extrairSkills } from '../../resume/texto.ts';
 import { emitir } from '../../events.ts';
+import { passo, vistas } from '../../varredura.ts';
 
 /**
  * Descoberta de vagas no InHire — separada da candidatura.
@@ -179,6 +180,9 @@ export async function varrer(perfil: PerfilBusca, filtros: FiltrosScore & { scor
 
     for (const [i, e] of lista.entries()) {
       progresso = { atual: i + 1, total: lista.length, empresa: e.nome || e.subdominio };
+      // A barra do botão "Procurar vagas" também precisa saber: o InHire é a parte mais longa da varredura
+      // (uma requisição por empresa) e sem isto ela ficava parada em "começando" o tempo todo.
+      passo(`empresa ${e.nome || e.subdominio}`, i + 1, lista.length);
       if (i % 5 === 0) emitir({ tipo: 'estado' });
       if (i > 0) await dormir(PAUSA_ENTRE_EMPRESAS_MS);
       let resultado: Awaited<ReturnType<typeof listarVagas>>;
@@ -217,6 +221,7 @@ export async function varrer(perfil: PerfilBusca, filtros: FiltrosScore & { scor
       if (novasAqui || encerradas)
         log('info', `${resultado.tenantName || e.subdominio}: ${resultado.vagas.length} vagas publicadas, ${novasAqui} nova(s)${encerradas ? `, ${encerradas} encerrada(s)` : ''}.`);
     }
+    vistas(conhecidas.size);
     salvarDescoberta({ ultimaVarredura: new Date().toISOString() });
     log('sucesso', `Varredura concluída: ${novas.length} vaga(s) nova(s) em ${lista.length} empresa(s).`);
   } finally {

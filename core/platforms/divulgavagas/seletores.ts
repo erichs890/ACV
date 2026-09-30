@@ -57,5 +57,5 @@ export const ROTA_ENVIO_GLOB = '**/envioCV';
 
 export const PAUSA_ENTRE_PAGINAS_MS = 400;
 /** Quantas vagas novas abrir por varredura: o acervo é grande e quase todo fora da área de tecnologia. */
-export const MAX_VAGAS_POR_VARREDURA = 40;
+export const MAX_VAGAS_POR_VARREDURA = 150; // das candidatas do seu perfil, as mais novas (o site tem 41 mil)
 export const ESPERA_ENVIO_MS = 90_000;

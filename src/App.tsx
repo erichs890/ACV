@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import { CircleAlert, CircleCheck, Info, RefreshCw, X } from 'lucide-react';
 import Logo from './components/Logo';
+import Orbe from './components/Orbe';
 import Sidebar from './components/Sidebar';
 import Topbar from './components/Topbar';
 import Footer from './components/Footer';
@@ -81,7 +82,10 @@ function Conectando({ offline, tentar }: { offline: boolean; tentar: () => void 
             </button>
           </>
         ) : (
-          <p className="mt-3 text-xs text-ink-soft">Conectando ao núcleo...</p>
+          <div className="mt-4 flex flex-col items-center gap-2 text-blue-dark">
+            <Orbe estado="conectando" tamanho={64} rotulo="Conectando ao núcleo" />
+            <p className="text-xs text-ink-soft">Conectando ao núcleo...</p>
+          </div>
         )}
       </div>
     </div>

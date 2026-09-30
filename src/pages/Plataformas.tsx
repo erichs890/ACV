@@ -7,6 +7,7 @@ import { useEstado } from '../estado';
 import { api, post } from '../api';
 import { PLATAFORMAS, REGIOES, tempoAtras } from '../dados';
 import type { Plataforma } from '../types';
+import Orbe from '../components/Orbe';
 
 /** Quantas vagas dessa plataforma estão vivas na lista (o card mostra isso quando ela está conectada). */
 const contarVagas = (vagas: { plataforma: string; status: string }[], id: string) => vagas.filter(v => v.plataforma === id && v.status !== 'encerrada').length;
@@ -79,7 +80,9 @@ export default function Plataformas() {
       <div className="rounded-lg border border-panel-border bg-panel px-3 py-[9px]">
         <p className="text-[13px] font-bold">
           {conectadas} {conectadas === 1 ? 'plataforma conectada' : 'plataformas conectadas'}{' '}
-          <span className="text-xs font-normal text-ink-soft">• InHire, Indeed e Vagas PJ disponíveis; as outras chegam como plugins</span>
+          <span className="text-xs font-normal text-ink-soft">
+            • {PLATAFORMAS.filter(p => p.disponivel).length} com adapter pronto · {PLATAFORMAS.filter(p => p.login).length} exigem login · as outras chegam como plugins
+          </span>
         </p>
       </div>
 
@@ -97,6 +100,12 @@ export default function Plataformas() {
               <span className="rounded-[9px] border border-panel-border bg-page-bg px-2 py-0.5 text-[10px] font-bold text-ink-soft tabular-nums">
                 {ligadas ? `${ligadas} de ${doGrupo.length} conectada(s)` : `${doGrupo.length} plataforma(s)`}
               </span>
+              {doGrupo.some(p => p.login) && (
+                <span className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink">
+                  <KeyRound size={10} aria-hidden />
+                  {doGrupo.filter(p => p.login).length} exige(m) login
+                </span>
+              )}
               <p className="min-w-[200px] flex-1 text-[11px] text-ink-soft">{r.texto}</p>
             </div>
             <ul className="grid grid-cols-4 gap-3.5 max-lg:grid-cols-2 max-md:grid-cols-1">
@@ -116,6 +125,16 @@ export default function Plataformas() {
                           <span aria-hidden className="size-1.5 rounded-full bg-current" />
                           {conexao ? (conexao.sessao?.valida === false ? 'Sessão expirada' : 'Conectado') : p.disponivel ? 'Não conectado' : 'Indisponível'}
                         </span>
+                        {/* Dito na cara: o que separa estas das outras não é a integração, é você precisar de conta */}
+                        {p.login && (
+                          <span
+                            className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink"
+                            title="Esta plataforma só deixa candidatar quem está logado: você entra uma vez numa janela do robô e a sessão fica salva."
+                          >
+                            <KeyRound size={10} aria-hidden />
+                            Exige login
+                          </span>
+                        )}
                       </div>
                     </div>
                     <p className="text-xs text-ink-soft">{descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}</p>
@@ -430,16 +449,19 @@ function ModalLogin({ plataforma, onFechar }: { plataforma: string | null; onFec
             Cancelar
           </button>
           <button type="button" className="btn btn-primary" onClick={entrar} disabled={esperando}>
+            {esperando && <Orbe estado="esperando" />}
             {esperando ? 'Aguardando o seu login...' : 'Abrir a janela de login'}
           </button>
         </>
       }
     >
       {esperando ? (
-        <p role="status" className="flex items-center gap-2 text-sm">
-          <span aria-hidden className="size-4 animate-spin rounded-full border-2 border-blue-dark border-t-transparent" />
+        <div role="status" className="flex items-center gap-3.5 text-sm">
+          <span className="text-blue-dark">
+            <Orbe estado="esperando" tamanho={64} />
+          </span>
           Faça login na janela que abriu. Assim que terminar, vamos continuar automaticamente.
-        </p>
+        </div>
       ) : (
         <p className="text-xs text-ink-soft">
           Vai abrir uma janela do navegador do robô, identificada como do AutoCV, na página de login de {p?.nome}. Entre como sempre — senha, código por e-mail, captcha, o que {p?.nome} pedir. O

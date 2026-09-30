@@ -1,17 +1,16 @@
 import type { Vaga } from '../src/types.ts';
 import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
-import { ler } from './estado.ts';
+import { filtrosDaAutomacao, ler } from './estado.ts';
 import { emitir } from './events.ts';
+import { iniciarVarredura, plataformaAtual, terminarPlataforma, terminarVarredura } from './varredura.ts';
 import { chaveDaVaga, executarCandidatura, jaCandidatado, jaEnviada, PERGUNTA_LINKEDIN, PERGUNTA_PRETENSAO, PERGUNTA_REGIME } from './candidatura.ts';
 import { avaliarVagas, iaAtiva, lerIA, responderPergunta } from './ia.ts';
 import { descobrirEmpresas, lerDescoberta } from './platforms/inhire/discovery.ts';
 import { empresas } from './storage/db.ts';
-import { calcularScore } from './resume/score.ts';
+import { calcularScore, termoExcluido } from './resume/score.ts';
 import { vagaCompativelComLocalizacao } from './localizacao.ts';
 import { indeedVencido } from './platforms/indeed/busca.ts';
-import { vagaspjVencido } from './platforms/vagaspj/busca.ts';
-import { divulgaVencido } from './platforms/divulgavagas/busca.ts';
 import { inferirSenioridade } from './resume/analyzer.ts';
 import { esperaDaTentativa, falhaRepetivel, MAX_TENTATIVAS } from './falhas.ts';
 import { fecharNavegador } from './browser.ts';
@@ -32,13 +31,7 @@ export function repontuar(): number {
   const cfg = ler.automacao();
   const perfil = ler.curriculos()[0]?.perfilBusca;
   if (!perfil) return 0;
-  const filtros = {
-    area: cfg.area,
-    cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
-    senioridade: cfg.senioridade,
-    localizacao: ler.localizacao(), // cidade e países aceitos: regra compartilhada com o Indeed
-    cargoRigido: cfg.cargoRigido,
-  };
+  const filtros = filtrosDaAutomacao(cfg, ler.localizacao());
   const abertas = vagas.listar().filter(v => v.status === 'encontrada' || v.status === 'ignorada');
   for (const v of abertas) {
     const a = calcularScore(v, perfil, filtros);
@@ -126,10 +119,28 @@ export async function buscarVagas(manual = false): Promise<number> {
     registrar('alerta', 'Varredura cancelada: envie um currículo para o AutoCV montar o perfil de busca.');
     return 0;
   }
+  const conectadas = Object.keys(ler.conexoes()).filter(id => adapters[id]);
+  if (!conectadas.length) {
+    registrar('alerta', 'Varredura cancelada: nenhuma plataforma conectada. Conecte uma em Plataformas.');
+    return 0;
+  }
   let novas: Vaga[] = [];
-  for (const id of Object.keys(ler.conexoes())) {
-    const adapter = adapters[id];
-    if (adapter) novas = novas.concat(await adapter.buscarVagas(principal.perfilBusca, cfg, registrar, { manual }));
+  iniciarVarredura(conectadas);
+  try {
+    for (const id of conectadas) {
+      plataformaAtual(id);
+      const antes = vagas.listar().length;
+      try {
+        const achadas = await adapters[id].buscarVagas(principal.perfilBusca, cfg, registrar, { manual });
+        novas = novas.concat(achadas);
+        terminarPlataforma(id, vagas.listar().length - antes);
+      } catch (e) {
+        registrar('erro', `${id}: a varredura falhou (${(e as Error).message.slice(0, 90)}).`);
+        terminarPlataforma(id, 0);
+      }
+    }
+  } finally {
+    terminarVarredura();
   }
 
   // Com IA configurada, ela lê o currículo e pontua cada vaga nova (o léxico já gravado fica de reserva)
@@ -159,6 +170,21 @@ export async function buscarVagas(manual = false): Promise<number> {
   return novas.length;
 }
 
+/**
+ * Um aviso explicativo só sai quando muda de verdade.
+ *
+ * O laço da fila roda a cada 20 s e reenfileira: a mesma linha ("60 vagas ficaram de fora") apareceu 13 vezes
+ * em 5 minutos num caso real e empurrou para fora do log as linhas das candidaturas, que era o que importava.
+ */
+const avisosDados = new Map<string, number>();
+const JANELA_AVISO_MS = 30 * 60_000;
+function avisoNovo(chave: string): boolean {
+  const agora = Date.now();
+  if ((avisosDados.get(chave) ?? 0) > agora - JANELA_AVISO_MS) return false;
+  avisosDados.set(chave, agora);
+  return true;
+}
+
 // Status que já ocupam uma vaga de trabalho do robô (não podem ser enfileirados de novo nem contar duas vezes)
 const NA_FILA: Vaga['status'][] = ['na_fila', 'em_andamento', 'aguardando_pergunta', 'aguardando_aprovacao'];
 
@@ -170,7 +196,79 @@ const modeloAceito = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => v.model
  * Vale só para a fila automática: clicar em "Candidatar" numa vaga é um ato seu, e um filtro do robô não
  * manda em você. Conexão sem o campo = pode, para as conexões criadas antes disto continuarem funcionando.
  */
-export const plataformaEnviaCurriculo = (v: Vaga) => ler.conexoes()[v.plataforma]?.enviar !== false && sessaoValida(v.plataforma);
+export const plataformaEnviaCurriculo = (v: Vaga) => plataformaNoFoco(v.plataforma) && sessaoValida(v.plataforma);
+
+/**
+ * A plataforma está no foco da automação? (Automação › quais plataformas entram na fila.)
+ *
+ * Separado de `plataformaEnviaCurriculo` de propósito: foco é escolha do usuário e vale na hora do envio;
+ * sessão vencida é uma situação passageira, que segura a vaga na fila até o login, sem tirá-la de lá.
+ */
+export const plataformaNoFoco = (id: string) => ler.conexoes()[id]?.enviar !== false;
+
+/**
+ * Devolve para "encontrada" as vagas que estão na fila mas cuja plataforma saiu do foco.
+ *
+ * O filtro de foco só existia na ENTRADA da fila (`enfileirarCompativeis`). Quem já estava na fila continuava
+ * sendo enviado: desmarcar o InHire com três vagas dele enfileiradas não impedia nada — o robô mandava as três
+ * assim mesmo. Caso real do usuário. Filtro que vale num ponto do ciclo de vida e não no ponto de uso é mentira.
+ *
+ * Volta para "encontrada" (e não para um status novo): marcar a plataforma de novo devolve a vaga à fila pelo
+ * caminho normal, sem nada especial para desfazer.
+ */
+/**
+ * Candidatura que ficou em `em_andamento` sem ninguém tocando nela (o núcleo caiu ou foi fechado no meio).
+ *
+ * Caso real (28/09/2026): o Vagas PJ clicou em "Candidatar", dispensou o anúncio, e a vaga ficou `em_andamento`
+ * para sempre — a fila seguiu adiante e ninguém mais olhou para ela.
+ *
+ * NÃO volta para a fila: o envio pode ter chegado ao servidor sem o robô ver a resposta, e reenviar seria o
+ * segundo currículo na mesa do mesmo recrutador (invariante 4). Vira `erro` com a dúvida escrita, para você
+ * decidir — o botão "Candidatar" continua ali se quiser tentar de novo.
+ */
+export function resgatarInterrompidas(): number {
+  const presas = vagas.listar().filter(v => v.status === 'em_andamento');
+  for (const v of presas) {
+    vagas.atualizar(v.id, {
+      status: 'erro',
+      pedidaPorVoce: undefined,
+      posicao: undefined,
+      erro: 'o robô foi interrompido no meio desta candidatura — confira no site se ela entrou antes de tentar de novo',
+    });
+    registrar('alerta', `"${v.titulo}" ficou pela metade quando o robô parou. Não reenviei por conta própria: confira no site se a candidatura entrou.`);
+  }
+  if (presas.length) emitir({ tipo: 'estado' });
+  return presas.length;
+}
+
+/**
+ * A vaga que está na frente da fila ainda passa nos filtros de AGORA?
+ *
+ * Nota e nicho a evitar eram conferidos só na entrada da fila, como o foco das plataformas era. Resultado real
+ * (28/09/2026): o usuário colocou "sap" na lista de nichos e, minutos depois, saiu uma candidatura para
+ * "Pessoa Desenvolvedora SAP ABAP Pleno" — a vaga já estava na fila com a nota velha.
+ *
+ * `repontuar` tira essas vagas da fila quando o filtro muda; esta função é a rede embaixo: se algum caminho
+ * futuro esquecer de repontuar, o envio não acontece do mesmo jeito. Vaga que VOCÊ pediu passa sempre.
+ */
+function filtroAindaVale(v: Vaga, cfg: ReturnType<typeof ler.automacao>): string {
+  if (v.pedidaPorVoce) return '';
+  const excluido = termoExcluido(v.titulo, cfg.excluir);
+  if (excluido) return `"${excluido}" está na sua lista de nichos a evitar`;
+  if (v.score < cfg.scoreMinimo) return `a compatibilidade dela (${v.score}%) ficou abaixo do seu mínimo (${cfg.scoreMinimo}%)`;
+  return '';
+}
+
+export function limparForaDoFoco(): number {
+  const fora = vagas.listar().filter(v => NA_FILA.includes(v.status) && !v.pedidaPorVoce && !plataformaNoFoco(v.plataforma));
+  for (const v of fora) vagas.atualizar(v.id, { status: 'encontrada', pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
+  if (fora.length) {
+    const nomes = [...new Set(fora.map(v => v.plataforma))].join(', ');
+    registrar('alerta', `${fora.length} vaga(s) saíram da fila: ${nomes} está fora do foco da automação. Elas voltam se você marcar a plataforma de novo.`);
+    emitir({ tipo: 'estado' });
+  }
+  return fora.length;
+}
 
 /**
  * Vaga que a fila pode pegar.
@@ -242,7 +340,7 @@ export function enfileirarCompativeis(motivo: string): number {
   if (!candidatas.length) {
     // "liguei o robô e a fila continua vazia": se o que barrou foi o filtro de plataformas, diga isso
     const barradas = todas.filter(v => podeEntrarNaFila(v, cfg) && v.score >= cfg.scoreMinimo && modeloAceito(v, cfg) && !jaCandidatado(v) && !plataformaEnviaCurriculo(v));
-    if (barradas.length)
+    if (barradas.length && avisoNovo(`barradas:${barradas.length}`))
       registrar(
         'info',
         barradas.some(v => !sessaoValida(v.plataforma))
@@ -251,7 +349,8 @@ export function enfileirarCompativeis(motivo: string): number {
       );
     // Ensaiadas esperando o ensaio ser desligado: é a explicação mais provável para "tenho vaga boa e a fila não anda"
     const ensaiadas = todas.filter(v => v.status === 'ensaio' && v.score >= cfg.scoreMinimo && !jaCandidatado(v));
-    if (cfg.ensaio && ensaiadas.length) registrar('info', `${ensaiadas.length} vaga(s) já ensaiada(s) esperam o modo ensaio ser desligado para entrarem na fila de verdade.`);
+    if (cfg.ensaio && ensaiadas.length && avisoNovo(`ensaiadas:${ensaiadas.length}`))
+      registrar('info', `${ensaiadas.length} vaga(s) já ensaiada(s) esperam o modo ensaio ser desligado para entrarem na fila de verdade.`);
     return 0;
   }
   if (restantes <= 0) {
@@ -284,14 +383,14 @@ export function candidatarAgora(id: string) {
   if (!v) throw new Error('vaga não encontrada');
   if (jaEnviada(id)) throw new Error('você já se candidatou a esta vaga');
   if (jaCandidatado(v)) throw new Error(`você já se candidatou a "${v.titulo}" em ${v.empresa} (outra publicação da mesma vaga)`);
-  vagas.atualizar(id, { status: 'na_fila', posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
+  vagas.atualizar(id, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
   void processarProxima(true);
 }
 
 export function removerDaFila(id: string) {
-  vagas.atualizar(id, { status: 'encontrada', posicao: undefined, pendencia: undefined });
+  vagas.atualizar(id, { status: 'encontrada', pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
   emitir({ tipo: 'estado' });
 }
 
@@ -527,10 +626,19 @@ async function girarFila(forcar: boolean) {
       }
       ultimaEspera = '';
     }
+    limparForaDoFoco(); // o foco pode ter mudado depois que a vaga entrou na fila
     const proxima = vagas.proximaNaFila();
     if (!proxima) {
       await liberarNavegador();
       return;
+    }
+    // Filtro de agora, não o de quando ela entrou na fila
+    const desatualizada = filtroAindaVale(proxima, cfg);
+    if (desatualizada) {
+      vagas.atualizar(proxima.id, { status: 'ignorada', posicao: undefined, pendencia: undefined });
+      registrar('alerta', `"${proxima.titulo}" saiu da fila sem ser enviada: ${desatualizada}.`);
+      emitir({ tipo: 'estado' });
+      continue;
     }
     if (cfg.ensaio) registrar('alerta', `Modo ensaio LIGADO: "${proxima.titulo}" será preenchida mas NÃO enviada. Desligue o ensaio em Automação para candidatar de verdade.`);
     if (!(await processarUma(proxima))) return;
@@ -546,6 +654,20 @@ let agendando = false;
  *  - descoberta de empresas novas (Fonte B) 1x/dia, se ligada e com chave;
  *  - com o robô ligado, processa a próxima candidatura da fila.
  */
+/**
+ * Hora de revarrer esta plataforma? Vale para qualquer adapter que grave `<id>:ultimaBusca` ao terminar a busca
+ * — que é o que todos fazem. InHire e Indeed ficam de fora porque têm agenda própria: o InHire tem a descoberta
+ * de empresas (Fonte A/B) e o Indeed tem uma varredura por dia por causa do bloqueio dele.
+ */
+const COM_AGENDA_PROPRIA = ['inhire', 'indeed'];
+
+export function plataformaVencida(id: string, horas: number): boolean {
+  const ultima = kv.get<string | null>(`${id}:ultimaBusca`, null);
+  return !ultima || Date.now() - new Date(ultima).getTime() >= horas * 3_600_000;
+}
+
+export const algumaPlataformaVencida = (horas: number) => Object.keys(ler.conexoes()).some(id => !COM_AGENDA_PROPRIA.includes(id) && adapters[id] && plataformaVencida(id, horas));
+
 export function iniciarLaco() {
   setInterval(async () => {
     if (!agendando) {
@@ -564,10 +686,10 @@ export function iniciarLaco() {
         } else if (ler.conexoes().indeed && indeedVencido() && ler.curriculos()[0]?.perfilBusca) {
           // Só o Indeed conectado (ou o InHire em dia): a varredura diária dele não depende da do InHire
           await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
-        } else if (ler.conexoes().vagaspj && vagaspjVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
-          // Idem para o Vagas PJ: quem está conectado sozinho também precisa que a varredura role
-          await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
-        } else if (ler.conexoes().divulgavagas && divulgaVencido(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
+        } else if (algumaPlataformaVencida(d.intervaloHoras) && ler.curriculos()[0]?.perfilBusca) {
+          // Qualquer outra plataforma conectada vencida. Era um `else if` por plataforma, e cada adapter novo
+          // que esquecesse de entrar na cadeia ficava sem varredura agendada — foi o que aconteceu com o
+          // Quickin, o Workable e o Arbeitnow, que só varriam de carona quando o InHire estava vencido.
           await buscarVagas().catch(e => registrar('erro', `Varredura agendada falhou: ${(e as Error).message}`));
         }
       } finally {

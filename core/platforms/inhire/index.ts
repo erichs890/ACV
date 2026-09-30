@@ -4,7 +4,7 @@ import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
 import { varrer } from './discovery.ts';
-import { ler } from '../../estado.ts';
+import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { formularios } from '../../storage/db.ts';
 import { lerSchemaFormulario, perguntasCertas } from './schema.ts';
 import { executarFormulario, type EtapaDescoberta } from './formulario.ts';
@@ -13,19 +13,7 @@ import { ROTAS_ENVIO } from './selectors.ts';
 export { pretensaoEmReais } from './formulario.ts';
 
 // A busca é o módulo de descoberta (discovery.ts): lista de empresas + API pública. Aqui só a candidatura.
-const buscarVagas = (perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log): Promise<Vaga[]> =>
-  varrer(
-    perfil,
-    {
-      area: cfg.area,
-      cargo: ler.perfil()?.cargo ?? '', // o cargo desejado mora no perfil: um campo, um dono
-      senioridade: cfg.senioridade,
-      localizacao: ler.localizacao(),
-      scoreMinimo: cfg.scoreMinimo,
-      cargoRigido: cfg.cargoRigido,
-    },
-    log,
-  );
+const buscarVagas = (perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log): Promise<Vaga[]> => varrer(perfil, { ...filtrosDaAutomacao(cfg, ler.localizacao()), scoreMinimo: cfg.scoreMinimo }, log);
 
 const jobIdDe = (vaga: Vaga) => vaga.id.replace(/^inhire:[^:]+:/, '');
 
