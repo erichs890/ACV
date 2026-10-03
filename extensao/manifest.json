@@ -1,16 +1,24 @@
 {
   "manifest_version": 3,
   "name": "AutoCV",
-  "version": "0.1.0",
-  "description": "Olha as páginas de vaga que você abre, diz se a plataforma exige conta e quais campos obrigatórios faltam no seu perfil. Não preenche nem envia nada.",
+  "version": "0.2.0",
+  "description": "Diz se a plataforma exige conta e o que falta no seu perfil, e candidata na vaga aberta quando você manda. Guarda a própria configuração e funciona com o AutoCV fechado.",
   "permissions": ["storage", "activeTab"],
   "host_permissions": ["http://127.0.0.1:4780/*"],
   "background": { "service_worker": "fundo.js" },
+  "options_page": "opcoes.html",
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["conteudo.js"],
+      "js": ["comum.js", "conteudo.js", "motor.js", "painel.js"],
       "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["https://*.linkedin.com/*", "https://*.indeed.com/*", "https://*.gupy.io/*"],
+      "js": ["rede.js"],
+      "run_at": "document_start",
+      "world": "MAIN",
       "all_frames": false
     }
   ],

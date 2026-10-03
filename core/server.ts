@@ -6,7 +6,7 @@ import type { Arquivo, Estado } from '../src/types.ts';
 import './platforms/inhire/index.ts';
 import './platforms/indeed/index.ts';
 import { cancelarLogin, entrarNaJanela } from './sessao.ts';
-import { autorizado, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } from './extensao.ts';
+import { autorizado, dadosParaExtensao, perfilParaExtensao, receberCandidaturas, registrarCamposFaltando, registrarPlataformaDetectada, responderParaExtensao, tokenDaExtensao } from './extensao.ts';
 import './platforms/vagaspj/index.ts';
 import './platforms/divulgavagas/index.ts';
 import './platforms/workable/index.ts';
@@ -136,6 +136,20 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   'GET /extensao/perfil': (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido: abra o popup da extensão e cole o token de Plataformas › Extensão' });
     json(res, 200, perfilParaExtensao());
+  },
+  // A extensão preenche formulários: aqui vão os valores de verdade (ver core/extensao.ts)
+  'GET /extensao/dados': (req, res, url) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, dadosParaExtensao(url.searchParams.get('curriculo') === '1'));
+  },
+  'POST /extensao/candidaturas': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    const { candidaturas: lista } = JSON.parse((await corpo(req)).toString('utf8'));
+    json(res, 200, { novas: receberCandidaturas(lista) });
+  },
+  'POST /extensao/pergunta': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, await responderParaExtensao(JSON.parse((await corpo(req)).toString('utf8'))));
   },
   'POST /extensao/plataforma': async (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });

@@ -91,7 +91,8 @@
    * Onde está o formulário de candidatura: o diálogo aberto, senão o <form> com mais campos visíveis, senão a
    * página inteira. Sem supor layout — o mesmo princípio do motor do núcleo.
    */
-  function areaDoFormulario() {
+  function areaDoFormulario(raiz) {
+    if (raiz && raiz !== document) return raiz;
     const dialogo = todos('dialog[open],[role="dialog"],[aria-modal="true"]').find(visivel);
     if (dialogo) return dialogo;
     const forms = todos('form')
@@ -101,8 +102,9 @@
     return forms[0]?.f ?? document.body;
   }
 
-  function descobrirCamposFormulario() {
-    const area = areaDoFormulario();
+  /** Campos da etapa atual. Cada um traz o `el` para o motor preencher; o diagnóstico manda só o descritivo. */
+  function descobrirCamposFormulario(raiz) {
+    const area = areaDoFormulario(raiz);
     const vistos = new Set();
     return [...area.querySelectorAll('input,select,textarea,[role="combobox"]')]
       .filter(c => visivel(c) && !['hidden', 'submit', 'button', 'search', 'image'].includes(c.type) && !IGNORAR.test(c.name || ''))
@@ -117,7 +119,7 @@
         const marcado = c.required || c.getAttribute('aria-required') === 'true' || /\*\s*$/.test(rotulo);
         // "Não sei dizer" é resposta legítima: o núcleo manda revisar à mão em vez de fingir certeza
         const dentroDeOpcional = /opcional|optional/i.test(rotulo);
-        return { pergunta: rotulo.replace(/\s*\*\s*$/, '').slice(0, 120), tipo: tipoDe(c), obrigatorio: marcado, incerto: !marcado && !dentroDeOpcional };
+        return { pergunta: rotulo.replace(/\s*\*\s*$/, '').slice(0, 120), tipo: tipoDe(c), obrigatorio: marcado, incerto: !marcado && !dentroDeOpcional, el: c };
       })
       .filter(Boolean);
   }
@@ -158,7 +160,44 @@
     }
   };
 
-  const GENERICO = { dominios: [], detectaTelaLogin, precisaLogin, descobrirCamposFormulario };
+  /** Dados da vaga pelo anúncio estruturado (JobPosting), que metade dos sites de vaga publica. */
+  function doJsonLd() {
+    for (const s of todos('script[type="application/ld+json"]')) {
+      try {
+        const bruto = JSON.parse(s.textContent ?? '');
+        const j = (Array.isArray(bruto) ? bruto : [bruto, ...(bruto['@graph'] ?? [])]).find(x => /JobPosting/i.test(x?.['@type'] ?? ''));
+        if (j) return { titulo: j.title ?? '', empresa: j.hiringOrganization?.name ?? '', descricao: String(j.description ?? '').replace(/<[^>]+>/g, ' ') };
+      } catch {
+        // anúncio com JSON quebrado é comum; o genérico cai nas heurísticas de DOM
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Motor genérico: o que vale para plataforma que ninguém mapeou ainda. Handler dedicado sobrescreve só o que
+   * difere — é por isso que os textos de botão ficam em expressão, e não em seletor de CSS.
+   */
+  const GENERICO = {
+    dominios: [],
+    detectaTelaLogin,
+    precisaLogin,
+    descobrirCamposFormulario,
+    dialogo: () => todos('dialog[open],[role="dialog"],[aria-modal="true"]').find(visivel) ?? null,
+    tituloDaVaga: () => doJsonLd()?.titulo || texto(document.querySelector('h1')).slice(0, 180),
+    empresaDaVaga: () => doJsonLd()?.empresa || texto(document.querySelector('[class*="company" i],[data-testid*="company" i]')).slice(0, 120),
+    descricaoDaVaga: () => (doJsonLd()?.descricao || texto(document.querySelector('[class*="description" i],[id*="description" i]'))).slice(0, 4000),
+    abrir: () => {
+      // O formulário já está na página? Então não há o que abrir (InHire, Vagas PJ e afins são assim)
+      if (descobrirCamposFormulario().length) return false;
+      const b = botaoCandidatar();
+      if (b) b.click();
+      return !!b;
+    },
+    botaoProximo: /^(avan[çc]ar|continuar|pr[óo]xim[oa]|seguinte|next|continue|revisar|review)/i,
+    botaoFinal: /^(enviar( candidatura| curr[íi]culo| inscri[çc][ãa]o)?|continuar inscri[çc][ãa]o|submit( application)?|finalizar|concluir)/i,
+    sucesso: /candidatura (foi )?enviada|inscri[çc][ãa]o (foi )?realizada|recebemos (sua|seu)|application (sent|submitted|received)|candidatura conclu[ií]da/i,
+  };
 
   // Handler dedicado: o que o núcleo já sabe do Indeed (core/platforms/indeed/seletores.ts), levantado ao vivo.
   const INDEED = {
@@ -174,7 +213,43 @@
     descobrirCamposFormulario,
   };
 
-  const REGISTRO = [INDEED];
+  /**
+   * LinkedIn — "Candidatura simplificada" (Easy Apply): a candidatura acontece num diálogo, em etapas, com
+   * "Avançar" → "Revisar" → "Enviar candidatura".
+   *
+   * NÃO VERIFICADO AO VIVO: exige conta e cada teste criaria candidatura real numa vaga real. Os seletores vêm
+   * dos rótulos de acessibilidade que o LinkedIn usa em pt-BR e en, com o texto do botão como reserva. Trate a
+   * primeira candidatura como o teste: acompanhe pela janela.
+   *
+   * AVISO DE CONTA: o LinkedIn proíbe automação no contrato de uso e suspende quem detecta. É a sua conta
+   * profissional. Por isso aqui não há disfarce nenhum — só ritmo humano, limite por dia e parada imediata ao
+   * primeiro sinal de restrição.
+   */
+  const LINKEDIN = {
+    dominios: ['linkedin.com'],
+    detectaTelaLogin: () => /\/(login|uas\/login|checkpoint|authwall)/i.test(location.pathname),
+    precisaLogin() {
+      if (/\/(login|authwall|checkpoint)/i.test(location.pathname)) return { precisa: true, logado: false, motivo: 'esta é a tela de entrada do LinkedIn' };
+      const eu = document.querySelector('.global-nav__me, [data-control-name="nav.settings"], img.global-nav__me-photo');
+      return { precisa: true, logado: !!eu, motivo: eu ? 'o seu avatar está no cabeçalho' : 'não achei o seu avatar no cabeçalho' };
+    },
+    descobrirCamposFormulario,
+    // ─── o que o motor precisa saber de específico desta plataforma ───
+    dialogo: () => todos('[role="dialog"], .jobs-easy-apply-modal').find(visivel) ?? null,
+    empresaDaVaga: () => texto(document.querySelector('.job-details-jobs-unified-top-card__company-name, .jobs-unified-top-card__company-name, [data-test-job-card-company-name]')).slice(0, 120),
+    tituloDaVaga: () => texto(document.querySelector('h1.job-title, .job-details-jobs-unified-top-card__job-title, .jobs-unified-top-card__job-title')).slice(0, 180),
+    descricaoDaVaga: () => texto(document.querySelector('#job-details, .jobs-description__content')).slice(0, 4000),
+    abrir: () => {
+      const b = todos('button').find(e => visivel(e) && /candidatura simplificada|easy apply/i.test(`${e.getAttribute('aria-label') ?? ''} ${texto(e)}`));
+      if (b) b.click();
+      return !!b;
+    },
+    botaoProximo: /^(avan[çc]ar|continuar( para a pr[óo]xima etapa)?|next|continue|revisar( sua candidatura)?|review)/i,
+    botaoFinal: /^(enviar candidatura|submit application|enviar)/i,
+    sucesso: /candidatura enviada|sua candidatura foi enviada|application sent|candidatura conclu[ií]da/i,
+  };
+
+  const REGISTRO = [INDEED, LINKEDIN];
   const handlerDe = host => REGISTRO.find(h => h.dominios.some(d => host === d || host.endsWith(`.${d}`))) ?? GENERICO;
 
   // ─── Diagnóstico ──────────────────────────────────────────────────────────────────────────────
@@ -194,7 +269,7 @@
       logadoAtualmente: login.logado,
       motivo: login.motivo,
       telaDeLogin: handler.detectaTelaLogin(),
-      campos: handler.descobrirCamposFormulario(),
+      campos: handler.descobrirCamposFormulario().map(({ el: _el, ...c }) => c),
     };
   }
 
@@ -209,26 +284,41 @@
     [/pretens[ãa]o|sal[áa]rio|remunera[çc][ãa]o|salary/i, 'pretensao'],
     [/curr[íi]culo|curriculum|resume|cv\b|anexar/i, 'curriculo'],
     [/regime|tipo de contrata|v[íi]nculo|\bclt\b|\bpj\b/i, 'regime'],
+    [/anos de experi[êe]ncia|years of experience|tempo de experi[êe]ncia/i, 'anosExperiencia'],
   ];
   const normal = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
-  function temDado(campo, perfil) {
-    const achado = CONHECIDOS.find(([re]) => re.test(campo.pergunta));
-    if (achado) return perfil.tem?.[achado[1]] === true;
-    // Pergunta da empresa: vale se já existe resposta salva parecida (o núcleo manda só os enunciados)
-    const p = normal(campo.pergunta);
-    return (perfil.perguntas ?? []).some(q => {
-      const n = normal(q);
-      return n === p || (n.length > 8 && (p.includes(n) || n.includes(p)));
+  /** Qual chave do perfil responde este campo? (nome, email, celular...) ou null se for pergunta da empresa. */
+  const chaveDoCampo = campo => CONHECIDOS.find(([re]) => re.test(campo.pergunta))?.[1] ?? null;
+
+  /**
+   * Resposta pronta para esta pergunta da empresa, ou null.
+   *
+   * Casamento quase exato de propósito: a extensão NUNCA deduz resposta por parecença. Pergunta de
+   * autodeclaração (gênero, raça, PcD) cai aqui e sai como null — e null significa parar e chamar a pessoa,
+   * nunca chutar. É o invariante 3 do projeto valendo também fora do núcleo.
+   */
+  function respostaSalva(pergunta, salvas) {
+    const p = normal(pergunta);
+    const achada = (salvas ?? []).find(q => {
+      const n = normal(q.pergunta ?? q);
+      return n === p || (n.length > 12 && (p.includes(n) || n.includes(p)));
     });
+    const r = achada?.resposta;
+    return r?.trim() ? r : null;
   }
 
-  // Testável fora da extensão (core/extensao-check.ts injeta este arquivo numa página e chama isto)
-  const api = { diagnosticar, precisaLogin, descobrirCamposFormulario, handlerDe, temDado, GENERICO, INDEED };
-  if (typeof chrome === 'undefined' || !chrome.runtime?.id) {
-    globalThis.AutoCVExtensao = api;
-    return;
+  /** O campo tem como ser respondido com o que já existe? (usado no diagnóstico, sem preencher nada) */
+  function temDado(campo, perfil) {
+    const chave = chaveDoCampo(campo);
+    if (chave) return perfil.tem ? perfil.tem[chave] === true : !!perfil.perfil?.[chave];
+    return !!respostaSalva(campo.pergunta, perfil.perguntas);
   }
+
+  // Usado pelo motor (motor.js), pelo painel (painel.js) e, fora do navegador, por core/extensao-check.ts
+  const api = { diagnosticar, precisaLogin, descobrirCamposFormulario, handlerDe, temDado, respostaSalva, chaveDoCampo, texto, visivel, todos, rotuloDe, pareceVaga, GENERICO, INDEED, LINKEDIN };
+  globalThis.AutoCVExtensao = api;
+  if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
 
   const aoNucleo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
@@ -241,9 +331,9 @@
     if (novidade) await aoNucleo({ tipo: 'PLATAFORMA_DETECTADA', ...d, campos: undefined });
 
     if (!d.campos.length) return;
-    const { perfil } = await aoNucleo({ tipo: 'PERFIL' });
-    if (!perfil) return;
-    const faltando = d.campos.filter(c => (c.obrigatorio || c.incerto) && !temDado(c, perfil));
+    const { dados } = await aoNucleo({ tipo: 'DADOS' });
+    if (!dados?.perfil) return;
+    const faltando = d.campos.filter(c => (c.obrigatorio || c.incerto) && !temDado(c, dados));
     if (faltando.length) await aoNucleo({ tipo: 'VALIDACAO_CAMPOS', dominio: d.dominio, url: d.url, camposFaltando: faltando });
   }
 

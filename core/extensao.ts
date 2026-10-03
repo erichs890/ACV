@@ -9,10 +9,14 @@
 // que o núcleo devolve sobre o perfil são só BOOLEANOS (tenho celular? tenho CPF?) mais os enunciados das
 // perguntas salvas — valor de dado pessoal nunca sai daqui.
 import { randomBytes } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import type { CampoFaltando, PlataformaDetectada } from '../src/types.ts';
+import { DADO_PESSOAL, categoriaSensivel } from '../src/sensiveis.ts';
 import { emitir } from './events.ts';
 import { ler } from './estado.ts';
-import { kv, log } from './storage/db.ts';
+import { iaAtiva, responderPergunta } from './ia.ts';
+import { candidaturas, kv, log } from './storage/db.ts';
 
 export function tokenDaExtensao(): string {
   const salvo = kv.get<string>('extensaoToken', '');
@@ -85,6 +89,102 @@ export function registrarCamposFaltando(e: { dominio: string; url?: string; camp
     if (duvidosos.length) log.registrar('info', `[extensão · ${nova.dominio}] não tenho certeza se são obrigatórios, revise manualmente: ${duvidosos.map(c => c.pergunta).join('; ')}.`);
   }
   return nova;
+}
+
+/**
+ * Tudo o que a extensão precisa para PREENCHER um formulário sozinha, inclusive com o AutoCV fechado depois
+ * (ela guarda isto em cache).
+ *
+ * Aqui saem valores de verdade — nome, e-mail, telefone, respostas salvas, currículo. É uma mudança de
+ * fronteira consciente em relação a `perfilParaExtensao`, que só diz "tem ou não tem": quem preenche precisa
+ * do conteúdo. O que protege continua sendo o mesmo: servidor só em 127.0.0.1 e token obrigatório.
+ */
+export function dadosParaExtensao(comCurriculo: boolean): Record<string, unknown> {
+  const p = ler.perfil();
+  const cv = ler.curriculos()[0];
+  const dados: Record<string, unknown> = {
+    perfil: {
+      nome: p?.nome ?? '',
+      email: p?.email ?? '',
+      telefone: p?.telefone ?? '',
+      linkedin: p?.linkedin ?? '',
+      cidade: p?.cidade ?? '',
+      cpf: p?.cpf ?? '',
+      pretensao: p?.pretensao ?? '',
+      cargo: p?.cargo ?? '',
+    },
+    regimePreferido: ler.automacao().regimePreferido,
+    perguntas: ler
+      .perguntas()
+      .filter(q => q.resposta.trim())
+      .map(q => ({ pergunta: q.pergunta, resposta: q.resposta })),
+  };
+  if (comCurriculo && cv?.caminho) {
+    try {
+      dados.curriculo = { nome: basename(cv.caminho), base64: readFileSync(cv.caminho).toString('base64') };
+    } catch {
+      // currículo apagado do disco: a extensão segue sem anexo e avisa quando o campo for obrigatório
+    }
+  }
+  return dados;
+}
+
+/**
+ * A extensão candidatou numa plataforma e manda o que fez (inclusive o que aconteceu com o AutoCV fechado).
+ * Entra no histórico junto com as candidaturas do robô: o Painel é a visão consolidada de tudo.
+ */
+export function receberCandidaturas(lista: { dominio?: string; url?: string; titulo?: string; empresa?: string; enviadaEm?: string }[]): number {
+  if (!Array.isArray(lista)) throw new Error('lista de candidaturas inválida');
+  const perfil = ler.perfil();
+  const jaTem = new Set(candidaturas.listar().map(c => `${c.url}|${c.enviadaEm}`));
+  let novas = 0;
+  for (const c of lista.slice(0, 200)) {
+    const url = String(c.url ?? '').slice(0, 500);
+    const enviadaEm = c.enviadaEm && !Number.isNaN(Date.parse(c.enviadaEm)) ? c.enviadaEm : new Date().toISOString();
+    if (!url || jaTem.has(`${url}|${enviadaEm}`)) continue; // reenvio da fila de pendentes não duplica o histórico
+    candidaturas.inserir({
+      vagaId: `extensao:${url}`,
+      titulo: String(c.titulo ?? 'vaga').slice(0, 200),
+      empresa: String(c.empresa ?? '').slice(0, 120) || 'Empresa não informada',
+      plataforma: String(c.dominio ?? 'extensão').slice(0, 60),
+      url,
+      enviadaEm,
+      nome: perfil?.nome ?? '',
+      email: perfil?.email ?? '',
+      celular: perfil?.telefone ?? '',
+      curriculo: '',
+      versao: 'original',
+      regime: '',
+      resultado: 'enviada',
+    });
+    novas++;
+  }
+  if (novas) {
+    log.registrar('sucesso', `[extensão] ${novas} candidatura(s) feitas por você no navegador entraram no histórico.`);
+    emitir({ tipo: 'estado' });
+  }
+  return novas;
+}
+
+/**
+ * A extensão achou uma pergunta sem resposta salva e quer a IA. Ela roda AQUI porque é aqui que estão as travas:
+ * autodeclaração e dado pessoal nunca chegam na IA (invariante 3), e sem IA configurada ninguém chuta nada.
+ */
+export async function responderParaExtensao(e: {
+  pergunta?: string;
+  opcoes?: string[];
+  vaga?: { titulo?: string; empresa?: string; descricao?: string };
+}): Promise<{ resposta: string | null; motivo?: string }> {
+  const pergunta = String(e.pergunta ?? '').trim();
+  if (!pergunta) return { resposta: null, motivo: 'pergunta vazia' };
+  const sensivel = categoriaSensivel(pergunta);
+  if (sensivel) return { resposta: null, motivo: `${sensivel.rotulo.toLowerCase()} é autodeclaração: só você responde (Configurações › Autodeclaração)` };
+  if (DADO_PESSOAL.test(pergunta)) return { resposta: null, motivo: 'é um dado pessoal: a IA não adivinha isso' };
+  const curriculo = ler.curriculos()[0]?.markdown;
+  if (!curriculo || !iaAtiva()) return { resposta: null, motivo: 'IA não configurada no AutoCV' };
+  const vaga = { titulo: String(e.vaga?.titulo ?? '').slice(0, 200), empresa: String(e.vaga?.empresa ?? '').slice(0, 120), descricao: String(e.vaga?.descricao ?? '').slice(0, 4000) };
+  const resposta = await responderPergunta(curriculo, vaga, { rotulo: pergunta, tipo: e.opcoes?.length ? 'opcoes' : 'texto', opcoes: e.opcoes }, { cauteloso: true });
+  return resposta ? { resposta } : { resposta: null, motivo: 'a IA preferiu não chutar' };
 }
 
 /** O que a extensão precisa para cruzar campo × perfil: quais dados EXISTEM, nunca o valor deles. */

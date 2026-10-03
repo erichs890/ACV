@@ -39,7 +39,7 @@ Em **Plataformas › Indeed › Entrar e conectar** abre uma janela do navegador
 
 O Indeed **bloqueia navegador oculto** e, depois de algumas páginas, pode pedir uma **verificação**. Por isso a janela sempre aparece, o robô faz poucas buscas (uma a cada 30 s, uma varredura automática por dia) e, se o Indeed bloquear ou pedir verificação, ele para e avisa: você pode resolver a verificação na janela; ele não tenta burlar. A candidatura pelo Indeed ainda não foi testada contra o site real — deixe o **modo ensaio** ligado na primeira vez.
 
-## Extensão do navegador (opcional)
+## Extensão do navegador
 
 A pasta `extensao/` é uma extensão do Chrome/Edge que trabalha do outro lado: em vez de o robô abrir o site, ela olha as páginas de vaga que **você** abre, no seu navegador de sempre, com a sua sessão. Ela responde duas coisas e nada mais:
 
@@ -48,7 +48,17 @@ A pasta `extensao/` é uma extensão do Chrome/Edge que trabalha do outro lado: 
 
 Ela **não preenche, não clica e não envia** candidatura nenhuma — quem candidata continua sendo o robô. Plataforma que ela nunca viu já funciona pelo motor genérico, sem código novo; Indeed tem tratamento dedicado.
 
-Para instalar: em `chrome://extensions`, ligue o "Modo do desenvolvedor", clique em "Carregar sem compactação" e escolha a pasta `extensao/`. Depois abra o popup dela e cole o token que aparece em **Plataformas › Extensão do navegador** (o núcleo é um servidor local sem senha; o token impede que outra extensão fale com ele). O que ela encontrar aparece nessa mesma tela e no log.
+A partir da versão 0.2 ela também **candidata na vaga que está aberta**, quando você clica — e é autossuficiente: a configuração dela (perfil do LinkedIn, pretensão, anos de experiência, empresas bloqueadas, IA, ritmo e limites) fica guardada na própria extensão e funciona com o AutoCV fechado. Quando o AutoCV abre, os dois se sincronizam sozinhos: ele manda currículo e respostas salvas, ela devolve as candidaturas que fez enquanto ele estava fechado.
+
+No painel que aparece sobre a página você vê a vaga, o contador do dia, se a IA está ligada e se está sincronizado; e tem o botão **Iniciar candidatura**. Uma vaga por clique: ela não varre a lista de resultados sozinha.
+
+**O que ela nunca faz:** inventar resposta. Campo fixo vem do seu perfil, pergunta da empresa só é respondida com uma resposta que você já salvou — e se não houver, a candidatura **para** e mostra a pergunta. Autodeclaração (gênero, cor/raça, PcD) nunca é respondida por IA. Com o AutoCV aberto e a IA ligada, quem responde é a IA de lá, com as travas de lá.
+
+**Empresas bloqueadas:** em Configurações da extensão você lista empresas onde não quer se candidatar (a sua atual, por exemplo). "Acme", "Acme S.A." e "Acme Ltda" contam como a mesma.
+
+**Aviso sobre o LinkedIn:** o contrato de uso dele proíbe automação, e quem é detectado pode ter a conta suspensa — é a sua conta profissional em jogo. O AutoCV não disfarça nada: vai devagar (espera sorteada entre candidaturas), respeita o limite diário, segura plataforma recém-usada em 5 por dia nos 3 primeiros dias e para no primeiro sinal de restrição. Use com parcimônia, e a primeira candidatura acompanhe pela tela.
+
+Para instalar: em `chrome://extensions`, ligue o "Modo do desenvolvedor", clique em "Carregar sem compactação" e escolha a pasta `extensao/`. Depois abra as Configurações dela e cole o token que aparece em **Plataformas › Extensão do navegador** (o núcleo é um servidor local sem senha; o token impede que outra extensão fale com ele).
 
 ## Descoberta de vagas
 

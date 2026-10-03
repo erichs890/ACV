@@ -8,6 +8,7 @@
 import assert from 'node:assert/strict';
 import { createServer } from 'node:http';
 import { mkdtempSync, readFileSync } from 'node:fs';
+import { createContext, runInContext } from 'node:vm';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -56,8 +57,54 @@ const VAGA_LOGADO = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><ti
 const CABECALHO_INDEED = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
 <header><a href="/x">Carregar o currículo</a><a href="/y">Acessar</a></header><button>Candidate-se facilmente</button></body></html>`;
 
-const paginas: Record<string, string> = { '/vaga': VAGA_PUBLICA, '/conta': VAGA_COM_CONTA, '/login': TELA_LOGIN, '/logado': VAGA_LOGADO, '/indeed': CABECALHO_INDEED };
+const CANDIDATURA = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<script type="application/ld+json">{"@type":"JobPosting","title":"Pessoa Desenvolvedora Back-end","hiringOrganization":{"name":"Acme Tecnologia Ltda"},"description":"Java e Spring"}</script>
+<h1>Pessoa Desenvolvedora Back-end</h1>
+<button id="abrir">Candidatar-se</button>
+<div id="dlg" role="dialog" hidden>
+  <div class="etapa" id="e1">
+    <label for="nome">Nome completo *</label><input id="nome" name="nome" required>
+    <label for="email">E-mail *</label><input id="email" name="email" type="email" required>
+    <label for="tel">Celular *</label><input id="tel" name="telefone" required>
+    <button type="button" class="prox">Avançar</button>
+  </div>
+  <div class="etapa" id="e2" hidden>
+    <label for="exp">Quantos anos de experiência com React? *</label>
+    <select id="exp" name="exp" required><option value="">Selecione</option><option>Menos de 1 ano</option><option>1 a 3 anos</option><option>Mais de 3 anos</option></select>
+    <button type="button" class="prox">Revisar</button>
+  </div>
+  <div class="etapa" id="e3" hidden>
+    <p>Revise e envie.</p>
+    <button type="button" id="enviar">Enviar candidatura</button>
+  </div>
+</div>
+<p id="fim" hidden>Candidatura enviada com sucesso.</p>
+<script>
+  document.getElementById('abrir').onclick = () => { document.getElementById('dlg').hidden = false; };
+  for (const b of document.querySelectorAll('.prox')) {
+    b.onclick = () => {
+      const etapa = b.closest('.etapa');
+      if ([...etapa.querySelectorAll('[required]')].some(i => !i.value.trim())) return; // a plataforma barra etapa incompleta
+      etapa.hidden = true;
+      etapa.nextElementSibling.hidden = false;
+    };
+  }
+  document.getElementById('enviar').onclick = async () => {
+    document.getElementById('enviar').disabled = true;
+    await fetch('/apply', { method: 'POST', body: '{}' });
+    document.getElementById('dlg').hidden = true;
+    document.getElementById('fim').hidden = false;
+  };
+</script></body></html>`;
+
+const paginas: Record<string, string> = { '/candidatura': CANDIDATURA, '/vaga': VAGA_PUBLICA, '/conta': VAGA_COM_CONTA, '/login': TELA_LOGIN, '/logado': VAGA_LOGADO, '/indeed': CABECALHO_INDEED };
+let envios = 0;
 const servidor = createServer((req, res) => {
+  if (req.method === 'POST' && req.url === '/apply') {
+    envios++;
+    res.writeHead(201, { 'content-type': 'application/json' });
+    return res.end('{"id":"ok"}');
+  }
   res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
   res.end(paginas[(req.url ?? '').split('?')[0]] ?? '<p>nada</p>');
 });
@@ -125,7 +172,10 @@ try {
   console.log('✓ Extensão: descoberta dos campos por rótulo, com tipo, obrigatoriedade e grupo de rádio');
 
   // ─── C) O que falta no meu perfil ──────────────────────────────────────────────────────────────
-  const perfilFalso = { tem: { nome: true, email: true, celular: true, curriculo: true, regime: true, linkedin: false, cidade: false, cpf: false, pretensao: false }, perguntas: ['Tipo de CNPJ'] };
+  const perfilFalso = {
+    tem: { nome: true, email: true, celular: true, curriculo: true, regime: true, linkedin: false, cidade: false, cpf: false, pretensao: false },
+    perguntas: [{ pergunta: 'Tipo de CNPJ', resposta: 'MEI' }],
+  };
   const faltando = await page.evaluate(
     ([campos, perfil]) => {
       const api = (globalThis as unknown as { AutoCVExtensao: { temDado: (c: unknown, p: unknown) => boolean } }).AutoCVExtensao;
@@ -165,6 +215,149 @@ try {
   const serializado = JSON.stringify(paraExtensao);
   for (const segredo of ['Marina', 'marina@exemplo.com', '11982324410', '52998224725', '4.500']) assert.ok(!serializado.includes(segredo), `valor de dado pessoal vazou para a extensão: ${segredo}`);
   console.log('✓ Núcleo: token protege as rotas da extensão, a detecção se acumula e nenhum dado pessoal vaza');
+
+  // ─── D) Regras que a extensão aplica sozinha (sem navegador: é lógica pura) ────────────────────
+  const comum = (() => {
+    const caixa: Record<string, unknown> = { module: { exports: {} }, URLSearchParams, console };
+    const ctx = createContext(caixa);
+    caixa.globalThis = caixa;
+    runInContext(readFileSync(new URL('../extensao/comum.js', import.meta.url), 'utf8'), ctx);
+    return (caixa.module as { exports: unknown }).exports as {
+      empresaBloqueada: (e: string, l: string[]) => string | null;
+      normalizarEmpresa: (e: string) => string;
+      montarUrlBuscaLinkedIn: (f: Record<string, unknown>) => string;
+      quantasCabemHoje: (d: string, c: unknown, k: unknown) => { cabem: number; limite: number; aquecendo: boolean };
+      proximaEspera: (c: unknown) => number;
+      PADRAO: Record<string, unknown>;
+    };
+  })();
+
+  // Empresa bloqueada: quem digita "Acme" quer barrar a Acme escrita de qualquer jeito
+  for (const nome of ['Acme', 'ACME S.A.', 'Acme Ltda.', 'Acme Tecnologia', 'acme  tecnologia do brasil'])
+    assert.ok(comum.empresaBloqueada(nome, ['Acme']), `"${nome}" devia bater com o bloqueio "Acme"`);
+  assert.equal(comum.empresaBloqueada('Acmezinha Digital', ['Acme']), null, 'nome parecido não é a mesma empresa');
+  assert.equal(comum.empresaBloqueada('Nubank', ['Acme', 'Itaú']), null);
+  assert.equal(comum.empresaBloqueada('ITAU UNIBANCO', ['Itaú']), 'Itaú', 'acento não pode decidir bloqueio');
+  assert.equal(comum.empresaBloqueada('', ['Acme']), null, 'vaga sem empresa não bloqueia por acidente');
+  assert.equal(comum.empresaBloqueada('Acme', []), null);
+  console.log('✓ Extensão: empresas bloqueadas batem com S.A., Ltda, acento e nome composto — e não com homônimo parecido');
+
+  // URL de busca do LinkedIn: os parâmetros confirmados em uso real
+  const url = new URL(comum.montarUrlBuscaLinkedIn({ palavraChave: 'desenvolvedor java', geoId: '106057199', distanciaKm: 25, janelaTempo: 'semana', apenasCandidaturaSimplificada: true }));
+  assert.equal(url.origin + url.pathname, 'https://www.linkedin.com/jobs/search/');
+  assert.equal(url.searchParams.get('keywords'), 'desenvolvedor java');
+  assert.equal(url.searchParams.get('f_AL'), 'true', 'candidatura simplificada é sempre ligada neste projeto');
+  assert.equal(url.searchParams.get('f_TPR'), 'r604800', 'última semana = 604800 s');
+  assert.equal(url.searchParams.get('geoId'), '106057199');
+  assert.equal(url.searchParams.get('distance'), '25');
+  assert.equal(new URL(comum.montarUrlBuscaLinkedIn({ palavraChave: 'dev', janelaTempo: '24h' })).searchParams.get('f_TPR'), 'r86400');
+  assert.equal(new URL(comum.montarUrlBuscaLinkedIn({ palavraChave: 'dev', modelo: 'remoto' })).searchParams.get('f_WT'), '2');
+  console.log('✓ Extensão: URL de busca do LinkedIn com candidatura simplificada, janela de tempo e local');
+
+  // Limite por dia e aquecimento de plataforma nova
+  const cfg = { ...comum.PADRAO, limiteDiarioPorPlataforma: { 'linkedin.com': 20 } };
+  const hojeIso = new Date().toISOString().slice(0, 10);
+  const nova = comum.quantasCabemHoje('linkedin.com', cfg, { 'linkedin.com': { desde: new Date().toISOString(), dia: hojeIso, feitas: 2 } });
+  assert.equal(nova.limite, 5, 'plataforma recém-usada fica no teto de aquecimento, não no limite cheio');
+  assert.equal(nova.cabem, 3);
+  assert.ok(nova.aquecendo);
+  const velha = comum.quantasCabemHoje('linkedin.com', cfg, { 'linkedin.com': { desde: new Date(Date.now() - 10 * 86400000).toISOString(), dia: hojeIso, feitas: 20 } });
+  assert.equal(velha.limite, 20, 'passado o aquecimento, vale o limite configurado');
+  assert.equal(velha.cabem, 0, 'limite do dia alcançado não deixa passar mais nenhuma');
+  assert.equal(comum.quantasCabemHoje('linkedin.com', cfg, { 'linkedin.com': { desde: '2020-01-01T00:00:00.000Z', dia: '2020-01-01', feitas: 99 } }).cabem, 20, 'contador de ontem não limita hoje');
+  const esperas = Array.from({ length: 40 }, () => comum.proximaEspera({ intervaloMinSegundos: 30, intervaloMaxSegundos: 60 }));
+  assert.ok(Math.min(...esperas) >= 30000 && Math.max(...esperas) <= 60000, 'a espera fica na faixa configurada');
+  assert.ok(new Set(esperas).size > 20, 'a espera é sorteada, não um relógio certinho');
+  console.log('✓ Extensão: limite por dia, aquecimento de plataforma nova e espera sorteada entre candidaturas');
+
+  // ─── E) Candidatura ponta a ponta numa página de várias etapas ─────────────────────────────────
+  const MOTOR = readFileSync(new URL('../extensao/motor.js', import.meta.url), 'utf8');
+  const COMUM = readFileSync(new URL('../extensao/comum.js', import.meta.url), 'utf8');
+  const REDE = readFileSync(new URL('../extensao/rede.js', import.meta.url), 'utf8');
+
+  /** Monta a página com a extensão carregada e o service worker trocado por um dublê controlado pelo teste. */
+  const prepararCandidatura = async (stub: Record<string, unknown>) => {
+    await page.goto(`${base}/candidatura`, { waitUntil: 'domcontentloaded' });
+    await page.addScriptTag({ content: REDE });
+    await page.evaluate(s => {
+      (globalThis as Record<string, unknown>).__stub = s;
+      (globalThis as Record<string, unknown>).chrome = {
+        runtime: {
+          // sem `id`: conteudo.js expõe a api e não tenta falar com o navegador
+          sendMessage: (msg: { tipo: string; candidatura?: unknown }, cb: (r: unknown) => void) => {
+            const st = (globalThis as unknown as { __stub: Record<string, unknown> }).__stub;
+            const resposta =
+              (
+                {
+                  CONFIG: { cfg: st.cfg },
+                  DADOS: { dados: st.dados },
+                  CABEM: st.cabem,
+                  PERGUNTA: st.pergunta ?? { resposta: null, motivo: 'a IA está desligada nas configurações da extensão' },
+                  CANDIDATURA: { sincronizado: true },
+                } as Record<string, Record<string, unknown>>
+              )[msg.tipo] ?? {};
+            if (msg.tipo === 'CANDIDATURA') (st.enviadas as unknown[]).push(msg.candidatura);
+            cb({ ok: true, ...resposta });
+          },
+        },
+      };
+    }, stub);
+    await page.addScriptTag({ content: COMUM });
+    await page.addScriptTag({ content: CONTEUDO });
+    await page.addScriptTag({ content: MOTOR });
+  };
+
+  const DADOS_FALSOS = {
+    perfil: { nome: 'Marina Pitanga', email: 'marina@exemplo.com', telefone: '(11) 98232-4410', cidade: 'Fortaleza - CE', linkedin: '', cpf: '', pretensao: '' },
+    perguntas: [] as { pergunta: string; resposta: string }[],
+  };
+  const CFG_FALSA = { ...comum.PADRAO, empresasBloqueadas: [] as string[] };
+  const CABEM_LIVRE = { cabem: 5, limite: 5, feitasHoje: 0, aquecendo: false };
+  const candidatar = () => page.evaluate(() => (globalThis as unknown as { AutoCVMotor: { candidatar: () => Promise<Record<string, unknown>> } }).AutoCVMotor.candidatar());
+
+  // Empresa bloqueada: nem abre o formulário
+  await prepararCandidatura({ cfg: { ...CFG_FALSA, empresasBloqueadas: ['Acme'] }, dados: DADOS_FALSOS, cabem: CABEM_LIVRE, enviadas: [] });
+  let r = await candidatar();
+  assert.equal(r.status, 'bloqueada', `empresa bloqueada não pode ser candidatada (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, 0);
+
+  // Limite do dia alcançado
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: DADOS_FALSOS, cabem: { cabem: 0, limite: 5, feitasHoje: 5, aquecendo: false }, enviadas: [] });
+  r = await candidatar();
+  assert.equal(r.status, 'limite');
+  assert.equal(envios, 0, 'nada pode sair com o limite do dia alcançado');
+
+  // Pergunta da empresa sem resposta salva: para e devolve a pergunta, NUNCA chuta
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: DADOS_FALSOS, cabem: CABEM_LIVRE, enviadas: [] });
+  r = await candidatar();
+  assert.equal(r.status, 'pergunta', `esperava parar na pergunta, veio ${r.status}: ${r.motivo}`);
+  assert.match(String(r.pergunta), /anos de experi[êe]ncia com React/i);
+  assert.equal(envios, 0, 'parar na pergunta não pode ter enviado nada');
+  assert.equal(await page.inputValue('#nome'), 'Marina Pitanga', 'o que era conhecido foi preenchido antes de parar');
+  assert.equal(await page.inputValue('#email'), 'marina@exemplo.com');
+  console.log('✓ Motor: empresa bloqueada e limite do dia barram antes de abrir; pergunta nova para a candidatura em vez de chutar');
+
+  // Com a resposta salva, vai até o fim — e o desfecho sai da resposta HTTP, não do texto da tela
+  await prepararCandidatura({
+    cfg: CFG_FALSA,
+    dados: { ...DADOS_FALSOS, perguntas: [{ pergunta: 'Quantos anos de experiência com React?', resposta: 'Mais de 3 anos' }] },
+    cabem: CABEM_LIVRE,
+    enviadas: [],
+  });
+  r = await candidatar();
+  assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}: ${r.motivo}`);
+  assert.equal(envios, 1, 'exatamente um envio');
+  assert.equal(await page.inputValue('#exp'), 'Mais de 3 anos', 'a resposta salva escolheu a opção certa da lista');
+  const registradas = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as { titulo: string; empresa: string }[];
+  assert.equal(registradas.length, 1, 'a candidatura tem de ser registrada para contar no limite e subir ao AutoCV');
+  assert.match(registradas[0].empresa, /Acme/);
+  assert.ok((r.espera as number) >= 5000, 'o motor devolve quanto esperar antes da próxima');
+
+  // Clicar de novo não manda outra: a trava é a mesma do núcleo (uma vaga, uma candidatura)
+  const antes = envios;
+  r = await candidatar();
+  assert.equal(envios, antes, `não pode sair um segundo envio (veio ${r.status}: ${r.motivo})`);
+  console.log('✓ Motor: preenche as etapas, envia uma vez só e confirma pela resposta HTTP (prova de rede)');
 } finally {
   await page.close().catch(() => {});
   servidor.close();
