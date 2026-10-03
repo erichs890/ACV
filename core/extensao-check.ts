@@ -18,7 +18,9 @@ process.env.AUTOCV_PERFIL = join(DIR, 'navegador');
 
 const { autorizado, lerDeteccoes, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } = await import('./extensao.ts');
 const { fecharNavegador, navegador } = await import('./browser.ts');
-const { kv } = await import('./storage/db.ts');
+const { kv, vagas } = await import('./storage/db.ts');
+await import('./platforms/vagaspj/index.ts'); // registra o adapter: a ponte por URL só oferece o que existe
+const { plataformaDaUrl, plataformasConhecidas, vagaDaUrl } = await import('./importar.ts');
 
 const CONTEUDO = readFileSync(new URL('../extensao/conteudo.js', import.meta.url), 'utf8');
 
@@ -215,6 +217,45 @@ try {
   const serializado = JSON.stringify(paraExtensao);
   for (const segredo of ['Marina', 'marina@exemplo.com', '11982324410', '52998224725', '4.500']) assert.ok(!serializado.includes(segredo), `valor de dado pessoal vazou para a extensão: ${segredo}`);
   console.log('✓ Núcleo: token protege as rotas da extensão, a detecção se acumula e nenhum dado pessoal vaza');
+
+  // ─── C2) "Candidata nesta vaga daqui pelo AutoCV": a ponte por URL ─────────────────────────────
+  // O caso real: a pessoa acha no LinkedIn uma vaga que leva para uma página do InHire. Lá o núcleo já tem
+  // adapter testado, então a extensão manda a URL em vez de usar o motor dela.
+  assert.equal(plataformaDaUrl('https://radix.inhire.app/vagas/1fe8ca9c/profissional-ai-specialist')?.id, 'inhire');
+  assert.equal(plataformaDaUrl('https://www.vagaspj.com.br/vagas/empresa/123/')?.id, 'vagaspj');
+  assert.equal(plataformaDaUrl('https://br.indeed.com/viewjob?jk=abc')?.id, 'indeed');
+  assert.equal(plataformaDaUrl('https://www.linkedin.com/jobs/view/42'), null, 'LinkedIn não tem adapter no núcleo: fica com o motor da extensão');
+  assert.equal(plataformaDaUrl('não é url'), null);
+  assert.ok(
+    plataformasConhecidas().some(p => p.id === 'vagaspj' && p.dominios.includes('vagaspj.com.br')),
+    'a extensão precisa receber os domínios de quem está carregado no núcleo',
+  );
+
+  vagas.salvar({
+    id: 'vagaspj:123',
+    plataforma: 'vagaspj',
+    tenant: '',
+    titulo: 'Pessoa Desenvolvedora',
+    empresa: 'Acme',
+    descricao: '',
+    requisitos: '',
+    regime: 'PJ',
+    modelo: 'remoto',
+    local: 'Remoto',
+    url: 'https://www.vagaspj.com.br/vagas/acme/123/',
+    skills: [],
+    camposConhecidos: [],
+    score: 70,
+    status: 'encontrada',
+    encontradaEm: new Date().toISOString(),
+    atualizadaEm: new Date().toISOString(),
+  });
+  // A URL que você tem no navegador quase nunca é idêntica à que o robô gravou: www, barra no fim e rastreio
+  const achada = await vagaDaUrl('https://vagaspj.com.br/vagas/acme/123?utm_source=linkedin#topo');
+  assert.equal(achada.id, 'vagaspj:123', 'a vaga tem de ser reconhecida apesar de www, barra final e parâmetros');
+  await assert.rejects(vagaDaUrl('https://www.vagaspj.com.br/vagas/acme/999/'), /ainda não está na lista/, 'vaga que o AutoCV não varreu dá instrução, não erro técnico');
+  await assert.rejects(vagaDaUrl('https://exemplo.com/vaga/1'), /não tem adapter/, 'site sem adapter é caso do motor da própria extensão');
+  console.log('✓ Ponte por URL: reconhece a plataforma do núcleo e acha a vaga mesmo com www, barra e rastreio na URL');
 
   // ─── D) Regras que a extensão aplica sozinha (sem navegador: é lógica pura) ────────────────────
   const comum = (() => {

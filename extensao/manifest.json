@@ -3,9 +3,11 @@
   "name": "AutoCV",
   "version": "0.2.0",
   "description": "Diz se a plataforma exige conta e o que falta no seu perfil, e candidata na vaga aberta quando você manda. Guarda a própria configuração e funciona com o AutoCV fechado.",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": ["http://127.0.0.1:4780/*"],
-  "background": { "service_worker": "fundo.js" },
+  "background": {
+    "service_worker": "fundo.js"
+  },
   "options_page": "opcoes.html",
   "content_scripts": [
     {
@@ -22,5 +24,8 @@
       "all_frames": false
     }
   ],
-  "action": { "default_popup": "popup.html", "default_title": "AutoCV" }
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "AutoCV"
+  }
 }

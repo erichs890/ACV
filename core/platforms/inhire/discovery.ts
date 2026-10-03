@@ -128,7 +128,7 @@ const regimeDe = (tipos: string[]): Vaga['regime'] => {
 const requisitosDe = (texto: string) => (texto.match(/requisitos?[\s\S]*?(?=\n(?:benef|diferen|compet|sobre|o que oferecemos|faixa)|$)/i)?.[0] ?? '').trim().slice(0, 2000);
 const idVaga = (tenant: string, jobId: string) => `inhire:${tenant}:${jobId}`;
 
-async function montarVaga(tenant: string, resumo: ResumoVagaInHire, perfil: PerfilBusca, filtros: FiltrosScore): Promise<Vaga> {
+export async function montarVaga(tenant: string, resumo: ResumoVagaInHire, perfil: PerfilBusca, filtros: FiltrosScore): Promise<Vaga> {
   const d = await detalheVaga(tenant, resumo.jobId);
   const descricao = htmlParaTexto(d.description ?? '');
   const skills = extrairSkills(`${d.displayName}\n${descricao}`);

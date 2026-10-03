@@ -45,7 +45,10 @@ async function sincronizar(comCurriculo = false) {
   }
   const temCurriculo = !!(await ler('cache', {})).curriculo;
   const dados = await paraONucleo(`/extensao/dados${comCurriculo || !temCurriculo ? '?curriculo=1' : ''}`);
+  // Onde o núcleo tem adapter próprio: nesses sites o painel oferece o motor dele, que é o testado
+  const { plataformas } = await paraONucleo('/extensao/plataformas').catch(() => ({ plataformas: null }));
   const cache = { ...(await ler('cache', {})), ...dados, em: new Date().toISOString() };
+  if (plataformas) cache.plataformas = plataformas;
   await gravar('cache', cache);
   return cache;
 }
@@ -113,6 +116,27 @@ async function cacheDeteccao(dominio, forcar) {
   return c && Date.now() - c.em < VALIDADE_DETECCAO_MS ? c : null;
 }
 
+/**
+ * Leva a pessoa para a tela do ACV.
+ *
+ * A extensão vive num navegador e o ACV pode estar em OUTRO (o usuário usa Edge para navegar e Firefox para o
+ * app) — nenhuma extensão consegue focar a janela de outro navegador, isso o sistema não permite. O que dá, e
+ * resolve o problema de verdade, é abrir a mesma tela aqui: o ACV é um servidor local, então a mesma URL serve
+ * nos dois. Se já houver uma aba aberta nela, reaproveita em vez de encher o navegador de abas.
+ */
+async function abrirApp() {
+  const { urlApp } = await lerConfig();
+  const base = (urlApp || PADRAO.urlApp).replace(/\/+$/, '');
+  const abas = await chrome.tabs.query({ url: `${base}/*` }).catch(() => []);
+  if (abas[0]) {
+    await chrome.tabs.update(abas[0].id, { active: true });
+    await chrome.windows.update(abas[0].windowId, { focused: true }).catch(() => {});
+    return { aba: abas[0].id, reaproveitada: true };
+  }
+  const nova = await chrome.tabs.create({ url: base, active: true });
+  return { aba: nova.id, reaproveitada: false };
+}
+
 const ACOES = {
   CONFIG: async () => ({ cfg: await lerConfig() }),
   CONFIG_GRAVAR: async m => {
@@ -138,6 +162,19 @@ const ACOES = {
       return { resposta: null, motivo: `o AutoCV não respondeu (${e.message})` };
     }
   },
+  // Primeira visita a uma página de vaga: o cache ainda está vazio, então vale uma tentativa de sincronizar
+  // antes de responder — senão o botão "Candidatar pelo AutoCV" só apareceria a partir da segunda vez.
+  PLATAFORMAS: async () => {
+    let cache = await ler('cache', {});
+    if (!cache.plataformas) {
+      await sincronizar().catch(() => {});
+      cache = await ler('cache', {});
+    }
+    return { plataformas: cache.plataformas ?? [] };
+  },
+  ABRIR_APP: () => abrirApp(),
+  // Candidatar com o motor do NÚCLEO (adapter testado) na vaga que está aberta. Exige o ACV aberto.
+  NUCLEO_CANDIDATAR: m => paraONucleo('/extensao/candidatar', { url: m.url }),
   CACHE: async m => ({ cache: await cacheDeteccao(m.dominio, m.forcar) }),
   PLATAFORMA_DETECTADA: async m => {
     const todas = await ler('deteccoes', {});

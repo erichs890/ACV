@@ -320,6 +320,9 @@
   globalThis.AutoCVExtensao = api;
   if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
 
+  // Marca que a extensão leu esta página. Serve para você (e para o teste) saber se ela está ativa aqui.
+  document.documentElement.dataset.autocv = 'lido';
+
   const aoNucleo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
   async function reportar(forcar = false) {

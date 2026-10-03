@@ -6,6 +6,7 @@ import type { Arquivo, Estado } from '../src/types.ts';
 import './platforms/inhire/index.ts';
 import './platforms/indeed/index.ts';
 import { cancelarLogin, entrarNaJanela } from './sessao.ts';
+import { plataformasConhecidas, vagaDaUrl } from './importar.ts';
 import { autorizado, dadosParaExtensao, perfilParaExtensao, receberCandidaturas, registrarCamposFaltando, registrarPlataformaDetectada, responderParaExtensao, tokenDaExtensao } from './extensao.ts';
 import './platforms/vagaspj/index.ts';
 import './platforms/divulgavagas/index.ts';
@@ -150,6 +151,37 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   'POST /extensao/pergunta': async (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
     json(res, 200, await responderParaExtensao(JSON.parse((await corpo(req)).toString('utf8'))));
+  },
+  // A extensão pergunta onde o núcleo tem adapter próprio — nesses sites o botão dela chama o AutoCV
+  'GET /extensao/plataformas': (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, { plataformas: plataformasConhecidas() });
+  },
+  /**
+   * "Candidata nesta vaga que está aberta no meu navegador" — com o motor do núcleo, não o da extensão.
+   * Acha (ou importa) a vaga, põe na fila como um clique em "Quero me candidatar" e ESPERA o desfecho, para a
+   * extensão poder dizer o que aconteceu. Todas as travas do núcleo valem: duplicidade, ensaio, pendência.
+   */
+  'POST /extensao/candidatar': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    const { url } = JSON.parse((await corpo(req)).toString('utf8')) as { url: string };
+    try {
+      const vaga = await vagaDaUrl(String(url ?? ''));
+      // O aviso sai ANTES do trabalho: é ele que diz, na tela do ACV, em qual vaga a extensão mandou mexer
+      emitir({ tipo: 'aviso', nivel: 'info', msg: `Veio da extensão: candidatando em "${vaga.titulo}" (${vaga.empresa}).` });
+      await candidatarAgora(vaga.id);
+      const depois = vagas.get(vaga.id);
+      json(res, 200, {
+        status: depois?.status ?? 'desconhecido',
+        titulo: vaga.titulo,
+        empresa: vaga.empresa,
+        score: vaga.score,
+        pergunta: depois?.pendencia?.tipo === 'pergunta' ? depois.pendencia.pergunta.rotulo : undefined,
+        erro: depois?.erro,
+      });
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message });
+    }
   },
   'POST /extensao/plataforma': async (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });

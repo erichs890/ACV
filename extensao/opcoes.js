@@ -52,7 +52,7 @@ async function carregar() {
   const r = await aoFundo({ tipo: 'CONFIG' });
   cfg = { ...PADRAO, ...(r?.cfg ?? {}) };
   empresas = [...(cfg.empresasBloqueadas ?? [])];
-  for (const campo of ['linkedinPerfilUrl', 'anosExperiencia', 'intervaloMinSegundos', 'intervaloMaxSegundos']) $(campo).value = cfg[campo] ?? '';
+  for (const campo of ['linkedinPerfilUrl', 'anosExperiencia', 'intervaloMinSegundos', 'intervaloMaxSegundos', 'urlApp']) $(campo).value = cfg[campo] ?? '';
   $('pretensaoSalarial').value = String(cfg.pretensaoSalarial ?? 0);
   $('pretensaoTexto').textContent = dinheiro(cfg.pretensaoSalarial);
   $('iaAtiva').checked = !!cfg.iaAtiva;
@@ -89,6 +89,7 @@ $('salvar').addEventListener('click', async () => {
   const novo = {
     ...cfg,
     linkedinPerfilUrl: $('linkedinPerfilUrl').value.trim(),
+    urlApp: $('urlApp').value.trim() || PADRAO.urlApp,
     pretensaoSalarial: Number($('pretensaoSalarial').value) || 0,
     anosExperiencia: Number($('anosExperiencia').value) || 0,
     empresasBloqueadas: empresas,

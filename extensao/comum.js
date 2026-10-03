@@ -16,6 +16,7 @@
     empresasBloqueadas: [],
     iaAtiva: false, // só tem efeito com o AutoCV aberto: é lá que a IA roda, com as travas dela
     limiteDiarioPorPlataforma: { 'linkedin.com': 10, 'indeed.com': 10, 'gupy.io': 10 },
+    urlApp: 'http://localhost:5173', // tela do ACV (o start.bat sobe nela); o núcleo em si fica na 4780
     intervaloMinSegundos: 45,
     intervaloMaxSegundos: 120,
   };

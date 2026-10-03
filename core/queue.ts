@@ -378,7 +378,7 @@ export async function buscarEmpresas(): Promise<number> {
 }
 
 /** Modo manual: "Quero me candidatar" — entra na fila e roda em seguida. */
-export function candidatarAgora(id: string) {
+export function candidatarAgora(id: string): Promise<void> {
   const v = vagas.get(id);
   if (!v) throw new Error('vaga não encontrada');
   if (jaEnviada(id)) throw new Error('você já se candidatou a esta vaga');
@@ -386,7 +386,8 @@ export function candidatarAgora(id: string) {
   vagas.atualizar(id, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
-  void processarProxima(true);
+  // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do AutoCV continua ignorando
+  return processarProxima(true);
 }
 
 export function removerDaFila(id: string) {

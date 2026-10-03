@@ -2,17 +2,42 @@
 //
 // Por que um painel na própria página e não só o popup da barra: a candidatura acontece aqui, e o que você
 // precisa ver (a vaga, o contador do dia, o motivo de uma vaga ter sido pulada) é sobre a vaga que está na tela.
-// Fica dentro de um shadow DOM: nem o CSS do LinkedIn entra, nem o nosso vaza para ele.
+// Fica dentro de um shadow DOM: nem o CSS do site entra, nem o nosso vaza para ele.
+//
+// Ele decide SE deve aparecer mais de uma vez, conforme a página se monta: site de vaga é aplicativo de uma
+// página só e no `document_idle` a tela quase sempre ainda está vazia. Decidindo uma vez só, ele simplesmente
+// não aparecia no InHire.
 (() => {
-  if (!globalThis.AutoCVMotor || document.getElementById('autocv-painel')) return;
+  if (!globalThis.AutoCVMotor) return;
   const { handlerDe, pareceVaga } = globalThis.AutoCVExtensao;
   const { empresaBloqueada, montarUrlBuscaLinkedIn } = globalThis.AutoCVComum;
   const aoFundo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
   const handler = handlerDe(location.hostname);
+  // Plataformas que a própria extensão atende (candidatura aqui mesmo, com o motor dela)
   const PLATAFORMAS_COM_PAINEL = ['linkedin.com', 'indeed.com', 'gupy.io'];
   const dominio = location.hostname.replace(/^www\./, '');
-  if (!PLATAFORMAS_COM_PAINEL.some(d => dominio === d || dominio.endsWith(`.${d}`))) return;
+  const bate = d => dominio === d || dominio.endsWith(`.${d}`);
+  const MAX_TENTATIVAS = 30;
+
+  let doNucleo = null;
+  let tentativas = 0;
+  let ocupado = false;
+  let raiz = null;
+
+  /**
+   * Este site é um dos que o AutoCV já sabe candidatar sozinho (InHire, Vagas PJ, Divulga Vagas...)? Então o
+   * caminho bom não é o motor daqui: é mandar a URL para o núcleo e deixar o adapter dele trabalhar — ele tem
+   * schema da API, adaptação de currículo, modo ensaio e prova de envio. A lista vem do próprio núcleo.
+   */
+  async function devoAparecer() {
+    if (PLATAFORMAS_COM_PAINEL.some(bate)) return true;
+    if (!doNucleo) {
+      const { plataformas = [] } = (await aoFundo({ tipo: 'PLATAFORMAS' })) ?? {};
+      doNucleo = plataformas.find(p => (p.dominios ?? []).some(bate)) ?? null;
+    }
+    return !!doNucleo || pareceVaga();
+  }
 
   const CSS = `
   :host { all: initial; }
@@ -36,35 +61,12 @@
   .erro { background:#fdecea; border-color:#a03000; color:#a03000; }
   .log { background:#f6f6f8; border:1px solid #e3e3e8; border-radius:8px; padding:8px; max-height:140px; overflow:auto;
          font:11px/1.4 ui-monospace, monospace; white-space:pre-wrap; }
-  .aviso { background:#fdf3e2; border:1px solid #a86a00; color:#7a4d00; border-radius:8px; padding:8px; font-size:11px; }`;
-
-  const hospedeiro = document.createElement('div');
-  hospedeiro.id = 'autocv-painel';
-  const raiz = hospedeiro.attachShadow({ mode: 'open' });
-  raiz.innerHTML = `<style>${CSS}</style>
-  <div class="caixa">
-    <div class="topo"><strong>AutoCV</strong><button id="recolher" title="Recolher">—</button><button id="fechar" title="Fechar">✕</button></div>
-    <div class="corpo" id="corpo">
-      <div id="guia">
-        <p class="cinza"><b>Como usar</b></p>
-        <ol>
-          <li>Entre na sua conta da plataforma normalmente.</li>
-          <li>Pesquise a vaga e ligue o filtro de candidatura simplificada.</li>
-          <li>Abra a vaga que você quer.</li>
-          <li>Confira os seus dados e clique em <b>Iniciar candidatura</b>.</li>
-        </ol>
-        <button class="acao secundaria" id="ocultarGuia">Entendi, ocultar</button>
-      </div>
-      <div class="aviso" id="avisoConta">O LinkedIn proíbe automação no contrato de uso e pode suspender a conta de quem detecta. Use com parcimônia: uma vaga por clique, poucas por dia. O AutoCV não disfarça nada.</div>
-      <p class="vaga" id="vaga">—</p>
-      <div class="etiquetas" id="etiquetas"></div>
-      <button class="acao" id="candidatar">Iniciar candidatura</button>
-      <button class="acao secundaria" id="buscar">Buscar vagas com meus critérios</button>
-      <button class="acao secundaria" id="config">Configurações</button>
-      <div class="log" id="log" hidden></div>
-    </div>
-  </div>`;
-  document.documentElement.appendChild(hospedeiro);
+  .aviso { background:#fdf3e2; border:1px solid #a86a00; color:#7a4d00; border-radius:8px; padding:8px; font-size:11px; }
+  .trabalhando { display:flex; align-items:center; gap:8px; background:#eef2fb; border:1px solid #1b3a8f; color:#1b3a8f;
+                 border-radius:8px; padding:8px; font-size:12px; font-weight:600; }
+  .giro { width:14px; height:14px; flex:0 0 auto; border:2px solid #1b3a8f; border-top-color:transparent; border-radius:50%;
+          animation: girar .8s linear infinite; }
+  @keyframes girar { to { transform: rotate(360deg); } }`;
 
   const $ = id => raiz.getElementById(id);
   const registrar = msg => {
@@ -75,18 +77,18 @@
   };
   const etiqueta = (texto, classe = '') => `<span class="etiqueta ${classe}">${texto}</span>`;
 
-  let ocupado = false;
-
   async function pintar() {
     const empresa = handler.empresaDaVaga?.() ?? '';
     const titulo = handler.tituloDaVaga?.() ?? '';
+    $('trabalhando').hidden = !ocupado;
+    if (ocupado) $('trabalhandoTexto').textContent = `O ACV está trabalhando em "${(titulo || 'esta vaga').slice(0, 60)}". Acompanhe na aba dele.`;
     $('vaga').textContent = titulo ? `${titulo}${empresa ? ` — ${empresa}` : ''}` : 'Abra uma vaga para começar';
     const st = await aoFundo({ tipo: 'STATUS' });
     const cota = await aoFundo({ tipo: 'CABEM', dominio });
     const bloqueada = empresaBloqueada(empresa, st?.cfg?.empresasBloqueadas);
     $('avisoConta').hidden = !/linkedin/.test(dominio);
     $('etiquetas').innerHTML = [
-      etiqueta(st?.sincronizado ? 'AutoCV conectado' : 'operando em cache', st?.sincronizado ? 'ok' : 'atencao'),
+      etiqueta(st?.sincronizado ? 'ACV conectado' : 'operando em cache', st?.sincronizado ? 'ok' : 'atencao'),
       etiqueta(st?.cfg?.iaAtiva ? 'IA ativa' : 'IA desligada', st?.cfg?.iaAtiva ? 'ok' : ''),
       etiqueta(`${cota?.feitasHoje ?? 0} de ${cota?.limite ?? 0} hoje`, cota?.cabem ? '' : 'erro'),
       cota?.aquecendo ? etiqueta('aquecendo', 'atencao') : '',
@@ -94,54 +96,142 @@
       bloqueada ? etiqueta('empresa bloqueada', 'erro') : '',
     ].join('');
 
+    // Em plataforma do núcleo, o motor de lá é o principal e o daqui vira alternativa
+    $('nucleo').hidden = !doNucleo;
+    $('explicaNucleo').hidden = !doNucleo;
+    if (doNucleo) {
+      $('explicaNucleo').textContent = `O ACV tem adapter próprio para ${doNucleo.nome}: ele adapta o currículo, respeita o modo ensaio e confirma o envio pela resposta do servidor.`;
+      $('candidatar').classList.add('secundaria');
+      $('nucleo').disabled = ocupado || !st?.sincronizado;
+      $('nucleo').textContent = ocupado ? 'Conectando à vaga no ACV...' : st?.sincronizado ? `Candidatar pelo ACV (${doNucleo.nome})` : 'Abra o ACV para candidatar por ele';
+    }
+
     const b = $('candidatar');
-    b.disabled = ocupado || !!bloqueada || !cota?.cabem || !pareceVaga();
-    b.textContent = ocupado ? 'Candidatando...' : bloqueada ? `Bloqueada: ${bloqueada}` : !cota?.cabem ? 'Limite de hoje alcançado' : !pareceVaga() ? 'Abra uma vaga' : 'Iniciar candidatura';
+    b.disabled = ocupado || !!bloqueada || !cota?.cabem;
+    b.textContent = ocupado
+      ? 'Candidatando...'
+      : bloqueada
+        ? `Bloqueada: ${bloqueada}`
+        : !cota?.cabem
+          ? 'Limite de hoje alcançado'
+          : doNucleo
+            ? 'Candidatar aqui mesmo (motor da extensão)'
+            : 'Iniciar candidatura';
   }
 
-  $('candidatar').addEventListener('click', async () => {
-    ocupado = true;
-    await pintar();
-    registrar('— iniciando —');
-    try {
-      const r = await globalThis.AutoCVMotor.candidatar(registrar);
-      registrar(r.status === 'enviada' ? '✓ Candidatura enviada.' : `${r.status === 'pergunta' ? 'Parei nesta pergunta' : 'Não enviei'}: ${r.pergunta ? `"${r.pergunta}" — ` : ''}${r.motivo ?? ''}`);
-      if (r.status === 'enviada' && r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
-    } catch (e) {
-      registrar(`Erro: ${e.message}`);
-    } finally {
-      ocupado = false;
+  function montar() {
+    const hospedeiro = document.createElement('div');
+    hospedeiro.id = 'autocv-painel';
+    raiz = hospedeiro.attachShadow({ mode: 'open' });
+    raiz.innerHTML = `<style>${CSS}</style>
+    <div class="caixa">
+      <div class="topo"><strong>ACV</strong><button id="recolher" title="Recolher">—</button><button id="fechar" title="Fechar">✕</button></div>
+      <div class="corpo" id="corpo">
+        <div id="guia">
+          <p class="cinza"><b>Como usar</b></p>
+          <ol>
+            <li>Entre na sua conta da plataforma normalmente.</li>
+            <li>Pesquise a vaga e ligue o filtro de candidatura simplificada.</li>
+            <li>Abra a vaga que você quer.</li>
+            <li>Confira os seus dados e clique no botão de candidatura.</li>
+          </ol>
+          <button class="acao secundaria" id="ocultarGuia">Entendi, ocultar</button>
+        </div>
+        <div class="aviso" id="avisoConta">O LinkedIn proíbe automação no contrato de uso e pode suspender a conta de quem detecta. Use com parcimônia: uma vaga por clique, poucas por dia. O ACV não disfarça nada.</div>
+        <p class="vaga" id="vaga">—</p>
+        <div class="etiquetas" id="etiquetas"></div>
+        <div class="trabalhando" id="trabalhando" hidden><span class="giro"></span><span id="trabalhandoTexto"></span></div>
+        <button class="acao" id="nucleo" hidden>Candidatar pelo ACV</button>
+        <p class="cinza" id="explicaNucleo" hidden></p>
+        <button class="acao" id="candidatar">Iniciar candidatura</button>
+        <button class="acao secundaria" id="buscar">Buscar vagas com meus critérios</button>
+        <button class="acao secundaria" id="config">Configurações</button>
+        <div class="log" id="log" hidden></div>
+      </div>
+    </div>`;
+    document.documentElement.appendChild(hospedeiro);
+
+    // Candidatura pelo NÚCLEO: o adapter testado do AutoCV, na vaga que está aberta aqui
+    $('nucleo').addEventListener('click', async () => {
+      ocupado = true;
       await pintar();
-    }
-  });
+      registrar(`— mandando para o ACV (${doNucleo.nome}) —`);
+      try {
+        // Leva a pessoa para a tela do ACV antes de começar: é lá que o trabalho aparece acontecendo, e sem
+        // isso o clique parece não ter feito nada (ainda mais com o app num navegador e a extensão em outro)
+        const aba = await aoFundo({ tipo: 'ABRIR_APP' });
+        registrar(aba?.ok ? (aba.reaproveitada ? 'Abri a aba do ACV que já estava aberta.' : 'Abri o ACV numa aba nova.') : 'Não consegui abrir a tela do ACV; acompanhe por ela mesmo assim.');
+        const r = await aoFundo({ tipo: 'NUCLEO_CANDIDATAR', url: location.href });
+        if (!r?.ok) registrar(`Não deu: ${r?.erro ?? 'o ACV não respondeu'}`);
+        else if (r.status === 'enviada') registrar(`✓ Enviada pelo ACV: "${r.titulo}" (${r.empresa}), compatibilidade ${r.score}.`);
+        else if (r.status === 'ensaio') registrar('Modo ensaio ligado no ACV: ele preencheu tudo e NÃO enviou. Desligue o ensaio em Automação para valer.');
+        else if (r.status === 'aguardando_pergunta') registrar(`A vaga fez uma pergunta nova${r.pergunta ? `: "${r.pergunta}"` : ''}. Responda no ACV e ela segue.`);
+        else registrar(`Terminou como "${r.status}"${r.erro ? `: ${r.erro}` : ''}. Veja o log do ACV.`);
+      } catch (e) {
+        registrar(`Erro: ${e.message}`);
+      } finally {
+        ocupado = false;
+        await pintar();
+      }
+    });
 
-  $('buscar').addEventListener('click', async () => {
-    const st = await aoFundo({ tipo: 'STATUS' });
-    const cargo = st?.cache?.perfil?.cargo || st?.cfg?.palavraChave || '';
-    if (!/linkedin/.test(dominio)) return registrar('A busca por critérios só está montada para o LinkedIn.');
-    location.href = montarUrlBuscaLinkedIn({ palavraChave: cargo, janelaTempo: 'semana', apenasCandidaturaSimplificada: true });
-  });
+    // Candidatura com o motor da própria extensão (plataforma sem adapter no núcleo)
+    $('candidatar').addEventListener('click', async () => {
+      ocupado = true;
+      await pintar();
+      registrar('— iniciando —');
+      try {
+        const r = await globalThis.AutoCVMotor.candidatar(registrar);
+        registrar(r.status === 'enviada' ? '✓ Candidatura enviada.' : `${r.status === 'pergunta' ? 'Parei nesta pergunta' : 'Não enviei'}: ${r.pergunta ? `"${r.pergunta}" — ` : ''}${r.motivo ?? ''}`);
+        if (r.status === 'enviada' && r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
+      } catch (e) {
+        registrar(`Erro: ${e.message}`);
+      } finally {
+        ocupado = false;
+        await pintar();
+      }
+    });
 
-  $('config').addEventListener('click', () => aoFundo({ tipo: 'ABRIR_OPCOES' }));
-  $('fechar').addEventListener('click', () => hospedeiro.remove());
-  $('recolher').addEventListener('click', () => {
-    const c = $('corpo');
-    c.hidden = !c.hidden;
-  });
-  $('ocultarGuia').addEventListener('click', () => {
-    $('guia').hidden = true;
-    chrome.storage.local.set({ guiaVisto: true });
-  });
-  chrome.storage.local.get('guiaVisto').then(({ guiaVisto }) => {
-    if (guiaVisto) $('guia').hidden = true;
-  });
+    $('buscar').addEventListener('click', async () => {
+      if (!/linkedin/.test(dominio)) return registrar('A busca por critérios só está montada para o LinkedIn.');
+      const st = await aoFundo({ tipo: 'STATUS' });
+      location.href = montarUrlBuscaLinkedIn({ palavraChave: st?.cache?.perfil?.cargo ?? '', janelaTempo: 'semana', apenasCandidaturaSimplificada: true });
+    });
 
-  pintar();
-  // Lista de vagas do LinkedIn troca de vaga sem recarregar a página: o painel acompanha
-  let ultima = location.href;
-  setInterval(() => {
-    if (location.href === ultima) return;
-    ultima = location.href;
+    $('config').addEventListener('click', () => aoFundo({ tipo: 'ABRIR_OPCOES' }));
+    $('fechar').addEventListener('click', () => hospedeiro.remove());
+    $('recolher').addEventListener('click', () => {
+      const c = $('corpo');
+      c.hidden = !c.hidden;
+    });
+    $('ocultarGuia').addEventListener('click', () => {
+      $('guia').hidden = true;
+      chrome.storage.local.set({ guiaVisto: true });
+    });
+    chrome.storage.local.get('guiaVisto').then(({ guiaVisto }) => {
+      if (guiaVisto) $('guia').hidden = true;
+    });
+
     pintar();
-  }, 1500);
+    // Lista de vagas troca de vaga sem recarregar a página: o painel acompanha
+    let ultima = location.href;
+    setInterval(() => {
+      if (location.href === ultima) return;
+      ultima = location.href;
+      pintar();
+    }, 1500);
+  }
+
+  async function tentar() {
+    if (document.getElementById('autocv-painel') || ++tentativas > MAX_TENTATIVAS) return;
+    if (await devoAparecer()) montar();
+  }
+
+  let agendado = null;
+  const agendar = () => {
+    clearTimeout(agendado);
+    agendado = setTimeout(tentar, 800);
+  };
+  tentar();
+  new MutationObserver(agendar).observe(document.documentElement, { childList: true, subtree: true });
 })();
