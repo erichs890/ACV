@@ -250,7 +250,19 @@
   };
 
   const REGISTRO = [INDEED, LINKEDIN];
-  const handlerDe = host => REGISTRO.find(h => h.dominios.some(d => host === d || host.endsWith(`.${d}`))) ?? GENERICO;
+
+  /**
+   * O handler desta página: o dedicado do domínio POR CIMA do genérico, nunca no lugar dele.
+   *
+   * Antes isto devolvia o dedicado puro, e um handler que só queria acrescentar diagnóstico acabava
+   * APAGANDO o resto. O do Indeed define 4 dos 12 campos: sem a fusão, o motor ficava sem `abrir`,
+   * `botaoProximo`, `botaoFinal` e `sucesso` naquele site — ou seja, nunca achava o botão de enviar e nunca
+   * reconhecia a confirmação. Handler dedicado é complemento, não substituição.
+   */
+  const handlerDe = host => {
+    const dedicado = REGISTRO.find(h => h.dominios.some(d => host === d || host.endsWith(`.${d}`)));
+    return dedicado ? { ...GENERICO, ...dedicado } : GENERICO;
+  };
 
   // ─── Diagnóstico ──────────────────────────────────────────────────────────────────────────────
   const dominioBase = host => host.replace(/^www\./, '');

@@ -12,24 +12,52 @@ import { filtrosDaAutomacao, ler } from './estado.ts';
 import { log, vagas } from './storage/db.ts';
 
 /**
- * Domínios de cada plataforma, para a extensão saber onde oferecer "candidatar pelo AutoCV".
+ * Domínios de cada plataforma e QUEM atende cada uma. **Esta é a lista única.**
  *
  * Mora aqui e não em cada adapter porque é a extensão que precisa disto, não o robô — e uma lista só é mais
- * fácil de conferir do que sete campos espalhados. `importa` diz se dá para trazer uma vaga que o AutoCV ainda
- * não varreu; nas outras, a vaga precisa já estar na lista (a varredura diária costuma dar conta).
+ * fácil de conferir do que sete campos espalhados. Antes a extensão tinha as suas próprias listas paralelas
+ * (`PLATAFORMAS_COM_PAINEL` no painel, os `matches` do manifesto, os limites do `comum.js`), e nenhuma
+ * consultava esta: um site podia estar em três delas e faltar na quarta sem ninguém perceber.
+ *
+ * `importa` diz se dá para trazer uma vaga que o AutoCV ainda não varreu; nas outras, a vaga precisa já estar
+ * na lista (a varredura diária costuma dar conta).
+ *
+ * `motor` diz por onde a candidatura acontece:
+ *  - `nucleo`   — o adapter testado do robô (adapta currículo, respeita ensaio, prova o envio pela resposta)
+ *  - `extensao` — só o motor da extensão, no navegador da pessoa (plataforma sem adapter, como LinkedIn)
+ *  - `ambos`    — os dois caminhos servem, e a extensão oferece a escolha
  */
-export const DOMINIOS: { id: string; dominios: string[]; importa: boolean }[] = [
-  { id: 'inhire', dominios: ['inhire.app'], importa: true },
-  { id: 'vagaspj', dominios: ['vagaspj.com.br'], importa: false },
-  { id: 'divulgavagas', dominios: ['divulgavagas.com.br'], importa: false },
-  { id: 'quickin', dominios: ['quickin.io'], importa: false },
-  { id: 'workable', dominios: ['workable.com'], importa: false },
-  { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false },
-  { id: 'indeed', dominios: ['indeed.com'], importa: false },
+export type MotorDaPlataforma = 'nucleo' | 'extensao' | 'ambos';
+
+export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor: MotorDaPlataforma; nome?: string }[] = [
+  { id: 'inhire', dominios: ['inhire.app'], importa: true, motor: 'nucleo' },
+  { id: 'vagaspj', dominios: ['vagaspj.com.br'], importa: false, motor: 'nucleo' },
+  { id: 'divulgavagas', dominios: ['divulgavagas.com.br'], importa: false, motor: 'nucleo' },
+  { id: 'quickin', dominios: ['quickin.io'], importa: false, motor: 'nucleo' },
+  { id: 'workable', dominios: ['workable.com'], importa: false, motor: 'nucleo' },
+  { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false, motor: 'nucleo' },
+  { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos' },
+  // Sem adapter no núcleo: quem candidata é o motor da extensão, no navegador da pessoa. Entram aqui para
+  // a extensão parar de guardar a própria lista — `nome` é obrigatório porque não há adapter de onde tirá-lo.
+  { id: 'linkedin', dominios: ['linkedin.com'], importa: false, motor: 'extensao', nome: 'LinkedIn' },
+  { id: 'gupy', dominios: ['gupy.io'], importa: false, motor: 'extensao', nome: 'Gupy' },
 ];
 
+/**
+ * O que a extensão recebe em `GET /extensao/plataformas`.
+ *
+ * Inclui as de `motor: 'extensao'`, que não têm adapter: elas não podem ser filtradas por `adapters[id]`,
+ * senão a extensão continuaria sem saber dos sites que ela mesma atende.
+ */
 export const plataformasConhecidas = () =>
-  DOMINIOS.filter(d => adapters[d.id]).map(d => ({ id: d.id, nome: adapters[d.id].nome, dominios: d.dominios, importa: d.importa, conectada: !!ler.conexoes()[d.id] }));
+  DOMINIOS.filter(d => d.motor !== 'nucleo' || adapters[d.id]).map(d => ({
+    id: d.id,
+    nome: adapters[d.id]?.nome ?? d.nome ?? d.id,
+    dominios: d.dominios,
+    importa: d.importa,
+    motor: d.motor,
+    conectada: !!ler.conexoes()[d.id],
+  }));
 
 const daUrl = (url: string) => {
   try {
@@ -69,6 +97,9 @@ function inhireDaUrl(url: string): { tenant: string; jobId: string } | null {
 export async function vagaDaUrl(url: string): Promise<Vaga> {
   const plataforma = plataformaDaUrl(url);
   if (!plataforma) throw new Error('o AutoCV não tem adapter para este site — use o motor da própria extensão');
+  // A lista conhece sites que só a extensão atende (LinkedIn, Gupy). Conhecer não é saber candidatar:
+  // aqui a ponte recusa com o nome da plataforma, em vez de um "não está carregada no núcleo" técnico.
+  if (plataforma.motor === 'extensao') throw new Error(`o AutoCV não tem adapter para ${plataforma.nome ?? plataforma.id} — a candidatura aí é pelo motor da própria extensão`);
   if (!adapters[plataforma.id]) throw new Error(`a plataforma ${plataforma.id} não está carregada no núcleo`);
 
   const chave = chaveUrl(url);

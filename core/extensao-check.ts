@@ -158,6 +158,26 @@ try {
   assert.equal(desafiado, null, 'com a verificação anti-robô na tela, não dá para diagnosticar nada');
   console.log('✓ Extensão: handler dedicado do Indeed (registro por domínio) e recuo diante da verificação anti-robô');
 
+  // Handler dedicado é COMPLEMENTO do genérico, não substituição.
+  // O do Indeed define 4 dos 12 campos; antes `handlerDe` devolvia o dedicado puro e o motor ficava sem
+  // `abrir`, `botaoProximo`, `botaoFinal` e `sucesso` naquele site — nunca achava o botão de enviar.
+  const herdado = await page.evaluate(() => {
+    const { handlerDe, GENERICO } = (globalThis as unknown as { AutoCVExtensao: Record<string, (h: string) => Record<string, unknown>> & { GENERICO: Record<string, unknown> } }).AutoCVExtensao;
+    const h = handlerDe('br.indeed.com') as Record<string, unknown>;
+    const g = GENERICO as Record<string, unknown>;
+    return {
+      dominio: (h.dominios as string[])[0],
+      proprio: typeof h.precisaLogin === 'function' && h.precisaLogin !== g.precisaLogin,
+      herdados: ['abrir', 'botaoProximo', 'botaoFinal', 'sucesso', 'dialogo', 'tituloDaVaga'].filter(k => h[k] !== undefined),
+      generico: Object.keys(handlerDe('sitequalquer.com')).length,
+    };
+  });
+  assert.equal(herdado.dominio, 'indeed.com', 'o domínio vem do handler dedicado');
+  assert.ok(herdado.proprio, 'o que o dedicado define continua sendo dele');
+  assert.deepEqual(herdado.herdados, ['abrir', 'botaoProximo', 'botaoFinal', 'sucesso', 'dialogo', 'tituloDaVaga'], 'e o que ele não define vem do genérico');
+  assert.ok(herdado.generico > 0, 'domínio sem handler dedicado continua caindo no genérico');
+  console.log('✓ Extensão: handler dedicado estende o genérico em vez de apagá-lo (o Indeed volta a ter botão de envio)');
+
   // ─── B) Campos do formulário (leitura, sem preencher) ─────────────────────────────────────────
   const perguntas = publica.campos.map(c => c.pergunta);
   assert.deepEqual(
@@ -224,7 +244,16 @@ try {
   assert.equal(plataformaDaUrl('https://radix.inhire.app/vagas/1fe8ca9c/profissional-ai-specialist')?.id, 'inhire');
   assert.equal(plataformaDaUrl('https://www.vagaspj.com.br/vagas/empresa/123/')?.id, 'vagaspj');
   assert.equal(plataformaDaUrl('https://br.indeed.com/viewjob?jk=abc')?.id, 'indeed');
-  assert.equal(plataformaDaUrl('https://www.linkedin.com/jobs/view/42'), null, 'LinkedIn não tem adapter no núcleo: fica com o motor da extensão');
+  // O LinkedIn passa a ser CONHECIDO (a extensão precisa saber que atende lá), mas com `motor: 'extensao'`:
+  // conhecer não é saber candidatar. A ponte do núcleo recusa dizendo de quem é o trabalho.
+  const li = plataformaDaUrl('https://www.linkedin.com/jobs/view/42');
+  assert.equal(li?.id, 'linkedin', 'a lista única conhece o LinkedIn');
+  assert.equal(li?.motor, 'extensao', 'mas quem candidata lá é o motor da extensão');
+  await assert.rejects(() => vagaDaUrl('https://www.linkedin.com/jobs/view/42'), /motor da própria extensão/, 'a ponte recusa explicando de quem é o trabalho');
+  assert.ok(
+    plataformasConhecidas().some(p => p.id === 'linkedin' && p.motor === 'extensao'),
+    'e a extensão recebe o LinkedIn na lista, mesmo sem adapter no núcleo — era essa a lista paralela que ela guardava sozinha',
+  );
   assert.equal(plataformaDaUrl('não é url'), null);
   assert.ok(
     plataformasConhecidas().some(p => p.id === 'vagaspj' && p.dominios.includes('vagaspj.com.br')),
