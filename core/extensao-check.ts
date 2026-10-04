@@ -340,6 +340,95 @@ try {
   assert.ok(new Set(esperas).size > 20, 'a espera é sorteada, não um relógio certinho');
   console.log('✓ Extensão: limite por dia, aquecimento de plataforma nova e espera sorteada entre candidaturas');
 
+  // ─── D2) Classificação dos sites e decisão do botão (lógica pura, mesmo sandbox) ───────────────
+  const puro = <T>(arquivo: string): T => {
+    const caixa: Record<string, unknown> = { module: { exports: {} }, console };
+    const ctx = createContext(caixa);
+    caixa.globalThis = caixa;
+    runInContext(readFileSync(new URL(`../extensao/ui/${arquivo}`, import.meta.url), 'utf8'), ctx);
+    return (caixa.module as { exports: unknown }).exports as T;
+  };
+
+  type Sitio = { nivel: string; nome: string; importa?: boolean; conectada?: boolean; dois?: boolean; nota: string } | null;
+  const plat = puro<{
+    classificar: (h: string, o: { plataformas?: unknown[]; pareceVaga?: boolean }) => Sitio;
+    catalogo: (o: { plataformas?: unknown[] }) => { nome: string; nivel: string; avisos: { texto: string }[] }[];
+  }>('plataformas.js');
+
+  // A lista que o núcleo serve de verdade. Aqui só o adapter do Vagas PJ está carregado (linha 22), e é
+  // isso mesmo que `plataformasConhecidas` reflete: adapter ausente não aparece como `nucleo`. O LinkedIn
+  // aparece mesmo sem adapter — é o conserto de 03/10, a extensão precisa saber dos sites que ELA atende.
+  const servidas = plataformasConhecidas();
+  assert.ok(
+    servidas.some(p => p.id === 'vagaspj' && p.motor === 'nucleo'),
+    'o adapter carregado tem de ser servido como do núcleo',
+  );
+  assert.ok(
+    servidas.some(p => p.id === 'linkedin' && p.motor === 'extensao'),
+    'e o site sem adapter também, com o motor da extensão',
+  );
+
+  assert.equal(plat.classificar('www.vagaspj.com.br', { plataformas: servidas })?.nivel, 'nucleo', 'www. não atrapalha o reconhecimento');
+  assert.equal(plat.classificar('www.linkedin.com', { plataformas: servidas })?.nivel, 'extensao', 'LinkedIn não tem adapter: é o motor da extensão');
+  assert.equal(plat.classificar('exemplo.com', { plataformas: servidas }), null, 'site desconhecido que não é vaga: o painel não aparece');
+  assert.equal(plat.classificar('exemplo.com', { plataformas: servidas, pareceVaga: true })?.nivel, 'generico', 'site desconhecido COM vaga: oferece o genérico');
+
+  // Os ramos que dependem de campos que a lista carregada aqui não exercita (a função é pura, então a lista
+  // sintética é legítima): subdomínio, "ambos" e o par importa/conectada.
+  const inventadas = [
+    { id: 'inhire', nome: 'InHire', dominios: ['inhire.app'], motor: 'nucleo', importa: true, conectada: true },
+    { id: 'indeed', nome: 'Indeed', dominios: ['indeed.com'], motor: 'ambos', importa: false, conectada: false },
+  ];
+  assert.equal(plat.classificar('radix.inhire.app', { plataformas: inventadas })?.nivel, 'nucleo', 'subdomínio cai no adapter do domínio-pai');
+  const ind = plat.classificar('br.indeed.com', { plataformas: inventadas });
+  assert.equal(ind?.nivel, 'nucleo', 'servindo pelos dois, o núcleo é o caminho melhor');
+  assert.ok(ind?.dois, 'mas a tela precisa contar que há dois caminhos');
+
+  const cat = plat.catalogo({ plataformas: inventadas });
+  assert.equal(cat[0].nivel, 'nucleo', 'o catálogo começa pelos adapters testados');
+  assert.ok(
+    cat.find(p => p.nome === 'InHire')?.avisos.some(a => a.texto === 'qualquer vaga'),
+    'o InHire importa vaga avulsa, e a tela diz isso ANTES do clique',
+  );
+  assert.ok(
+    cat.find(p => p.nome === 'Indeed')?.avisos.some(a => a.texto === 'vagas já varridas'),
+    'quem não importa precisa avisar, senão a pessoa só descobre pelo erro',
+  );
+  assert.ok(
+    cat.find(p => p.nome === 'Indeed')?.avisos.some(a => a.texto === 'conta não ligada'),
+    'conta não ligada é a causa número um de "cliquei e não fez nada", e hoje é invisível',
+  );
+  console.log('✓ Extensão: classifica o site aberto em adapter do núcleo, motor próprio ou modo genérico');
+
+  type Acao = { principal: { id: string; desabilitado: boolean; rotulo: string }; alternativa: { id: string } | null; motivo: string };
+  const acao = puro<{ decidir: (s: Record<string, unknown>) => Acao }>('acao.js');
+  const cabe = { cabem: 3, feitasHoje: 2, limite: 5, aquecendo: false };
+  const nucleo: Sitio = { nivel: 'nucleo', nome: 'InHire', nota: '' };
+  const situacaoBase = { temVaga: true, sincronizado: true, cota: cabe, sitio: nucleo };
+
+  assert.equal(acao.decidir(situacaoBase).principal.id, 'nucleo');
+  assert.equal(acao.decidir({ ...situacaoBase, sitio: { nivel: 'extensao', nome: 'LinkedIn', nota: '' } }).principal.id, 'extensao');
+  assert.equal(acao.decidir({ ...situacaoBase, sitio: { nivel: 'generico', nome: 'exemplo.com', nota: 'posso tentar' } }).principal.id, 'generico');
+  assert.equal(acao.decidir({ ...situacaoBase, temVaga: false }).principal.id, 'sem_vaga');
+  assert.equal(acao.decidir({ ...situacaoBase, sincronizado: false }).principal.id, 'nucleo_fechado', 'adapter do núcleo com o ACV fechado: oferece a extensão como saída');
+  assert.equal(acao.decidir({ ...situacaoBase, sincronizado: false }).alternativa?.id, 'extensao');
+
+  // A regressão que o ternário de cinco ramos podia introduzir em silêncio: um botão ATIVO num estado que
+  // impede candidatar. Qualquer um destes quatro tem de desabilitar, e a ordem entre eles não pode importar.
+  for (const [nome, impeditivo] of [
+    ['restrição anti-robô', { restrita: true }],
+    ['ocupado', { ocupado: true }],
+    ['empresa bloqueada', { bloqueada: 'Acme' }],
+    ['limite do dia', { cota: { cabem: 0, feitasHoje: 5, limite: 5, aquecendo: false } }],
+  ] as const) {
+    const r = acao.decidir({ ...situacaoBase, ...impeditivo });
+    assert.equal(r.principal.desabilitado, true, `${nome} tem de desabilitar o botão`);
+    assert.ok(r.principal.rotulo.length > 0, `${nome} precisa dizer por quê no próprio botão`);
+  }
+  // E impedimento ganha de oferta, mesmo com tudo pronto para candidatar
+  assert.equal(acao.decidir({ ...situacaoBase, restrita: true, bloqueada: 'Acme', ocupado: true }).principal.id, 'restrita', 'restrição é o primeiro de todos: o robô para antes de qualquer coisa');
+  console.log('✓ Extensão: o botão do painel tem um caso nomeado por estado, e nenhum impedimento deixa botão ativo');
+
   // ─── E) Candidatura ponta a ponta numa página de várias etapas ─────────────────────────────────
   const MOTOR = readFileSync(new URL('../extensao/motor.js', import.meta.url), 'utf8');
   const COMUM = readFileSync(new URL('../extensao/comum.js', import.meta.url), 'utf8');

@@ -10,7 +10,7 @@ async function pintar() {
   if (!st?.ok && !st?.cfg) return mostrar('não consegui ler o estado da extensão', true);
   // Sem cache nenhum a frase vira "cópia de nunca", que não é português. Nesse caso o que a pessoa precisa
   // saber é outra coisa: o servidor nunca respondeu ainda.
-  const quando = st.cacheEm ? `cópia de ${new Date(st.cacheEm).toLocaleString('pt-BR')}` : 'ainda sem cópia dos seus dados — abra o server.bat';
+  const quando = st.cacheEm ? `cópia de ${new Date(st.cacheEm).toLocaleString('pt-BR')}` : 'ainda sem cópia dos seus dados — abra o start.bat';
   $('conexao').innerHTML = st.sincronizado
     ? '<span class="etiqueta ok">ACV conectado</span>'
     : `<span class="etiqueta atencao">${st.cacheEm ? 'operando em cache' : 'desconectado'}</span><br><small>${quando}${st.pendentes ? ` · ${st.pendentes} candidatura(s) a sincronizar` : ''}</small>`;

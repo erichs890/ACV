@@ -48,7 +48,7 @@ async function garantirToken(forcar = false) {
 
 async function paraONucleo(caminho, dados, jaRepetiu = false) {
   const token = await garantirToken();
-  if (!token) throw new Error('o ACV não está no ar — abra o server.bat');
+  if (!token) throw new Error('o ACV não está no ar — abra o start.bat');
   const r = await fetch(NUCLEO + caminho, {
     method: dados === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
@@ -104,7 +104,7 @@ async function pintarIcone({ sincronizado, pendentes = 0, cacheEm = null }) {
   const complemento = quando ? `, usando a cópia de ${quando}` : ' e ainda não sincronizei nenhuma vez';
   try {
     await chrome.action.setIcon({ path: { 16: caminho(16), 32: caminho(32), 48: caminho(48) } });
-    await chrome.action.setTitle({ title: sincronizado ? 'ACV — conectado ao núcleo' : `ACV — abra o server.bat para conectar${complemento}` });
+    await chrome.action.setTitle({ title: sincronizado ? 'ACV — conectado ao núcleo' : `ACV — abra o start.bat para conectar${complemento}` });
     await chrome.action.setBadgeText({ text: pendentes > 0 ? String(Math.min(pendentes, 99)) : '' });
     if (pendentes > 0) {
       await chrome.action.setBadgeBackgroundColor({ color: '#c8481a' }); // --color-orange-deep
@@ -218,7 +218,7 @@ async function conferirConexao() {
   let sincronizado = false;
   try {
     // `garantirToken` já pareia sozinha na primeira vez: o pulso é também o que conecta a extensão quando
-    // você abre o server.bat, sem você fazer nada.
+    // você abre o start.bat, sem você fazer nada.
     const token = await garantirToken();
     if (token) {
       const r = await fetch(`${NUCLEO}/extensao/plataformas`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });

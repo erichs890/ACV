@@ -3,6 +3,11 @@ setlocal
 cd /d "%~dp0"
 title ACV
 
+rem Um clique sobe TUDO: o servidor (4780), que e com quem a extensao conversa, e a tela (5173).
+rem
+rem O servidor vai por `npm run servidor`, nao por `npm run core`: o core usa --watch e cai quando um arquivo
+rem do projeto e salvo. Isso ja derrubou uma candidatura no meio, em 29/09.
+
 where node >nul 2>nul
 if errorlevel 1 (
   echo.
@@ -24,12 +29,22 @@ if not exist node_modules (
 )
 
 echo.
-echo Iniciando o nucleo do ACV (automacao) em uma segunda janela...
-start "ACV - nucleo" cmd /k "npm run core"
+echo   Subindo o servidor do ACV em uma segunda janela...
+start "ACV - servidor" cmd /k "npm run servidor"
 
-echo ACV rodando em http://localhost:5173
-echo Feche as duas janelas para parar.
 echo.
+echo   ACV
+echo   --------------------------------------------------------------
+echo   Tela:      http://localhost:5173
+echo   Servidor:  http://localhost:4780  (e com ele que a extensao fala)
+echo.
+echo   Com as duas janelas abertas, o icone da extensao fica AZUL.
+echo   Nao ha nada para configurar: ela se conecta sozinha.
+echo   --------------------------------------------------------------
+echo.
+echo   Feche as duas janelas para parar.
+echo.
+
 call npm run dev -- --open
 
 pause
