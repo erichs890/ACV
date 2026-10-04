@@ -37,8 +37,24 @@ const gravar = (d: PlataformaDetectada) => {
   emitir({ tipo: 'estado' });
 };
 
+/** O botão de candidatura em uma linha legível, para o diário. */
+function descreverEnvio(e: NonNullable<PlataformaDetectada['envio']>): string {
+  const clique = { sim: 'clicar ENVIA', nao: 'clicar navega', talvez: 'não dá para saber daqui o que o clique faz' }[e.clicarEnvia];
+  const destino = e.href ? ` → ${e.href}` : '';
+  const form = e.form ? ` | form ${e.form.metodo.toUpperCase()} ${e.form.action || '(mesma URL)'} com ${e.form.campos.length} campo(s): ${e.form.campos.join(', ')}` : '';
+  return `<${e.tag}${e.classe ? ` class="${e.classe}"` : ''}> "${e.rotulo}"${destino} — ${clique}${form}`;
+}
+
 /** Uma plataforma foi vista pela extensão. `precisaLogin: null` = a detecção não teve certeza (ver conteudo.js). */
-export function registrarPlataformaDetectada(e: { dominio: string; precisaLogin: boolean | null; logadoAtualmente: boolean; motivo: string; handler: string; url?: string }): PlataformaDetectada {
+export function registrarPlataformaDetectada(e: {
+  dominio: string;
+  precisaLogin: boolean | null;
+  logadoAtualmente: boolean;
+  motivo: string;
+  handler: string;
+  url?: string;
+  envio?: PlataformaDetectada['envio'];
+}): PlataformaDetectada {
   if (!e.dominio) throw new Error('domínio ausente');
   const antes = kv.get<Record<string, PlataformaDetectada>>('deteccoes', {})[e.dominio];
   const nova: PlataformaDetectada = {
@@ -48,6 +64,7 @@ export function registrarPlataformaDetectada(e: { dominio: string; precisaLogin:
     motivo: String(e.motivo ?? '').slice(0, 200),
     handler: e.handler === 'generico' ? 'generico' : String(e.handler).slice(0, 40),
     detectadaEm: new Date().toISOString(),
+    envio: e.envio ?? antes?.envio,
     camposFaltando: antes?.camposFaltando,
     camposEm: antes?.camposEm,
   };
@@ -57,6 +74,10 @@ export function registrarPlataformaDetectada(e: { dominio: string; precisaLogin:
     'info',
     `[extensão · ${nova.dominio}] ${conta}${nova.logadoAtualmente ? ', você está logado' : ''} — ${nova.motivo}. Motor: ${nova.handler === 'generico' ? 'genérico' : nova.handler}.`,
   );
+  // O retrato do botão de candidatura, sem clique nenhum: é com esta linha que eu descubro o formulário logado
+  // de uma plataforma sem ter a conta de ninguém. Vai sempre, mesmo sem novidade de login, porque o botão muda
+  // quando a sessão muda — é justamente a diferença entre deslogado e logado que interessa.
+  if (nova.envio) log.registrar('info', `[extensão · ${nova.dominio}] botão de candidatura: ${descreverEnvio(nova.envio)}`);
   return nova;
 }
 

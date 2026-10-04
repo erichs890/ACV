@@ -277,7 +277,9 @@ const ACOES = {
   CACHE: async m => ({ cache: await cacheDeteccao(m.dominio, m.forcar) }),
   PLATAFORMA_DETECTADA: async m => {
     const todas = await ler('deteccoes', {});
-    todas[m.dominio] = { precisaLogin: m.precisaLogin, logadoAtualmente: m.logadoAtualmente, em: Date.now() };
+    // `envio` entra no cache porque o botão de candidatura muda quando a sessão muda, e essa mudança é
+    // justamente a novidade que vale relatar de novo (conteudo.js › reportar)
+    todas[m.dominio] = { precisaLogin: m.precisaLogin, logadoAtualmente: m.logadoAtualmente, envio: m.envio?.clicarEnvia ?? null, em: Date.now() };
     await gravar('deteccoes', todas);
     return paraONucleo('/extensao/plataforma', m);
   },

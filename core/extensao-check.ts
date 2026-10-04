@@ -59,6 +59,33 @@ const VAGA_LOGADO = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><ti
 const CABECALHO_INDEED = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
 <header><a href="/x">Carregar o currículo</a><a href="/y">Acessar</a></header><button>Candidate-se facilmente</button></body></html>`;
 
+/**
+ * ProgramaThor, as duas caras da mesma página — copiadas do site real em 04/10/2026.
+ *
+ * Deslogado, TODO caminho de candidatura leva ao cadastro, inclusive o CTA grande. Logado eu não vi (não tenho
+ * a conta), então a página "dentro" tem só o que é dedutível: o CTA deixou de apontar para o cadastro.
+ */
+const PT_FORA = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<header><a href="/users/sign_in">ENTRAR</a><a href="/users/sign_up">CADASTRAR-SE</a></header>
+<h1>Desenvolvedor(a) Full Stack Sênior</h1>
+<a href="/users/sign_in">ENTRAR COMO CANDIDATO</a>
+<a class="btn btn-success btn-lg" href="/users/sign_up">Quero me candidatar</a></body></html>`;
+
+const PT_DENTRO = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<header><a href="/users/edit">Meu perfil</a><a href="/users/sign_out">Sair</a></header>
+<h1>Desenvolvedor(a) Full Stack Sênior</h1>
+<a class="btn btn-success btn-lg" href="/jobs/33824/apply">Quero me candidatar</a></body></html>`;
+
+/** Candidatura de um clique por `<form method="post">`: clicar no botão É o envio, não a abertura de nada. */
+const UM_CLIQUE_FORM = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<h1>Vaga</h1><form action="/apply" method="post"><button type="submit">Quero me candidatar</button></form></body></html>`;
+
+/** O mesmo de um clique, mas por JavaScript: daqui não há como saber o que o clique faz antes de clicar. */
+const UM_CLIQUE_JS = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<script type="application/ld+json">{"@type":"JobPosting","title":"Pessoa Desenvolvedora Back-end","hiringOrganization":{"name":"Acme Tecnologia Ltda"},"description":"Java"}</script>
+<h1>Pessoa Desenvolvedora Back-end</h1><button type="button" id="ir">Quero me candidatar</button>
+<script>document.getElementById('ir').onclick = () => fetch('/apply', { method: 'POST', body: '{}' });</script></body></html>`;
+
 const CANDIDATURA = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
 <script type="application/ld+json">{"@type":"JobPosting","title":"Pessoa Desenvolvedora Back-end","hiringOrganization":{"name":"Acme Tecnologia Ltda"},"description":"Java e Spring"}</script>
 <h1>Pessoa Desenvolvedora Back-end</h1>
@@ -99,7 +126,18 @@ const CANDIDATURA = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><ti
   };
 </script></body></html>`;
 
-const paginas: Record<string, string> = { '/candidatura': CANDIDATURA, '/vaga': VAGA_PUBLICA, '/conta': VAGA_COM_CONTA, '/login': TELA_LOGIN, '/logado': VAGA_LOGADO, '/indeed': CABECALHO_INDEED };
+const paginas: Record<string, string> = {
+  '/candidatura': CANDIDATURA,
+  '/vaga': VAGA_PUBLICA,
+  '/conta': VAGA_COM_CONTA,
+  '/login': TELA_LOGIN,
+  '/logado': VAGA_LOGADO,
+  '/indeed': CABECALHO_INDEED,
+  '/pt-fora': PT_FORA,
+  '/pt-dentro': PT_DENTRO,
+  '/um-clique-form': UM_CLIQUE_FORM,
+  '/um-clique-js': UM_CLIQUE_JS,
+};
 let envios = 0;
 const servidor = createServer((req, res) => {
   if (req.method === 'POST' && req.url === '/apply') {
@@ -177,6 +215,61 @@ try {
   assert.deepEqual(herdado.herdados, ['abrir', 'botaoProximo', 'botaoFinal', 'sucesso', 'dialogo', 'tituloDaVaga'], 'e o que ele não define vem do genérico');
   assert.ok(herdado.generico > 0, 'domínio sem handler dedicado continua caindo no genérico');
   console.log('✓ Extensão: handler dedicado estende o genérico em vez de apagá-lo (o Indeed volta a ter botão de envio)');
+
+  /**
+   * ProgramaThor: o handler dedicado e, junto, o reconhecimento do botão de candidatura.
+   *
+   * O genérico "funcionava" aqui e dizia a coisa mais inútil possível — "você já está logado, então não dá
+   * para saber se a candidatura exige conta". Dá para saber: é o destino do CTA que responde.
+   */
+  const ptHandler = async (caminho: string) => {
+    await page.goto(`${base}${caminho}`, { waitUntil: 'domcontentloaded' });
+    await page.addScriptTag({ content: CONTEUDO });
+    return page.evaluate(() => {
+      const api = (globalThis as unknown as { ACVExtensao: Record<string, (h?: unknown) => Record<string, unknown>> }).ACVExtensao;
+      const h = api.handlerDe('programathor.com.br') as unknown as { precisaLogin: () => Record<string, unknown>; reconhecerEnvio: () => Record<string, unknown> | null; abrir: () => unknown };
+      const login = h.precisaLogin();
+      const envio = h.reconhecerEnvio();
+      // `el` é um nó do DOM e não atravessa a ponte do Playwright: sai daqui
+      const limpo = envio ? (Object.fromEntries(Object.entries(envio).filter(([k]) => k !== 'el')) as Record<string, unknown>) : null;
+      return { login, envio: limpo, dedicado: (api.PROGRAMATHOR as unknown as { dominios: string[] }).dominios[0] };
+    });
+  };
+
+  const fora = await ptHandler('/pt-fora');
+  assert.equal(fora.dedicado, 'programathor.com.br', 'o ProgramaThor tem handler dedicado no registro');
+  assert.equal(fora.login.precisa, true, 'o ProgramaThor sempre exige conta para candidatar');
+  assert.equal(fora.login.logado, false, 'o CTA apontando para /users/sign_up é prova de sessão ausente');
+  assert.equal(fora.envio?.clicarEnvia, 'nao', 'deslogado o CTA é link: clicar navega para o cadastro, não envia nada');
+  // O CTA tem de ser o botão grande, não o "ENTRAR COMO CANDIDATO" que vem antes dele na página real
+  assert.equal(fora.envio?.rotulo, 'Quero me candidatar', 'o handler acha o CTA certo, não o primeiro texto com "candidat"');
+  assert.match(String(fora.envio?.href), /sign_up/);
+
+  const dentro = await ptHandler('/pt-dentro');
+  assert.equal(dentro.login.logado, true, 'CTA que não leva mais ao cadastro e sem ENTRAR no topo = sessão valendo');
+  assert.equal(dentro.envio?.clicarEnvia, 'nao', 'logado, o CTA leva à página de candidatura: clicar navega');
+  assert.equal(dentro.envio?.rotulo, 'Quero me candidatar');
+  console.log('✓ Extensão: handler do ProgramaThor diz se a SUA sessão está valendo pelo destino do botão de candidatura');
+
+  /**
+   * O conserto que vale para qualquer site, achado no ProgramaThor: em quadro de vagas com candidatura de um
+   * clique, o botão "Quero me candidatar" É o envio. `abrir()` clicava nele achando que abria formulário — a
+   * candidatura saía ali, o motor não achava formulário depois e devolvia `erro`. Reportar falha de um envio
+   * consumado é a invariante 1 quebrada, e convidava a pessoa a clicar de novo.
+   */
+  await page.goto(`${base}/um-clique-form`, { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: CONTEUDO });
+  const enviosAntesDoRecon = envios;
+  const umClique = await page.evaluate(() => {
+    const { GENERICO, reconhecerEnvio } = (globalThis as unknown as { ACVExtensao: { GENERICO: { abrir: () => unknown }; reconhecerEnvio: () => Record<string, unknown> | null } }).ACVExtensao;
+    const r = reconhecerEnvio();
+    return { clicarEnvia: r?.clicarEnvia, form: r?.form, abrir: GENERICO.abrir() };
+  });
+  assert.equal(umClique.clicarEnvia, 'sim', 'botão de submit de um <form method="post"> envia ao ser clicado');
+  assert.deepEqual((umClique.form as { action: string }).action, '/apply', 'e o reconhecimento conta para onde vai, sem clicar');
+  assert.equal(umClique.abrir, 'envia_direto', 'então `abrir` avisa o motor em vez de clicar');
+  assert.equal(envios, enviosAntesDoRecon, 'e NADA foi enviado só por reconhecer a página');
+  console.log('✓ Extensão: botão que já envia não é clicado como se fosse abrir formulário (nenhuma candidatura às cegas)');
 
   // ─── B) Campos do formulário (leitura, sem preencher) ─────────────────────────────────────────
   const perguntas = publica.campos.map(c => c.pergunta);
@@ -435,8 +528,8 @@ try {
   const REDE = readFileSync(new URL('../extensao/rede.js', import.meta.url), 'utf8');
 
   /** Monta a página com a extensão carregada e o service worker trocado por um dublê controlado pelo teste. */
-  const prepararCandidatura = async (stub: Record<string, unknown>) => {
-    await page.goto(`${base}/candidatura`, { waitUntil: 'domcontentloaded' });
+  const prepararCandidatura = async (stub: Record<string, unknown>, caminho?: string) => {
+    await page.goto(`${base}${caminho ?? '/candidatura'}`, { waitUntil: 'domcontentloaded' });
     await page.addScriptTag({ content: REDE });
     await page.evaluate(s => {
       (globalThis as Record<string, unknown>).__stub = s;
@@ -517,6 +610,24 @@ try {
   r = await candidatar();
   assert.equal(envios, antes, `não pode sair um segundo envio (veio ${r.status}: ${r.motivo})`);
   console.log('✓ Motor: preenche as etapas, envia uma vez só e confirma pela resposta HTTP (prova de rede)');
+
+  /**
+   * A outra metade do conserto do clique único, e a mais perigosa: quando o botão manda por JavaScript, daqui
+   * não há como saber antes — `reconhecerEnvio` devolve `talvez` e clicar é a única forma de descobrir. Então o
+   * clique de `abrir` ENVIA, e o motor chega na etapa 1 sem formulário e sem botão para seguir.
+   *
+   * O que ele fazia: `erro — não achei o botão para seguir na etapa 1`. A candidatura já estava na mesa do
+   * recrutador, e a mensagem convidava a clicar de novo. Agora, antes de acusar erro, ele pergunta à rede:
+   * sucesso é a resposta HTTP, não o que está escrito na tela (invariante 1).
+   */
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: DADOS_FALSOS, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-js');
+  const antesDoUmClique = envios;
+  r = await candidatar();
+  assert.equal(r.status, 'enviada', `candidatura de um clique por JavaScript é um envio, não um erro (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, antesDoUmClique + 1, 'e exatamente um envio saiu');
+  const umaSo = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as unknown[];
+  assert.equal(umaSo.length, 1, 'registrada uma vez, para contar no limite do dia e travar a repetição');
+  console.log('✓ Motor: clique que já enviou é reconhecido pela prova de rede, nunca reportado como falha');
 } finally {
   await page.close().catch(() => {});
   servidor.close();

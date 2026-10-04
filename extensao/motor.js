@@ -178,7 +178,16 @@
     if (!dados?.perfil?.nome) return { status: 'erro', motivo: 'ainda não tenho os seus dados: abra o ACV uma vez com a extensão conectada (Plataformas › Extensão).' };
 
     log(`Vaga: ${titulo} — ${empresa || 'empresa não informada'}`);
-    if (handler.abrir?.()) {
+    /**
+     * `abrir` pode devolver `'envia_direto'`: o botão de candidatura É o envio (quadro de vagas em que o
+     * currículo já está na conta). Nesse caso ele NÃO foi clicado — quem clica é a etapa final abaixo, que
+     * espera a prova de rede. Clicar aqui mandaria a candidatura antes de preencher, e o motor devolveria
+     * `erro` depois de um envio consumado: era isso que a invariante 1 proíbe.
+     */
+    const aberturaEm = Date.now();
+    const abertura = handler.abrir?.();
+    if (abertura === 'envia_direto') log('Aqui a candidatura é de um clique só: vou preencher o que houver e então enviar.');
+    else if (abertura) {
       log('Formulário de candidatura aberto.');
       await esperar(1500);
     }
@@ -190,11 +199,25 @@
       const parada = await preencherEtapa(raiz, dados, cfg, vaga, log);
       if (parada) return { status: 'pergunta', pergunta: parada.pergunta.pergunta, motivo: parada.motivo };
 
-      const final = handler.botaoFinal && botao(raiz, handler.botaoFinal);
+      // No envio de um clique, o próprio botão de candidatura é o botão final — e só na primeira etapa
+      const direto = abertura === 'envia_direto' && etapa === 1 ? (handler.reconhecerEnvio?.()?.el ?? null) : null;
+      const final = (handler.botaoFinal && botao(raiz, handler.botaoFinal)) ?? direto;
       const proximo = handler.botaoProximo && botao(raiz, handler.botaoProximo);
       const alvo = final ?? proximo;
       if (!alvo) {
         if (handler.sucesso?.test(document.body.innerText)) break; // já terminou numa etapa anterior
+        /**
+         * Último recurso, e o mais importante: pode ser que o clique de `abrir` já tenha enviado — botão de
+         * JavaScript não deixa ver o destino antes, e `reconhecerEnvio` devolveu `talvez`. Antes de acusar
+         * erro, pergunto à rede. Sucesso é a resposta HTTP, não o que está na tela: dizer "erro" aqui faria a
+         * pessoa clicar de novo e mandar a segunda candidatura.
+         */
+        const prova = await provaDeEnvio(aberturaEm, 3);
+        if (prova) {
+          log(`A candidatura saiu no próprio clique de abrir. Prova de envio: ${prova.metodo} ${new URL(prova.url, location.origin).pathname} → HTTP ${prova.status}.`);
+          enviado = true;
+          break;
+        }
         return { status: 'erro', motivo: `não achei o botão para seguir na etapa ${etapa}; o layout da plataforma deve ter mudado.` };
       }
 

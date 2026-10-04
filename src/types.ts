@@ -277,6 +277,8 @@ export interface PlataformaDetectada {
   motivo: string;
   /** 'generico' ou o domínio do handler dedicado que atendeu */
   handler: string;
+  /** O que é o botão de candidatura, lido SEM clicar nele (conteudo.js › reconhecerEnvio) */
+  envio?: { tag: string; rotulo: string; href: string; classe: string; clicarEnvia: 'sim' | 'nao' | 'talvez'; form: { action: string; metodo: string; campos: string[] } | null };
   detectadaEm: string;
   camposFaltando?: CampoFaltando[];
   camposEm?: string;

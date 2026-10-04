@@ -152,6 +152,55 @@
     return { precisa: null, logado, motivo: 'não achei o botão de candidatura nesta página' };
   }
 
+  /**
+   * O que É o botão de candidatura desta página — **sem clicar nele**.
+   *
+   * Isto existe por causa de uma falha achada no ProgramaThor (04/10/2026) que valia para qualquer site: o
+   * motor chamava `abrir()`, que clica no botão "Quero me candidatar" supondo que ele ABRE um formulário. Em
+   * quadro de vagas com candidatura de um clique (o currículo já está na conta), aquele botão **é o envio**.
+   * O que acontecia: a candidatura saía durante o "abrir", o motor não achava formulário nenhum depois e
+   * devolvia `erro` — reportando falha de um envio que já tinha acontecido, e convidando a pessoa a clicar de
+   * novo. Dois currículos na mesa do mesmo recrutador, e a invariante 1 do projeto quebrada no meio.
+   *
+   * `clicarEnvia` responde a única pergunta que importa antes do clique:
+   *  - `nao`    — é um link com destino: clicar NAVEGA (foi o caso deslogado do ProgramaThor, que leva ao login)
+   *  - `sim`    — é o botão de envio de um `<form method="post">`: clicar MANDA, e o motor trata como etapa final
+   *  - `talvez` — botão de JavaScript, destino invisível daqui (é o caso do Easy Apply do LinkedIn, que abre
+   *               um diálogo). Clicar é a única forma de saber, então clica — e `motor.js` tem a rede embaixo:
+   *               antes de declarar erro por "não achei o botão", confere se houve prova de envio na rede.
+   *
+   * Serve também de relatório: vai no diagnóstico e para o diário, que é como eu descubro o formulário logado
+   * de uma plataforma sem ter a conta de ninguém.
+   */
+  function reconhecerEnvio(cta) {
+    const b = cta ?? botaoCandidatar();
+    if (!b) return null;
+    const href = b.getAttribute('href') ?? '';
+    const form = b.closest('form');
+    const metodo = (form?.getAttribute('method') ?? 'get').toLowerCase();
+    const tipo = (b.getAttribute('type') ?? '').toLowerCase();
+    const navega = !!href && !/^#|^javascript:/i.test(href);
+    const submete = !!form && metodo === 'post' && b.tagName !== 'A' && tipo !== 'button';
+    return {
+      tag: b.tagName.toLowerCase(),
+      rotulo: texto(b).slice(0, 60),
+      href: href.slice(0, 120),
+      classe: String(b.className ?? '').slice(0, 80),
+      clicarEnvia: navega ? 'nao' : submete ? 'sim' : 'talvez',
+      form: form
+        ? {
+            action: (form.getAttribute('action') ?? '').slice(0, 120),
+            metodo,
+            campos: [...form.elements]
+              .map(c => c.name)
+              .filter(Boolean)
+              .slice(0, 25),
+          }
+        : null,
+      el: b,
+    };
+  }
+
   const descobirCamposSeguro = () => {
     try {
       return descobrirCamposFormulario();
@@ -187,12 +236,17 @@
     tituloDaVaga: () => doJsonLd()?.titulo || texto(document.querySelector('h1')).slice(0, 180),
     empresaDaVaga: () => doJsonLd()?.empresa || texto(document.querySelector('[class*="company" i],[data-testid*="company" i]')).slice(0, 120),
     descricaoDaVaga: () => (doJsonLd()?.descricao || texto(document.querySelector('[class*="description" i],[id*="description" i]'))).slice(0, 4000),
+    reconhecerEnvio,
     abrir: () => {
       // O formulário já está na página? Então não há o que abrir (InHire, Vagas PJ e afins são assim)
       if (descobrirCamposFormulario().length) return false;
-      const b = botaoCandidatar();
-      if (b) b.click();
-      return !!b;
+      // `this` é o handler fundido: plataforma com CTA próprio (ProgramaThor) reconhece o botão certo
+      const r = this.reconhecerEnvio?.() ?? reconhecerEnvio();
+      if (!r) return false;
+      // Clicar neste botão JÁ envia: quem clica é a etapa final do motor, com prova de rede, nunca o "abrir"
+      if (r.clicarEnvia === 'sim') return 'envia_direto';
+      r.el.click();
+      return true;
     },
     botaoProximo: /^(avan[çc]ar|continuar|pr[óo]xim[oa]|seguinte|next|continue|revisar|review)/i,
     botaoFinal: /^(enviar( candidatura| curr[íi]culo| inscri[çc][ãa]o)?|continuar inscri[çc][ãa]o|submit( application)?|finalizar|concluir)/i,
@@ -249,7 +303,56 @@
     sucesso: /candidatura enviada|sua candidatura foi enviada|application sent|candidatura conclu[ií]da/i,
   };
 
-  const REGISTRO = [INDEED, LINKEDIN];
+  /**
+   * ProgramaThor — quadro de vagas brasileiro, ~22 mil vagas (1.468 páginas de listagem).
+   *
+   * CONFIRMADO AO VIVO, DESLOGADO (04/10/2026): o topo oferece "ENTRAR" → `/users/sign_in`, e **todos** os
+   * quatro caminhos de candidatura da página de uma vaga apontam para o login ou o cadastro — inclusive o CTA
+   * grande, que é `<a class="btn btn-success btn-lg" href="/users/sign_up">Quero me candidatar</a>`. Então,
+   * deslogado, `clicarEnvia` dá `nao` e o motor nem tenta.
+   *
+   * NÃO CONFIRMADO: o que esse mesmo CTA é quando você ESTÁ logado — outra página com formulário, um modal, ou
+   * o próprio envio de um clique. Não tenho a conta e não vou criar uma; e clicar para descobrir mandaria uma
+   * candidatura real. Quem resolve isso é `reconhecerEnvio()`, que descreve o botão sem tocar nele: abra uma
+   * vaga logado e o relatório vai para o diário. Até lá, as convenções de botão herdadas do genérico valem.
+   *
+   * Por que um handler dedicado se o genérico já "funcionava": o genérico não sabia dizer se você está logado
+   * (caiu em "você já está logado aqui, então não dá para saber se a candidatura exige conta" — verdadeiro e
+   * inútil). Aqui o sinal é direto e nasce da página real.
+   */
+  const PROGRAMATHOR = {
+    dominios: ['programathor.com.br'],
+    detectaTelaLogin: () => /\/users\/(sign_in|sign_up|password|confirmation|auth)/i.test(location.pathname),
+    precisaLogin() {
+      if (/\/users\/(sign_in|sign_up|password|confirmation|auth)/i.test(location.pathname)) return { precisa: true, logado: false, motivo: 'esta é a tela de entrada do ProgramaThor' };
+      // O caminho de candidatura apontando para login/cadastro é o sinal mais forte, e é o que eu vi na página
+      const destino = PROGRAMATHOR.cta()?.getAttribute('href') ?? '';
+      if (/\/users\/(sign_in|sign_up)/.test(destino)) return { precisa: true, logado: false, motivo: 'o botão "Quero me candidatar" ainda leva para o cadastro' };
+      // Reserva: o "ENTRAR" do topo, que só existe deslogado
+      const entrar = todos('a[href="/users/sign_in"]').some(visivel);
+      if (entrar) return { precisa: true, logado: false, motivo: 'o topo ainda oferece ENTRAR' };
+      return { precisa: true, logado: true, motivo: 'o caminho de candidatura não leva mais ao cadastro: a sua sessão está valendo' };
+    },
+    empresaDaVaga: () => texto(document.querySelector('.company-name, [class*="company" i] a, [class*="empresa" i]')).slice(0, 120) || doJsonLd()?.empresa || '',
+
+    /**
+     * O CTA de candidatura, e só ele.
+     *
+     * O genérico procura o primeiro elemento visível cujo texto casa com /candidat/ — e nesta página isso dá o
+     * link errado: o topo tem "Como candidato" e "ENTRAR COMO CANDIDATO" ANTES do botão de verdade. Deslogado
+     * dava na mesma por acidente (todos apontam para o cadastro); logado daria um retrato do botão errado, e é
+     * do retrato que depende a decisão de clicar ou não. O CTA real, confirmado ao vivo, é
+     * `<a class="btn btn-success btn-lg">Quero me candidatar</a>` — classe E texto, porque qualquer um dos
+     * dois sozinho é frágil.
+     */
+    cta: () =>
+      todos('a.btn-success,button.btn-success,a.btn-lg,[class*="btn-success" i]')
+        .filter(visivel)
+        .find(e => /quero me candidatar|candidatar/i.test(texto(e))) ?? botaoCandidatar(),
+    reconhecerEnvio: () => reconhecerEnvio(PROGRAMATHOR.cta()),
+  };
+
+  const REGISTRO = [INDEED, LINKEDIN, PROGRAMATHOR];
 
   /**
    * O handler desta página: o dedicado do domínio POR CIMA do genérico, nunca no lugar dele.
@@ -282,6 +385,8 @@
       motivo: login.motivo,
       telaDeLogin: handler.detectaTelaLogin(),
       campos: handler.descobrirCamposFormulario().map(({ el: _el, ...c }) => c),
+      // `el` é um nó do DOM: fica aqui dentro, nunca cruza a ponte para o núcleo
+      envio: (({ el: _el, ...r } = {}) => (r.tag ? r : null))(handler.reconhecerEnvio?.() ?? undefined),
     };
   }
 
@@ -328,7 +433,25 @@
   }
 
   // Usado pelo motor (motor.js), pelo painel (painel.js) e, fora do navegador, por core/extensao-check.ts
-  const api = { diagnosticar, precisaLogin, descobrirCamposFormulario, handlerDe, temDado, respostaSalva, chaveDoCampo, texto, visivel, todos, rotuloDe, pareceVaga, GENERICO, INDEED, LINKEDIN };
+  const api = {
+    diagnosticar,
+    precisaLogin,
+    descobrirCamposFormulario,
+    handlerDe,
+    temDado,
+    respostaSalva,
+    chaveDoCampo,
+    texto,
+    visivel,
+    todos,
+    rotuloDe,
+    pareceVaga,
+    reconhecerEnvio,
+    GENERICO,
+    INDEED,
+    LINKEDIN,
+    PROGRAMATHOR,
+  };
   globalThis.ACVExtensao = api;
   if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
 
@@ -342,7 +465,7 @@
     const d = diagnosticar();
     const { cache } = await aoNucleo({ tipo: 'CACHE', dominio: d.dominio, forcar });
     // Domínio já avaliado e sem novidade: não repete o relato a cada vaga aberta
-    const novidade = !cache || cache.precisaLogin !== d.precisaLogin || cache.logadoAtualmente !== d.logadoAtualmente;
+    const novidade = !cache || cache.precisaLogin !== d.precisaLogin || cache.logadoAtualmente !== d.logadoAtualmente || cache.envio !== (d.envio?.clicarEnvia ?? null);
     if (novidade) await aoNucleo({ tipo: 'PLATAFORMA_DETECTADA', ...d, campos: undefined });
 
     if (!d.campos.length) return;
