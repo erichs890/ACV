@@ -56,7 +56,6 @@ async function carregar() {
   $('pretensaoSalarial').value = String(cfg.pretensaoSalarial ?? 0);
   $('pretensaoTexto').textContent = dinheiro(cfg.pretensaoSalarial);
   $('iaAtiva').checked = !!cfg.iaAtiva;
-  $('token').value = (await chrome.storage.local.get('token')).token ?? '';
   pintarEmpresas();
   pintarLimites();
   mostrarSincronia(await aoFundo({ tipo: 'STATUS' }));
@@ -98,7 +97,6 @@ $('salvar').addEventListener('click', async () => {
     intervaloMaxSegundos: Math.max(5, Number($('intervaloMaxSegundos').value) || PADRAO.intervaloMaxSegundos),
   };
   if (novo.intervaloMaxSegundos < novo.intervaloMinSegundos) novo.intervaloMaxSegundos = novo.intervaloMinSegundos;
-  await chrome.storage.local.set({ token: $('token').value.trim() });
   const r = await aoFundo({ tipo: 'CONFIG_GRAVAR', cfg: novo });
   cfg = r?.cfg ?? novo;
   $('estado').textContent = 'Salvo.';

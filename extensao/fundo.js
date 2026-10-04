@@ -5,8 +5,12 @@
 // Por que a ponte mora aqui e não no content script: o service worker tem `host_permissions` e fala com o núcleo
 // sem esbarrar no CORS nem na CSP do site visitado.
 //
-// Fronteira de confiança: o núcleo é um servidor local sem senha, então `/extensao/*` exige o token que a pessoa
-// cola uma vez. A partir desta etapa a extensão PREENCHE formulários, então ela recebe os dados de verdade do
+// Fronteira de confiança: o núcleo é um servidor local sem senha, então `/extensao/*` exige um token — mas a
+// pessoa nunca o vê. A extensão o busca sozinha em `GET /extensao/token`, e é por isso que isso é seguro e
+// não um teatro: o núcleo escuta SÓ em 127.0.0.1 e não manda cabeçalho de CORS, então um site qualquer que
+// tente a mesma busca não consegue LER a resposta. Quem tem `host_permissions` para 127.0.0.1:4780 — ou
+// seja, só esta extensão — passa. O token continua protegendo contra o site que você visita disparar uma
+// candidatura na sua máquina; o que ele deixou de fazer é dar trabalho a você. A partir desta etapa a extensão PREENCHE formulários, então ela recebe os dados de verdade do
 // perfil (nome, e-mail, telefone, respostas salvas, currículo) — antes só recebia "tem ou não tem". É o preço de
 // preencher; o token e o localhost continuam sendo a única porta.
 importScripts('comum.js');
@@ -19,15 +23,44 @@ const ler = async (chave, padrao) => (await chrome.storage.local.get(chave))[cha
 const gravar = (chave, valor) => chrome.storage.local.set({ [chave]: valor });
 const lerConfig = async () => ({ ...PADRAO, ...(await ler('config', {})) });
 
-async function paraONucleo(caminho, dados) {
-  const token = await ler('token', '');
-  if (!token) throw new Error('sem token: abra o popup do ACV e cole o token que aparece em Plataformas');
+/**
+ * O token, pegando-o sozinha quando ainda não tem.
+ *
+ * Guarda em `chrome.storage.local` para não repetir a busca a cada chamada, e **descarta e repega** se o
+ * núcleo recusar: o token é regenerado quando o banco é apagado, e um token velho guardado para sempre
+ * deixaria a extensão morta sem explicação.
+ */
+async function garantirToken(forcar = false) {
+  if (!forcar) {
+    const guardado = await ler('token', '');
+    if (guardado) return guardado;
+  }
+  try {
+    const r = await fetch(`${NUCLEO}/extensao/token`, { signal: AbortSignal.timeout(2500) });
+    if (!r.ok) return '';
+    const { token } = await r.json();
+    if (token) await gravar('token', token);
+    return token ?? '';
+  } catch {
+    return ''; // núcleo fechado: o cache cobre o resto
+  }
+}
+
+async function paraONucleo(caminho, dados, jaRepetiu = false) {
+  const token = await garantirToken();
+  if (!token) throw new Error('o ACV não está no ar — abra o server.bat');
   const r = await fetch(NUCLEO + caminho, {
     method: dados === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: dados === undefined ? undefined : JSON.stringify(dados),
     signal: AbortSignal.timeout(8000), // ACV fechado não pode travar a página de vaga
   });
+  // 401 só acontece com token velho: o banco foi apagado e o núcleo gerou outro. Repega e repete UMA vez.
+  // A marca de repetição é parâmetro, não campo no corpo — no corpo ela viajaria junto com os dados.
+  if (r.status === 401 && !jaRepetiu) {
+    const novo = await garantirToken(true);
+    if (novo && novo !== token) return paraONucleo(caminho, dados, true);
+  }
   if (!r.ok) throw new Error(`${(await r.json().catch(() => ({}))).erro ?? r.status}`);
   return r.json();
 }
@@ -65,16 +98,13 @@ async function sincronizar(comCurriculo = false) {
 const ICONE = n => `ui/marca/icone-${n}.png`;
 const ICONE_OFF = n => `ui/marca/icone-off-${n}.png`;
 
-async function pintarIcone({ sincronizado, pendentes = 0, cacheEm = null, motivo = 'fechado' }) {
+async function pintarIcone({ sincronizado, pendentes = 0, cacheEm = null }) {
   const caminho = sincronizado ? ICONE : ICONE_OFF;
   const quando = cacheEm ? new Date(cacheEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
-  // Falta de token não é núcleo fechado, e dizer a coisa errada aqui derruba a serventia do ícone: a pessoa
-  // iria procurar um servidor caído quando o que falta é colar o token uma vez.
-  const porque = motivo === 'sem_token' ? 'falta colar o token no popup' : 'o núcleo está fechado';
-  const complemento = quando ? `, usando a cópia de ${quando}` : motivo === 'sem_token' ? '' : ' e ainda não sincronizei nenhuma vez';
+  const complemento = quando ? `, usando a cópia de ${quando}` : ' e ainda não sincronizei nenhuma vez';
   try {
     await chrome.action.setIcon({ path: { 16: caminho(16), 32: caminho(32), 48: caminho(48) } });
-    await chrome.action.setTitle({ title: sincronizado ? 'ACV — conectado ao núcleo' : `ACV — ${porque}${complemento}` });
+    await chrome.action.setTitle({ title: sincronizado ? 'ACV — conectado ao núcleo' : `ACV — abra o server.bat para conectar${complemento}` });
     await chrome.action.setBadgeText({ text: pendentes > 0 ? String(Math.min(pendentes, 99)) : '' });
     if (pendentes > 0) {
       await chrome.action.setBadgeBackgroundColor({ color: '#c8481a' }); // --color-orange-deep
@@ -97,7 +127,7 @@ async function status() {
   }
   const atual = await ler('cache', {});
   // Quem descobriu o estado pinta o ícone: é o único lugar que já sabe os três dados de uma vez
-  await pintarIcone({ sincronizado, pendentes: pendentes.length, cacheEm: atual.em ?? null, motivo: (await ler('token', '')) ? 'fechado' : 'sem_token' });
+  await pintarIcone({ sincronizado, pendentes: pendentes.length, cacheEm: atual.em ?? null });
   return {
     sincronizado,
     cacheEm: atual.em ?? null,
@@ -185,9 +215,11 @@ async function abrirApp() {
 const PULSO_MIN = 2;
 
 async function conferirConexao() {
-  const token = await ler('token', '');
   let sincronizado = false;
   try {
+    // `garantirToken` já pareia sozinha na primeira vez: o pulso é também o que conecta a extensão quando
+    // você abre o server.bat, sem você fazer nada.
+    const token = await garantirToken();
     if (token) {
       const r = await fetch(`${NUCLEO}/extensao/plataformas`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
       sincronizado = r.ok;
@@ -196,7 +228,7 @@ async function conferirConexao() {
     // Núcleo fechado é o caso normal desta arquitetura
   }
   const cache = await ler('cache', {});
-  await pintarIcone({ sincronizado, pendentes: (await ler('pendentes', [])).length, cacheEm: cache.em ?? null, motivo: token ? 'fechado' : 'sem_token' });
+  await pintarIcone({ sincronizado, pendentes: (await ler('pendentes', [])).length, cacheEm: cache.em ?? null });
 }
 
 chrome.alarms.create('pulso', { periodInMinutes: PULSO_MIN });

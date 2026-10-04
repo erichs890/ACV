@@ -34,11 +34,9 @@ echo   ACV - servidor da extensao
 echo   --------------------------------------------------------------
 echo   Enquanto esta janela estiver aberta, o icone da extensao fica
 echo   AZUL. Feche a janela e ele fica CINZA.
+echo.
+echo   Nao ha nada para configurar: a extensao se conecta sozinha.
 echo   --------------------------------------------------------------
-
-rem Espera o servidor responder e mostra o token (precisa ser colado uma vez no popup da extensao).
-rem A rota e aberta de proposito e so atende 127.0.0.1: e assim que a extensao e pareada com o nucleo.
-start "" /b node mostrar-token.mjs
 
 call npm run servidor
 
