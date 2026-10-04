@@ -1,0 +1,47 @@
+/* Tokens do AutoCV — os mesmos valores do `@theme` de src/index.css.
+ *
+ * Estão copiados, e não importados, porque a extensão é carregada descompactada: ela não passa pelo Vite nem
+ * pelo Tailwind e só lê arquivos de dentro da própria pasta. O que não se duplica é a DECISÃO — qualquer cor
+ * nova entra primeiro em src/index.css e desce para cá.
+ *
+ * Cada token aparece DUAS VEZES, em `:root` e em `:host`. Não é descuido: dentro do painel injetado,
+ * `all: initial` zera tudo o que é herdável, mas **propriedades customizadas não são afetadas por `all`**.
+ * Um `html { --color-ink: red }` da página hospedeira herdaria para dentro do nosso shadow DOM e pintaria o
+ * painel de vermelho. Declarar no `:host` corta a herança na porta.
+ */
+:root,
+:host {
+  /* Superfícies */
+  --color-page-bg: #eaeaea;
+  --color-panel: #ffffff;
+  --color-panel-border: #c3c9d1;
+
+  /* Texto */
+  --color-ink: #333333;
+  --color-ink-soft: #6b7480;
+
+  /* Marca / ações */
+  --color-blue: #2f7fd1;
+  --color-blue-dark: #1a6dc4;
+  --color-blue-deep: #0f4c8f;
+
+  /* Semântica — os tons `deep` existem para texto de 10-12px passar AA sobre branco */
+  --color-aqua: #6ec648;
+  --color-green-deep: #3e8524;
+  --color-orange: #e8622c;
+  --color-orange-deep: #c8481a;
+  --color-amber: #e8c86a;
+  --color-amber-ink: #7a6320;
+  --color-purple: #8b5fbf;
+
+  /* Superfícies escuras (barra lateral do app, cabeçalhos de cartão neutro) */
+  --color-side-top: #3d4756;
+  --color-side-bottom: #232a34;
+
+  --radius: 8px;
+
+  /* A família é "AutoCV PT Sans", não "PT Sans": se o site hospedeiro tiver uma PT Sans própria (variável,
+   * outro subconjunto, outro hinting), o painel não pega a dele por acidente. */
+  --font-ui: 'AutoCV PT Sans', 'PT Sans', system-ui, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
+}

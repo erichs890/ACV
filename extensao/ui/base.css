@@ -1,0 +1,317 @@
+/* Componentes do AutoCV para a extensão: botões, campos, pílulas, cartões e foco.
+ *
+ * Levantado de `@layer components` em src/index.css, que já era CSS puro. Vale para as três superfícies —
+ * popup, página de opções e o painel dentro do shadow DOM.
+ */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* Foco visível. A extensão inteira não tinha NENHUM estilo de foco; o painel ainda apagava o anel do
+ * navegador com `all: initial`. O halo branco é o que mantém o anel legível também sobre o azul do cabeçalho. */
+:focus-visible {
+  outline: 2px solid var(--color-blue-dark);
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px #fff;
+}
+
+button:not(:disabled),
+select,
+summary,
+label:has(> input[type='checkbox']:not(:disabled), > input[type='radio']:not(:disabled), > input[type='file']) {
+  cursor: pointer;
+}
+
+input[type='checkbox'],
+input[type='radio'] {
+  accent-color: var(--color-blue-dark);
+}
+
+/* ─── Botões ──────────────────────────────────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+  transition:
+    background-color 0.15s,
+    border-color 0.15s;
+}
+.btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.btn-sm {
+  padding: 6px 10px;
+}
+.btn-lg {
+  padding: 11px 18px;
+  font-size: 0.9375rem;
+}
+.btn-largo {
+  width: 100%;
+}
+
+.btn-primary {
+  background: var(--color-blue-dark);
+  color: #fff;
+}
+.btn-primary:hover:not(:disabled) {
+  background: var(--color-blue-deep);
+}
+.btn-success {
+  background: var(--color-green-deep);
+  color: #fff;
+}
+.btn-success:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-green-deep) 85%, #000);
+}
+.btn-danger {
+  background: var(--color-orange-deep);
+  color: #fff;
+}
+.btn-danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--color-orange-deep) 85%, #000);
+}
+.btn-secondary {
+  background: var(--color-panel);
+  color: var(--color-ink);
+  border-color: var(--color-panel-border);
+}
+.btn-secondary:hover:not(:disabled) {
+  background: var(--color-page-bg);
+}
+
+/* ─── Campos ──────────────────────────────────────────────────────────────────────────────────── */
+.field {
+  width: 100%;
+  height: 30px;
+  padding: 0 9px;
+  border: 1px solid var(--color-panel-border);
+  border-radius: 6px;
+  background: var(--color-panel);
+  color: var(--color-ink);
+  font-family: inherit;
+  font-size: 0.75rem;
+}
+.field::placeholder {
+  color: var(--color-ink-soft);
+}
+.field:hover:not(:disabled) {
+  border-color: var(--color-ink-soft);
+}
+.field:focus-visible {
+  outline-offset: 0;
+  border-color: var(--color-blue-dark);
+}
+.field:disabled {
+  background: var(--color-page-bg);
+  cursor: not-allowed;
+}
+
+.label {
+  display: block;
+  margin-bottom: 4px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+}
+
+/* Toggle: checkbox nativo com role="switch" — substitui o checkbox cru da página de opções */
+.switch {
+  appearance: none;
+  position: relative;
+  flex-shrink: 0;
+  width: 54px;
+  height: 26px;
+  border-radius: 13px;
+  background: var(--color-ink-soft);
+  transition: background-color 0.15s;
+}
+.switch::before {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: var(--color-panel);
+  transition: transform 0.15s;
+}
+.switch:checked {
+  background: var(--color-green-deep);
+}
+.switch:checked::before {
+  transform: translateX(28px);
+}
+
+/* ─── Pílulas ─────────────────────────────────────────────────────────────────────────────────── */
+/* Preenchimento SÓLIDO, não tinte: a 10-11px, texto colorido sobre fundo claro não passa AA. Era o caso
+ * das pílulas antigas da extensão (#a86a00 sobre #fdf3e2). */
+.pilula {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  padding: 2px 8px;
+  font-size: 0.625rem;
+  font-weight: 700;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+.pilula-ok {
+  background: var(--color-green-deep);
+  color: #fff;
+}
+.pilula-info {
+  background: var(--color-blue-dark);
+  color: #fff;
+}
+.pilula-atencao {
+  background: var(--color-amber);
+  color: var(--color-ink);
+}
+.pilula-erro {
+  background: var(--color-orange-deep);
+  color: #fff;
+}
+.pilula-neutra {
+  background: var(--color-page-bg);
+  border-color: var(--color-panel-border);
+  color: var(--color-ink-soft);
+}
+
+/* ─── Cartão (o padrão Panel do app: barra de 35px + corpo) ───────────────────────────────────── */
+.cartao {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius);
+  background: var(--color-panel);
+}
+.cartao > header {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  height: 35px;
+  padding: 0 12px;
+  background: var(--color-blue-dark);
+  color: #fff;
+}
+.cartao > header h2,
+.cartao > header h3 {
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+.cartao > header .aside {
+  margin-left: auto;
+  font-size: 0.6875rem;
+}
+.cartao-verde > header {
+  background: var(--color-green-deep);
+}
+.cartao-neutro > header {
+  background: var(--color-side-top);
+}
+.cartao-ambar > header {
+  background: var(--color-amber-ink);
+}
+.cartao-laranja > header {
+  background: var(--color-orange-deep);
+}
+.cartao-roxo > header {
+  background: var(--color-purple);
+}
+.cartao > .corpo {
+  padding: 14px;
+}
+
+/* ─── Avisos ──────────────────────────────────────────────────────────────────────────────────── */
+.aviso {
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+.aviso-atencao {
+  background: color-mix(in srgb, var(--color-amber) 22%, #fff);
+  border-color: var(--color-amber);
+  color: var(--color-amber-ink);
+}
+.aviso-erro {
+  background: color-mix(in srgb, var(--color-orange-deep) 10%, #fff);
+  border-color: var(--color-orange-deep);
+  color: var(--color-orange-deep);
+}
+.aviso-info {
+  background: color-mix(in srgb, var(--color-blue-dark) 8%, #fff);
+  border-color: var(--color-blue-dark);
+  color: var(--color-blue-deep);
+}
+
+/* ─── A marca, pela mesma técnica de src/components/Logo.tsx ──────────────────────────────────── */
+/* Um `<span>` pintado de `currentColor` e recortado pelo PNG como máscara: o mesmo arquivo branco serve
+ * sobre a barra azul e sobre o fundo branco, e a cor vem do contexto. A largura sai da proporção.
+ * `--marca-url` é definida por quem monta a superfície: nas páginas o caminho é relativo, no painel ele
+ * precisa ser absoluto (`chrome.runtime.getURL`), senão resolveria contra o site hospedeiro. */
+.marca {
+  display: inline-block;
+  flex-shrink: 0;
+  background: currentColor;
+  aspect-ratio: 666 / 390;
+  mask: var(--marca-url) no-repeat center / contain;
+  -webkit-mask: var(--marca-url) no-repeat center / contain;
+}
+.monograma {
+  display: inline-block;
+  flex-shrink: 0;
+  background: currentColor;
+  aspect-ratio: 1 / 1;
+  mask: var(--monograma-url) no-repeat center / contain;
+  -webkit-mask: var(--monograma-url) no-repeat center / contain;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Quem pede menos movimento tem de vencer qualquer animação de componente. O orbe já desenha um quadro
+ * parado por conta própria; isto cobre o resto. */
+@media (prefers-reduced-motion: reduce) {
+  /* biome-ignore-start lint/complexity/noImportantStyles: preferência do sistema vence estilo de componente */
+  *,
+  ::before,
+  ::after {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* biome-ignore-end lint/complexity/noImportantStyles: fim da exceção */
+}

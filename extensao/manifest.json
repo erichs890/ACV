@@ -14,7 +14,8 @@
       "matches": ["http://*/*", "https://*/*"],
       "js": ["comum.js", "conteudo.js", "motor.js", "painel.js"],
       "run_at": "document_idle",
-      "all_frames": false
+      "all_frames": false,
+      "css": ["ui/fonte.css"]
     },
     {
       "matches": ["https://*.linkedin.com/*", "https://*.indeed.com/*", "https://*.gupy.io/*"],
@@ -26,6 +27,24 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AutoCV"
-  }
+    "default_title": "AutoCV",
+    "default_icon": {
+      "16": "ui/marca/icone-16.png",
+      "32": "ui/marca/icone-32.png",
+      "48": "ui/marca/icone-48.png"
+    }
+  },
+  "icons": {
+    "16": "ui/marca/icone-16.png",
+    "32": "ui/marca/icone-32.png",
+    "48": "ui/marca/icone-48.png",
+    "128": "ui/marca/icone-128.png"
+  },
+  "web_accessible_resources": [
+    {
+      "resources": ["ui/tokens.css", "ui/base.css", "ui/painel.css", "ui/fontes/*.woff2", "ui/marca/*.png"],
+      "matches": ["http://*/*", "https://*/*"],
+      "use_dynamic_url": false
+    }
+  ]
 }

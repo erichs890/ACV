@@ -1,7 +1,7 @@
 # Extrai a marca do mockup em papel (acv.jpg) e gera os arquivos da identidade.
 #   python brand/gerar-logo.py    — só precisa rodar de novo se a arte original mudar.
 from PIL import Image, ImageDraw
-import numpy as np, os
+import numpy as np, os, shutil
 
 os.chdir(r"C:/Users/diluc/OneDrive/Documentos/GitHub/AutoCV")
 os.makedirs('public', exist_ok=True)
@@ -74,7 +74,9 @@ def icone(n, ocupacao=0.74, fundo=AZUL, raio=CANTO):
 
 
 # A 16px o desenho não aguenta 74% de ocupação nem canto arredondado: engrossa e vira borrão.
-tamanhos = {16: (0.86, 0.10), 32: (0.80, 0.14), 48: (0.76, 0.16), 192: (0.74, 0.18), 512: (0.74, 0.18)}
+# O 128 existe para o `icons` da extensão (diálogo de instalação e chrome://extensions). Deixar o
+# Chrome reduzir o 192 para 128 amolece justamente o ajuste que esta tabela faz à mão.
+tamanhos = {16: (0.86, 0.10), 32: (0.80, 0.14), 48: (0.76, 0.16), 128: (0.74, 0.18), 192: (0.74, 0.18), 512: (0.74, 0.18)}
 for n, (oc, r) in tamanhos.items():
     icone(n, oc, raio=r).save(f'public/favicon-{n}.png', optimize=True)
 
@@ -84,5 +86,15 @@ icone(48, 0.76, raio=0.16).save('public/favicon.ico', sizes=[(16, 16), (32, 32),
 # apple-touch-icon: iOS ignora transparência e já arredonda sozinho — quadrado cheio, sem canto
 icone(180, 0.72, raio=0.0).convert('RGB').save('public/apple-touch-icon.png', optimize=True)
 
+# A extensão carregada descompactada só lê de dentro da própria pasta — `../public` não existe para
+# ela. Por isso os arquivos são copiados; o que não se duplica é o GERADOR, que continua sendo este.
+MARCA_EXT = 'extensao/ui/marca'
+os.makedirs(MARCA_EXT, exist_ok=True)
+for n, (oc, r) in {16: tamanhos[16], 32: tamanhos[32], 48: tamanhos[48], 128: tamanhos[128]}.items():
+    icone(n, oc, raio=r).save(f'{MARCA_EXT}/icone-{n}.png', optimize=True)
+shutil.copyfile('public/logo.png', f'{MARCA_EXT}/logo.png')
+
 for f in sorted(os.listdir('public')):
-    print('  %-24s %6.1f KB' % (f, os.path.getsize('public/' + f) / 1024))
+    print('  public/%-22s %6.1f KB' % (f, os.path.getsize('public/' + f) / 1024))
+for f in sorted(os.listdir(MARCA_EXT)):
+    print('  %s/%-14s %6.1f KB' % (MARCA_EXT, f, os.path.getsize(f'{MARCA_EXT}/' + f) / 1024))
