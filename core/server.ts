@@ -13,6 +13,7 @@ import './platforms/divulgavagas/index.ts';
 import './platforms/workable/index.ts';
 import './platforms/quickin/index.ts';
 import './platforms/arbeitnow/index.ts';
+import './platforms/programathor/index.ts';
 import { PORTA, DIRS } from './config.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';

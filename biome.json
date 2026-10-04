@@ -1,8 +1,12 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
-  "vcs": { "enabled": true, "clientKind": "git", "useIgnoreFile": true },
+  "vcs": {
+    "enabled": true,
+    "clientKind": "git",
+    "useIgnoreFile": true
+  },
   "files": {
-    "includes": ["**", "!dist", "!node_modules", "!package-lock.json", "!database"]
+    "includes": ["**", "!dist", "!node_modules", "!package-lock.json", "!database", "!core/fixtures"]
   },
   "formatter": {
     "enabled": true,
@@ -22,11 +26,18 @@
     }
   },
   "json": {
-    "formatter": { "indentWidth": 2, "lineWidth": 200 }
+    "formatter": {
+      "indentWidth": 2,
+      "lineWidth": 200
+    }
   },
   "css": {
-    "parser": { "tailwindDirectives": true },
-    "formatter": { "quoteStyle": "single" }
+    "parser": {
+      "tailwindDirectives": true
+    },
+    "formatter": {
+      "quoteStyle": "single"
+    }
   },
   "linter": {
     "enabled": true,
@@ -52,12 +63,22 @@
   },
   "assist": {
     "enabled": true,
-    "actions": { "source": { "organizeImports": "off" } }
+    "actions": {
+      "source": {
+        "organizeImports": "off"
+      }
+    }
   },
   "overrides": [
     {
       "includes": ["core/**"],
-      "linter": { "rules": { "suspicious": { "noConsole": "off" } } }
+      "linter": {
+        "rules": {
+          "suspicious": {
+            "noConsole": "off"
+          }
+        }
+      }
     }
   ]
 }

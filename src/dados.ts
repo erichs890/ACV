@@ -61,6 +61,17 @@ export const PLATAFORMAS: Plataforma[] = [
   },
 
   {
+    id: 'programathor',
+    regiao: 'brasil',
+    nome: 'ProgramaThor',
+    sigla: 'PT',
+    cor: 'bg-blue-deep',
+    disponivel: true,
+    login: true,
+    site: 'https://programathor.com.br/jobs',
+    nota: 'Só vagas de tecnologia, e a listagem tem os mesmos filtros que você usa aqui (senioridade e remoto), o que deixa a varredura precisa: ~5.100 vagas em Pleno remoto. Candidatar EXIGE conta — login manual uma vez e a sessão fica no navegador do robô. Os termos de uso não proíbem automação (lidos em 03/10/2026).',
+  },
+  {
     id: 'vagas',
     regiao: 'brasil',
     nome: 'Vagas.com',

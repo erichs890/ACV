@@ -2,7 +2,7 @@
 //   node core/self-check.ts
 // Cobre: Markdown → PDF → Markdown, análise do currículo, score, adaptação sem invenção, similaridade de perguntas.
 import assert from 'node:assert/strict';
-import { existsSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -1145,6 +1145,48 @@ assert.ok(semLista.score > 0, 'sem lista de exclusão, nada é cortado');
 assert.equal(termoExcluido('Qualquer coisa', []), null);
 assert.equal(termoExcluido('Qualquer coisa', ['  ']), null, 'termo em branco não exclui o mundo');
 console.log('✓ Nichos a evitar: corta pelo título, com borda de palavra, e não mexe no resto');
+
+// ─── ProgramaThor: leitura do HTML REAL capturado do site em 03/10/2026 ─────────────────────────
+// As fixturas são recortes do que o site devolveu de verdade — não HTML inventado para o teste passar.
+const { lerListagem, lerJobPosting: lerJobPostingPT, localDe: localDePT, modeloDe: modeloDePT, montarVaga: montarPT, filtrosDoPerfil } = await import('./platforms/programathor/busca.ts');
+const { PROGRAMATHOR } = await import('./platforms/programathor/seletores.ts');
+// O ProgramaThor tem configuração própria no teste: senioridade e regimes mudam os filtros da URL
+const cfgPT = { area: '', senioridade: 'Pleno', scoreMinimo: 0, regimes: ['remoto'], excluir: [] } as unknown as Parameters<typeof montarPT>[3];
+const htmlPT = (nome: string) => readFileSync(new URL(`../core/fixtures/programathor-${nome}.html`, import.meta.url), 'utf8');
+
+const listaPT = lerListagem(htmlPT('listagem'));
+assert.equal(listaPT.length, 15, 'a listagem do ProgramaThor traz 15 vagas por página');
+assert.match(listaPT[0].url, /^https:\/\/programathor\.com\.br\/jobs\/\d+-/);
+assert.ok(new Set(listaPT.map(i => i.id)).size === 15, 'e nenhuma repetida: o mesmo id aparece mais de uma vez no HTML');
+
+const jpPT = lerJobPostingPT(htmlPT('vaga'));
+assert.ok(jpPT, 'o JSON-LD precisa ser lido mesmo com quebra de linha crua dentro das strings (o site tem)');
+assert.equal(jpPT?.hiringOrganization?.name, 'Net2source');
+assert.equal(localDePT(jpPT!), 'São Paulo');
+assert.equal(modeloDePT(jpPT!, htmlPT('vaga'), jpPT!.title ?? '', jpPT!.description ?? ''), 'hibrido', 'o modelo vem da página, que diz "Modelo: Híbrido"');
+// Sem a página, o JSON-LD sozinho não sabe: e 'indefinido' escapa da regra de localização — foi esse o
+// buraco por onde sete presenciais fora do Ceará receberam currículo em 28/09.
+assert.equal(modeloDePT(jpPT!, '', jpPT!.title ?? '', jpPT!.description ?? ''), 'indefinido', 'o JSON-LD sozinho não diz o modelo');
+
+const vagaPT = montarPT(listaPT[0], htmlPT('vaga'), perfil, cfgPT, { localizacaoPresencial: 'São Paulo - SP', paisesRemoto: ['Brasil'] });
+assert.ok(vagaPT, 'a vaga tem de ser montada a partir do HTML real');
+assert.match(vagaPT!.id, /^programathor:\d+$/);
+assert.equal(vagaPT!.empresa, 'Net2source');
+assert.ok(vagaPT!.skills.length > 0, 'as competências saem da descrição do JSON-LD');
+
+// Vaga vencida não entra: o site mantém a página no ar depois do prazo
+const vencida = htmlPT('vaga').replace('2026-12-24', '2020-01-01');
+assert.equal(montarPT(listaPT[0], vencida, perfil, cfgPT, { localizacaoPresencial: '', paisesRemoto: ['Brasil'] }), null, 'vaga fora do prazo não entra na lista');
+
+// Os filtros da URL saem da configuração: é o que torna a varredura barata (23.509 -> ~5.100)
+assert.deepEqual(filtrosDoPerfil(cfgPT, perfil), { expertise: 'Pleno', remoto: true });
+assert.equal(filtrosDoPerfil({ ...cfgPT, senioridade: 'Especialista' }, perfil).expertise, undefined, 'nível que o site não tem como filtro não vai para a URL');
+assert.equal(filtrosDoPerfil({ ...cfgPT, regimes: ['remoto', 'presencial'] }, perfil).remoto, false, 'quem aceita presencial não filtra só remotas');
+assert.match(PROGRAMATHOR.listagem({ expertise: 'Pleno', remoto: true }, 3), /expertise=Pleno.*remoto=true.*page=3/);
+
+// Deslogado, TODO caminho de candidatura leva ao cadastro — é daí que sai a prova de sessão
+assert.ok(PROGRAMATHOR.ctaDeslogado.test(htmlPT('vaga')), 'a página deslogada tem de ser reconhecida como deslogada');
+console.log('✓ ProgramaThor: lê a listagem e o JSON-LD reais, monta a vaga e sabe dizer que está deslogado');
 
 await fecharNavegador();
 console.log('\nTudo certo.');

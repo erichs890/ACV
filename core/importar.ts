@@ -37,6 +37,7 @@ export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor
   { id: 'workable', dominios: ['workable.com'], importa: false, motor: 'nucleo' },
   { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false, motor: 'nucleo' },
   { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos' },
+  { id: 'programathor', dominios: ['programathor.com.br'], importa: true, motor: 'ambos' },
   // Sem adapter no núcleo: quem candidata é o motor da extensão, no navegador da pessoa. Entram aqui para
   // a extensão parar de guardar a própria lista — `nome` é obrigatório porque não há adapter de onde tirá-lo.
   { id: 'linkedin', dominios: ['linkedin.com'], importa: false, motor: 'extensao', nome: 'LinkedIn' },
