@@ -3,7 +3,7 @@
   "name": "ACV",
   "version": "0.2.0",
   "description": "Diz se a plataforma exige conta e o que falta no seu perfil, e candidata na vaga aberta quando você manda. Guarda a própria configuração e funciona com o ACV fechado.",
-  "permissions": ["storage", "activeTab", "tabs"],
+  "permissions": ["storage", "activeTab", "tabs", "alarms"],
   "host_permissions": ["http://127.0.0.1:4780/*"],
   "background": {
     "service_worker": "fundo.js"

@@ -53,6 +53,38 @@ async function sincronizar(comCurriculo = false) {
   return cache;
 }
 
+/**
+ * O ícone da barra diz, de relance, se o núcleo está no ar.
+ *
+ * O desenho é o mesmo nos dois estados; muda só a cor do quadrado — azul quando conectado, cinza quando não.
+ * A 16px é a cor do quadrado que se lê, não o traço, então mexer no monograma nesse tamanho seria desperdício.
+ *
+ * O selo (badge) não repete essa informação: ele carrega um dado que a cor não cabe — quantas candidaturas
+ * estão esperando para subir. Sem pendência nenhuma ele some, para o ícone ficar limpo no caso normal.
+ */
+const ICONE = n => `ui/marca/icone-${n}.png`;
+const ICONE_OFF = n => `ui/marca/icone-off-${n}.png`;
+
+async function pintarIcone({ sincronizado, pendentes = 0, cacheEm = null, motivo = 'fechado' }) {
+  const caminho = sincronizado ? ICONE : ICONE_OFF;
+  const quando = cacheEm ? new Date(cacheEm).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : null;
+  // Falta de token não é núcleo fechado, e dizer a coisa errada aqui derruba a serventia do ícone: a pessoa
+  // iria procurar um servidor caído quando o que falta é colar o token uma vez.
+  const porque = motivo === 'sem_token' ? 'falta colar o token no popup' : 'o núcleo está fechado';
+  const complemento = quando ? `, usando a cópia de ${quando}` : motivo === 'sem_token' ? '' : ' e ainda não sincronizei nenhuma vez';
+  try {
+    await chrome.action.setIcon({ path: { 16: caminho(16), 32: caminho(32), 48: caminho(48) } });
+    await chrome.action.setTitle({ title: sincronizado ? 'ACV — conectado ao núcleo' : `ACV — ${porque}${complemento}` });
+    await chrome.action.setBadgeText({ text: pendentes > 0 ? String(Math.min(pendentes, 99)) : '' });
+    if (pendentes > 0) {
+      await chrome.action.setBadgeBackgroundColor({ color: '#c8481a' }); // --color-orange-deep
+      await chrome.action.setBadgeTextColor?.({ color: '#ffffff' });
+    }
+  } catch {
+    // Pintar o ícone é conforto, nunca motivo para derrubar o que o chamador estava fazendo
+  }
+}
+
 /** O que a tela mostra: sincronizado agora, ou operando com a cópia de quando. */
 async function status() {
   const [cfg, cache, pendentes, contadores] = [await lerConfig(), await ler('cache', {}), await ler('pendentes', []), await ler('contadores', {})];
@@ -64,6 +96,8 @@ async function status() {
     // ACV fechado é o caso normal desta arquitetura, não um erro
   }
   const atual = await ler('cache', {});
+  // Quem descobriu o estado pinta o ícone: é o único lugar que já sabe os três dados de uma vez
+  await pintarIcone({ sincronizado, pendentes: pendentes.length, cacheEm: atual.em ?? null, motivo: (await ler('token', '')) ? 'fechado' : 'sem_token' });
   return {
     sincronizado,
     cacheEm: atual.em ?? null,
@@ -136,6 +170,39 @@ async function abrirApp() {
   const nova = await chrome.tabs.create({ url: base, active: true });
   return { aba: nova.id, reaproveitada: false };
 }
+
+/**
+ * O ícone precisa de pulso próprio.
+ *
+ * Sem isto ele só se atualizava quando alguma coisa perguntava o estado (abrir o popup, abrir uma vaga) — e
+ * aí, fechado o núcleo, ele ficava azul dizendo "conectado" por tempo indeterminado. Um ícone que mente é
+ * pior do que nenhum.
+ *
+ * A conferência é barata de propósito: uma chamada à rota mais leve do núcleo, em 127.0.0.1, com dois
+ * segundos de paciência. Não sincroniza nada — quem sincroniza é `status()`, quando alguém de fato precisa
+ * dos dados. O service worker dorme entre um alarme e outro, que é como o MV3 funciona.
+ */
+const PULSO_MIN = 2;
+
+async function conferirConexao() {
+  const token = await ler('token', '');
+  let sincronizado = false;
+  try {
+    if (token) {
+      const r = await fetch(`${NUCLEO}/extensao/plataformas`, { headers: { authorization: `Bearer ${token}` }, signal: AbortSignal.timeout(2000) });
+      sincronizado = r.ok;
+    }
+  } catch {
+    // Núcleo fechado é o caso normal desta arquitetura
+  }
+  const cache = await ler('cache', {});
+  await pintarIcone({ sincronizado, pendentes: (await ler('pendentes', [])).length, cacheEm: cache.em ?? null, motivo: token ? 'fechado' : 'sem_token' });
+}
+
+chrome.alarms.create('pulso', { periodInMinutes: PULSO_MIN });
+chrome.alarms.onAlarm.addListener(a => a.name === 'pulso' && conferirConexao());
+chrome.runtime.onStartup.addListener(conferirConexao);
+chrome.runtime.onInstalled.addListener(conferirConexao);
 
 const ACOES = {
   CONFIG: async () => ({ cfg: await lerConfig() }),

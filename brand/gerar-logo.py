@@ -90,8 +90,17 @@ icone(180, 0.72, raio=0.0).convert('RGB').save('public/apple-touch-icon.png', op
 # ela. Por isso os arquivos são copiados; o que não se duplica é o GERADOR, que continua sendo este.
 MARCA_EXT = 'extensao/ui/marca'
 os.makedirs(MARCA_EXT, exist_ok=True)
-for n, (oc, r) in {16: tamanhos[16], 32: tamanhos[32], 48: tamanhos[48], 128: tamanhos[128]}.items():
+DA_EXTENSAO = {16: tamanhos[16], 32: tamanhos[32], 48: tamanhos[48], 128: tamanhos[128]}
+for n, (oc, r) in DA_EXTENSAO.items():
     icone(n, oc, raio=r).save(f'{MARCA_EXT}/icone-{n}.png', optimize=True)
+
+# Variante apagada: é o que o ícone da barra mostra quando o núcleo está fechado. O desenho é o MESMO —
+# muda só o fundo, de azul para cinza. A 16px a cor do quadrado é o que se lê de relance; mexer no traço
+# nesse tamanho não se enxerga.
+CINZA = (107, 116, 128)  # --color-ink-soft, o mesmo cinza de texto secundário do app
+for n, (oc, r) in DA_EXTENSAO.items():
+    icone(n, oc, fundo=CINZA, raio=r).save(f'{MARCA_EXT}/icone-off-{n}.png', optimize=True)
+
 shutil.copyfile('public/logo.png', f'{MARCA_EXT}/logo.png')
 
 for f in sorted(os.listdir('public')):
