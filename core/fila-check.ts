@@ -404,6 +404,121 @@ assert.equal(enviadas(), 1, 'o ensaio não contava como envio; agora existe uma 
 assert.throws(() => candidatarAgora(ensaiada), /já se candidatou/);
 console.log('✓ Vaga ensaiada volta à fila ao desligar o ensaio (e nunca com ele ligado)');
 
+// ─── Regressões que já aconteceram de verdade ────────────────────────────────────────────────────
+// Estes quatro cenários se perderam numa mesclagem (03/10/2026). O código dos consertos continuou no lugar,
+// mas teste removido é bug que volta em silêncio — e dois destes o usuário sentiu na pele, com currículo
+// enviado para vaga que ele tinha acabado de excluir.
+
+// Bug real (28/09/2026): InHire desmarcado em Automação e o robô mandou currículo para três vagas do InHire —
+// elas já estavam `na_fila` de antes, e o foco só era checado na ENTRADA da fila. Agora vale no ponto de uso.
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const jaNaFila = enfileirar();
+assert.equal(st(jaNaFila), 'na_fila');
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: false } }); // desmarcou DEPOIS
+await processarProxima();
+assert.equal(chamadas.get(jaNaFila), undefined, 'vaga de plataforma fora do foco não pode ser enviada');
+assert.equal(st(jaNaFila), 'encontrada', 'e tem de sair da fila, não ficar presa nela');
+// Marcar de novo devolve a vaga à fila pelo caminho normal
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+assert.equal(enfileirarCompativeis('voltou ao foco'), 1);
+assert.equal(st(jaNaFila), 'na_fila');
+console.log('✓ Fora do foco: vaga que já estava na fila sai dela e não é enviada');
+
+// ─── 12) Varredura agendada vale para QUALQUER plataforma conectada ──────────────────────────────
+// Era um `else if` por plataforma; adapter novo que esquecesse de entrar na cadeia ficava sem varredura
+// agendada (aconteceu com Quickin, Workable e Arbeitnow, que só varriam de carona com o InHire).
+const { plataformaVencida, algumaPlataformaVencida } = await import('./queue.ts');
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString() } });
+assert.ok(plataformaVencida('teste', 6), 'plataforma que nunca varreu está vencida');
+assert.ok(algumaPlataformaVencida(6), 'com uma conectada e nunca varrida, a varredura tem de rolar');
+kv.set('teste:ultimaBusca', new Date().toISOString());
+assert.ok(!plataformaVencida('teste', 6), 'acabou de varrer: não vence de novo agora');
+assert.ok(!algumaPlataformaVencida(6));
+kv.set('teste:ultimaBusca', new Date(Date.now() - 7 * 3600_000).toISOString());
+assert.ok(algumaPlataformaVencida(6), 'passadas as horas do intervalo, vence de novo');
+// InHire e Indeed têm agenda própria e não entram por aqui
+kv.set('conexoes', { inhire: { conectadaEm: new Date().toISOString() }, indeed: { conectadaEm: new Date().toISOString() } });
+assert.ok(!algumaPlataformaVencida(6), 'InHire e Indeed têm agenda própria; não podem disparar por esta regra');
+console.log('✓ Varredura agendada: regra única, serve para qualquer adapter novo');
+
+// ─── 13) Progresso da varredura: a barra do botão "Procurar vagas" ───────────────────────────────
+// Só o InHire dava sinal de vida, e numa tela diferente do botão. As outras seis varriam em silêncio.
+const { lerVarredura, iniciarVarredura, plataformaAtual, passo, vistas, terminarPlataforma, terminarVarredura } = await import('./varredura.ts');
+cenario();
+assert.equal(lerVarredura().rodando, false, 'parada por padrão');
+
+iniciarVarredura(['inhire', 'vagaspj', 'teste']);
+let prog = lerVarredura();
+assert.equal(prog.rodando, true);
+assert.deepEqual(prog.restantes, ['inhire', 'vagaspj', 'teste'], 'a fila inteira aparece desde o início: a tela mostra o tamanho do trabalho');
+assert.deepEqual(prog.feitas, []);
+
+plataformaAtual('inhire');
+prog = lerVarredura();
+assert.equal(prog.plataforma, 'inhire');
+assert.deepEqual(prog.restantes, ['vagaspj', 'teste'], 'quem está sendo varrida sai da fila de espera');
+
+passo('abrindo as vagas novas', 3, 40);
+prog = lerVarredura();
+assert.deepEqual([prog.etapa, prog.atual, prog.total], ['abrindo as vagas novas', 3, 40]);
+passo('lendo o feed');
+assert.equal(lerVarredura().total, 0, 'total 0 = tamanho desconhecido; a barra não finge uma porcentagem');
+
+// `conhecidas` é o número que responde "clicar de novo vai repetir vaga?"
+vistas(50);
+terminarPlataforma('inhire', 8);
+prog = lerVarredura();
+assert.deepEqual(prog.feitas, ['inhire']);
+assert.equal(prog.novas, 8);
+assert.equal(prog.conhecidas, 42, '50 examinadas menos 8 inéditas = 42 que o robô já tinha');
+
+// A contagem de examinadas não vaza de uma plataforma para a outra
+plataformaAtual('vagaspj');
+terminarPlataforma('vagaspj', 2);
+prog = lerVarredura();
+assert.equal(prog.conhecidas, 42, 'sem `vistas`, a plataforma seguinte não inventa conhecidas');
+assert.equal(prog.novas, 10, 'as novas somam entre plataformas');
+
+terminarVarredura();
+prog = lerVarredura();
+assert.equal(prog.rodando, false);
+assert.deepEqual(prog.feitas, ['inhire', 'vagaspj'], 'o resumo continua legível depois de terminar');
+assert.equal(prog.novas, 10);
+console.log('✓ Progresso da varredura: fila, etapa, e o contador de já-conhecidas');
+
+// ─── Filtro de agora, não o de quando a vaga entrou na fila ──────────────────────────────────────
+// Bug real (28/09/2026): "sap" entrou na lista de nichos a evitar e, minutos depois, saiu uma candidatura
+// para "Pessoa Desenvolvedora SAP ABAP Pleno" — a vaga já estava na fila com a nota antiga.
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const comSap = enfileirar({ titulo: 'Pessoa Desenvolvedora SAP ABAP Pleno' });
+assert.equal(st(comSap), 'na_fila');
+kv.set('automacao', { ...ler.automacao(), excluir: ['sap'] }); // o nicho entra DEPOIS
+await processarProxima();
+assert.equal(chamadas.get(comSap), undefined, 'vaga de nicho recusado não pode ser enviada');
+assert.equal(st(comSap), 'ignorada', 'e sai da fila');
+
+// A mesma rede pega a nota que caiu abaixo do mínimo
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const notaBaixa = enfileirar({ score: 55 });
+kv.set('automacao', { ...ler.automacao(), scoreMinimo: 80 });
+await processarProxima();
+assert.equal(chamadas.get(notaBaixa), undefined, 'vaga abaixo do mínimo de agora não é enviada');
+assert.equal(st(notaBaixa), 'ignorada');
+
+// Mas o que VOCÊ pediu vai, mesmo fora dos filtros: o filtro é do robô, não seu
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString(), enviar: true } });
+const pedida = enfileirar({ titulo: 'Desenvolvedor SAP ABAP', status: 'encontrada', posicao: undefined });
+kv.set('automacao', { ...ler.automacao(), excluir: ['sap'] });
+candidatarAgora(pedida);
+await new Promise(r => setTimeout(r, 150));
+assert.equal(st(pedida), 'enviada', 'clique seu passa por cima dos filtros do robô');
+console.log('✓ Filtros valem na hora do envio: nicho e nota novos tiram da fila, e o seu clique passa');
+
 // Ligar o robô fora da janela tem de DIZER isso na hora: sem o aviso, a pessoa liga, pausa e liga de novo
 // achando que o robô quebrou (aconteceu em 24/09/2026, às 23h, com a janela em 08:00-20:00). Fica por último
 // porque `ligarRobo` dispara um envio que não dá para esperar daqui, e ele vazaria para o cenário seguinte.

@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\AutoCV`.
-Antes de commitar: `npm run check` (93 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (99 verificações) e `npm run build` (biome + tsc + vite).
 
 ## Fluxo
 
