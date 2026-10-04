@@ -17,6 +17,7 @@ import './platforms/programathor/index.ts';
 import { PORTA, DIRS } from './config.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';
+import { migrarCaminhosDaPastaAntiga } from './migracoes.ts';
 import { ler, montarEstado, salvarParcial } from './estado.ts';
 import { buscarVagas, candidatarAgora, decidirPreview, enfileirarCompativeis, iniciarLaco, ligarRobo, limparDuplicatasDaFila, removerDaFila, repontuar, repontuarComIA, responder } from './queue.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
@@ -444,6 +445,7 @@ createServer(async (req, res) => {
   migrarTenantsAntigos(registrar);
   migrarModelo(registrar);
   if (ler.conexoes().inhire) importarSeed(registrar);
+  migrarCaminhosDaPastaAntiga();
   migrarIntervalo();
   // Perfil recalculado muda a compatibilidade de todas as vagas: repontua junto, sem esperar a próxima varredura
   const perfilMudou = migrarPerfilBusca();

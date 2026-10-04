@@ -1186,6 +1186,20 @@ assert.match(PROGRAMATHOR.listagem({ expertise: 'Pleno', remoto: true }, 3), /ex
 
 // Deslogado, TODO caminho de candidatura leva ao cadastro — é daí que sai a prova de sessão
 assert.ok(PROGRAMATHOR.ctaDeslogado.test(htmlPT('vaga')), 'a página deslogada tem de ser reconhecida como deslogada');
+// O login assistido fecha a janela quando a URL sai das "telas de login" por 6 s. O site oferece "Login com
+// LinkedIn", que passa por /users/auth/linkedin e por linkedin.com — se essas URLs não contarem como "ainda
+// entrando", o robô fecha a janela com a pessoa digitando a senha.
+const { programathor } = await import('./platforms/programathor/index.ts');
+const aindaEntrando = programathor.sessao!.telasDeLogin;
+for (const url of [
+  'https://programathor.com.br/users/sign_in',
+  'https://programathor.com.br/users/auth/linkedin',
+  'https://www.linkedin.com/oauth/v2/authorization?client_id=x',
+  'https://www.linkedin.com/checkpoint/challenge/',
+])
+  assert.ok(aindaEntrando.test(url), `${url} faz parte do caminho do login e não pode encerrar a espera`);
+assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs'), 'a listagem já é o estado logado: aí sim a espera acaba');
+assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs/123-dev'), 'e a página de uma vaga também');
 console.log('✓ ProgramaThor: lê a listagem e o JSON-LD reais, monta a vaga e sabe dizer que está deslogado');
 
 await fecharNavegador();

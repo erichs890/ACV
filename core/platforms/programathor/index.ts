@@ -31,7 +31,10 @@ const buscarVagas = (perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log): Promi
  */
 const sessao: ProvaDeLogin = {
   urlLogin: `${PROGRAMATHOR.base}/users/sign_in`,
-  telasDeLogin: /\/users\/(sign_in|sign_up|password|confirmation)/i,
+  // Cobre TAMBÉM o caminho do OAuth e o domínio do LinkedIn. O site oferece "Login com LinkedIn", que sai
+  // para /users/auth/linkedin e dali para linkedin.com — se a regex não reconhecer essas URLs como "ainda
+  // entrando", o robô acha que o login terminou e fecha a janela com a pessoa digitando a senha.
+  telasDeLogin: /programathor\.com\.br\/users\/(sign_in|sign_up|password|confirmation|auth)|linkedin\.com/i,
   urlProva: `${PROGRAMATHOR.base}/jobs`,
   logado: async (page: Page) => {
     const html = await page.content();
