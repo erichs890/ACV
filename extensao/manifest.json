@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "AutoCV",
+  "name": "ACV",
   "version": "0.2.0",
-  "description": "Diz se a plataforma exige conta e o que falta no seu perfil, e candidata na vaga aberta quando você manda. Guarda a própria configuração e funciona com o AutoCV fechado.",
+  "description": "Diz se a plataforma exige conta e o que falta no seu perfil, e candidata na vaga aberta quando você manda. Guarda a própria configuração e funciona com o ACV fechado.",
   "permissions": ["storage", "activeTab", "tabs"],
   "host_permissions": ["http://127.0.0.1:4780/*"],
   "background": {
@@ -27,7 +27,7 @@
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "AutoCV",
+    "default_title": "ACV",
     "default_icon": {
       "16": "ui/marca/icone-16.png",
       "32": "ui/marca/icone-32.png",

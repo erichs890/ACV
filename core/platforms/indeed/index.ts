@@ -17,7 +17,7 @@ import { marcarSessaoExpirada, type ProvaDeLogin } from '../../sessao.ts';
 const buscarVagas = (perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log, opcoes?: OpcoesBusca): Promise<Vaga[]> => buscarNoIndeed(perfil, cfg, ler.localizacao(), log, opcoes?.manual === true);
 
 /**
- * Login manual assistido (core/sessao.ts): a pessoa entra na janela do robô; o AutoCV não vê nem guarda a senha.
+ * Login manual assistido (core/sessao.ts): a pessoa entra na janela do robô; o ACV não vê nem guarda a senha.
  * Prova de "logado": a home sem redirect para as telas de login e sem o link "Acessar" do cabeçalho (é assim que
  * o Indeed em pt-BR chama o entrar — visto ao vivo em 23/09/2026). Se o Indeed responder com a verificação da
  * Cloudflare, a prova falha: o robô não a contorna (ver seletores.ts). O cabeçalho LOGADO nunca foi observado.

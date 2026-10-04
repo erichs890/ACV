@@ -1,5 +1,5 @@
-// Cérebro da extensão: guarda a configuração, conta as candidaturas do dia e conversa com o AutoCV QUANDO ele
-// estiver aberto. Com o AutoCV fechado a extensão continua funcionando pela cópia em cache — é a mudança de
+// Cérebro da extensão: guarda a configuração, conta as candidaturas do dia e conversa com o ACV QUANDO ele
+// estiver aberto. Com o ACV fechado a extensão continua funcionando pela cópia em cache — é a mudança de
 // arquitetura desta etapa: a extensão é autossuficiente, e o app é quem sincroniza, não quem manda.
 //
 // Por que a ponte mora aqui e não no content script: o service worker tem `host_permissions` e fala com o núcleo
@@ -10,7 +10,7 @@
 // perfil (nome, e-mail, telefone, respostas salvas, currículo) — antes só recebia "tem ou não tem". É o preço de
 // preencher; o token e o localhost continuam sendo a única porta.
 importScripts('comum.js');
-const { PADRAO, quantasCabemHoje, hoje } = globalThis.AutoCVComum;
+const { PADRAO, quantasCabemHoje, hoje } = globalThis.ACVComum;
 
 const NUCLEO = 'http://127.0.0.1:4780';
 const VALIDADE_DETECCAO_MS = 7 * 24 * 60 * 60 * 1000; // plataforma muda o fluxo de login: a detecção reexpira
@@ -21,12 +21,12 @@ const lerConfig = async () => ({ ...PADRAO, ...(await ler('config', {})) });
 
 async function paraONucleo(caminho, dados) {
   const token = await ler('token', '');
-  if (!token) throw new Error('sem token: abra o popup do AutoCV e cole o token que aparece em Plataformas');
+  if (!token) throw new Error('sem token: abra o popup do ACV e cole o token que aparece em Plataformas');
   const r = await fetch(NUCLEO + caminho, {
     method: dados === undefined ? 'GET' : 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${token}` },
     body: dados === undefined ? undefined : JSON.stringify(dados),
-    signal: AbortSignal.timeout(8000), // AutoCV fechado não pode travar a página de vaga
+    signal: AbortSignal.timeout(8000), // ACV fechado não pode travar a página de vaga
   });
   if (!r.ok) throw new Error(`${(await r.json().catch(() => ({}))).erro ?? r.status}`);
   return r.json();
@@ -61,7 +61,7 @@ async function status() {
     await sincronizar();
     sincronizado = true;
   } catch {
-    // AutoCV fechado é o caso normal desta arquitetura, não um erro
+    // ACV fechado é o caso normal desta arquitetura, não um erro
   }
   const atual = await ler('cache', {});
   return {
@@ -76,7 +76,7 @@ async function status() {
   };
 }
 
-/** Dados para preencher: cache primeiro (funciona offline), sincronizando por baixo quando o AutoCV responde. */
+/** Dados para preencher: cache primeiro (funciona offline), sincronizando por baixo quando o ACV responde. */
 async function dadosParaPreencher() {
   try {
     return await sincronizar();
@@ -86,7 +86,7 @@ async function dadosParaPreencher() {
 }
 
 /**
- * Candidatura feita: conta para o limite do dia e vai para o núcleo. Com o AutoCV fechado ela fica na fila de
+ * Candidatura feita: conta para o limite do dia e vai para o núcleo. Com o ACV fechado ela fica na fila de
  * pendentes e sobe na próxima sincronização — o histórico consolidado não pode depender de o app estar aberto.
  */
 async function registrarCandidatura(c) {
@@ -105,7 +105,7 @@ async function registrarCandidatura(c) {
     await gravar('pendentes', []);
     return { sincronizado: true };
   } catch {
-    return { sincronizado: false }; // fica pendente; sobe quando o AutoCV abrir
+    return { sincronizado: false }; // fica pendente; sobe quando o ACV abrir
   }
 }
 
@@ -151,7 +151,7 @@ const ACOES = {
     const cfg = await lerConfig();
     return quantasCabemHoje(m.dominio, cfg, await ler('contadores', {}));
   },
-  // A IA mora no núcleo, com as travas dela (dado pessoal e autodeclaração nunca passam por lá). Se o AutoCV
+  // A IA mora no núcleo, com as travas dela (dado pessoal e autodeclaração nunca passam por lá). Se o ACV
   // estiver fechado, a extensão simplesmente não responde sozinha: ela para e chama a pessoa.
   PERGUNTA: async m => {
     const cfg = await lerConfig();
@@ -159,11 +159,11 @@ const ACOES = {
     try {
       return await paraONucleo('/extensao/pergunta', m.dados);
     } catch (e) {
-      return { resposta: null, motivo: `o AutoCV não respondeu (${e.message})` };
+      return { resposta: null, motivo: `o ACV não respondeu (${e.message})` };
     }
   },
   // Primeira visita a uma página de vaga: o cache ainda está vazio, então vale uma tentativa de sincronizar
-  // antes de responder — senão o botão "Candidatar pelo AutoCV" só apareceria a partir da segunda vez.
+  // antes de responder — senão o botão "Candidatar pelo ACV" só apareceria a partir da segunda vez.
   PLATAFORMAS: async () => {
     let cache = await ler('cache', {});
     if (!cache.plataformas) {

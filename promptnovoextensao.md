@@ -1,4 +1,4 @@
-# PROMPT TÉCNICO — AUTOCV: EXTENSÃO AUTOSSUFICIENTE (LINKEDIN, INDEED, GUPY)
+# PROMPT TÉCNICO — ACV: EXTENSÃO AUTOSSUFICIENTE (LINKEDIN, INDEED, GUPY)
 
 Copie e cole o conteúdo abaixo na conversa com o Claude Opus (substitui definitivamente os prompts anteriores de extensão. Mudança de arquitetura: a extensão passa a ser **autossuficiente** — guarda sua própria configuração localmente e funciona mesmo com o app Tauri fechado —, inspirada na análise de um produto concorrente real cuja extensão foi gravada em vídeo e documentada abaixo.)
 
@@ -19,7 +19,7 @@ Analisamos a extensão de um concorrente (VagaAutomática) em uso real. Pontos c
    - `keywords=<termo>` → termo de busca
 5. O fluxo de uso real: usuário loga normalmente no LinkedIn (sessão própria, sem a extensão interferir no login), pesquisa a vaga manualmente, ativa "Candidatura simplificada" nos filtros, abre o painel da extensão e clica em "Iniciar Candidatura" — a extensão então processa a vaga atualmente aberta (lê descrição, cruza com perfil/currículo, preenche e envia).
 
-Usar esses achados como base da reformulação abaixo — mas manter as proteções e a regra de honestidade que já são identidade do AutoCV desde o início do projeto.
+Usar esses achados como base da reformulação abaixo — mas manter as proteções e a regra de honestidade que já são identidade do ACV desde o início do projeto.
 
 ---
 
@@ -51,7 +51,7 @@ type ConfiguracaoExtensao = {
   - App → Extensão: currículo em PDF atualizado (base64 ou referência), respostas salvas de perguntas extras/sensíveis atualizadas, vagas descobertas pelos módulos de descoberta já existentes (InHire) que possam ser relevantes de contexto.
   - Extensão → App: histórico de candidaturas realizadas (para alimentar o Painel e a fila do app, mantendo a visão consolidada entre todas as plataformas), logs em tempo real (mesmo mecanismo de console de log já existente).
 - Se o app estiver fechado, a extensão opera com a **última cópia em cache** desses dados (currículo, respostas salvas) e guarda localmente um log de candidaturas feitas nesse período "offline", sincronizando com o app assim que ele for aberto novamente (reconciliação: enviar o que aconteceu enquanto o app estava fechado).
-- Deixar claro na UI da extensão quando ela está "sincronizada com o AutoCV" vs. "operando com dados em cache, abra o AutoCV para atualizar currículo/respostas".
+- Deixar claro na UI da extensão quando ela está "sincronizada com o ACV" vs. "operando com dados em cache, abra o ACV para atualizar currículo/respostas".
 
 ---
 

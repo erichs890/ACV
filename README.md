@@ -1,4 +1,4 @@
-# AutoCV
+# ACV
 
 Aplicação local que busca vagas e envia seu currículo automaticamente. Funcionam as plataformas **InHire** e **Indeed** (só vagas com "Candidatar-se facilmente"); as outras aparecem como indisponíveis.
 
@@ -19,7 +19,7 @@ npm run dev    # interface, em outro
 ## Fluxo
 
 1. **Cadastro:** nome, e-mail, telefone, link do LinkedIn e currículo em PDF. O núcleo lê o texto do PDF e monta o *perfil de busca* (área, cargos, competências, senioridade).
-2. **Plataformas → InHire:** o InHire não tem busca geral; cada empresa publica em `empresa.inhire.app/vagas`. Ao conectar, o AutoCV carrega uma lista inicial de empresas verificadas (`core/platforms/inhire/seed_empresas_inhire.json`) e passa a revisitá-las periodicamente; você pode adicionar, pausar ou remover empresas e forçar uma varredura. Não há login nem senha.
+2. **Plataformas → InHire:** o InHire não tem busca geral; cada empresa publica em `empresa.inhire.app/vagas`. Ao conectar, o ACV carrega uma lista inicial de empresas verificadas (`core/platforms/inhire/seed_empresas_inhire.json`) e passa a revisitá-las periodicamente; você pode adicionar, pausar ou remover empresas e forçar uma varredura. Não há login nem senha.
 3. **Automação:** escolha o modo (manual ou automático), filtros, ritmo e se o currículo deve ser adaptado por vaga. "Buscar vagas agora" lista as vagas com a compatibilidade calculada e o motivo. Com IA configurada, é ela que lê seu currículo e pontua cada vaga; sem IA, o score vem das competências técnicas, do cargo e da área. Em cada vaga, "Currículo adaptado" mostra o que mudaria e gera o PDF.
 4. **Candidatura:** no modo manual, "Quero me candidatar"; no automático, o robô faz sozinho respeitando intervalo, limite diário e janela de horário. Ordem sempre: preencher → anexar → enviar → só então confirmar.
 
@@ -35,7 +35,7 @@ Em **Configurações › Meus Dados** há dois campos independentes: **sua cidad
 
 ## Indeed
 
-Em **Plataformas › Indeed › Entrar e conectar** abre uma janela do navegador do robô, identificada como do AutoCV, já na página de login: você entra na sua conta ali (senha, código, captcha — tudo com você; o AutoCV não vê nem guarda a senha). O app espera até 10 min, sem tempo fixo: assim que a página sai do login ele confere se a sessão ficou ativa e marca "Conectado"; dá para cancelar a qualquer momento. Se a sessão cair depois, o card mostra **"Sessão expirada"**, as vagas do Indeed param (as outras plataformas seguem) e você entra de novo pelo mesmo botão. O robô só considera vagas com **"Candidatar-se facilmente"**; as que levam ao site da empresa são descartadas na busca. Presenciais são buscadas no Indeed do seu país, com a sua cidade; remotas, no Indeed de cada país que você escolheu.
+Em **Plataformas › Indeed › Entrar e conectar** abre uma janela do navegador do robô, identificada como do ACV, já na página de login: você entra na sua conta ali (senha, código, captcha — tudo com você; o ACV não vê nem guarda a senha). O app espera até 10 min, sem tempo fixo: assim que a página sai do login ele confere se a sessão ficou ativa e marca "Conectado"; dá para cancelar a qualquer momento. Se a sessão cair depois, o card mostra **"Sessão expirada"**, as vagas do Indeed param (as outras plataformas seguem) e você entra de novo pelo mesmo botão. O robô só considera vagas com **"Candidatar-se facilmente"**; as que levam ao site da empresa são descartadas na busca. Presenciais são buscadas no Indeed do seu país, com a sua cidade; remotas, no Indeed de cada país que você escolheu.
 
 O Indeed **bloqueia navegador oculto** e, depois de algumas páginas, pode pedir uma **verificação**. Por isso a janela sempre aparece, o robô faz poucas buscas (uma a cada 30 s, uma varredura automática por dia) e, se o Indeed bloquear ou pedir verificação, ele para e avisa: você pode resolver a verificação na janela; ele não tenta burlar. A candidatura pelo Indeed ainda não foi testada contra o site real — deixe o **modo ensaio** ligado na primeira vez.
 
@@ -48,17 +48,17 @@ A pasta `extensao/` é uma extensão do Chrome/Edge que trabalha do outro lado: 
 
 Ela **não preenche, não clica e não envia** candidatura nenhuma — quem candidata continua sendo o robô. Plataforma que ela nunca viu já funciona pelo motor genérico, sem código novo; Indeed tem tratamento dedicado.
 
-A partir da versão 0.2 ela também **candidata na vaga que está aberta**, quando você clica — e é autossuficiente: a configuração dela (perfil do LinkedIn, pretensão, anos de experiência, empresas bloqueadas, IA, ritmo e limites) fica guardada na própria extensão e funciona com o AutoCV fechado. Quando o AutoCV abre, os dois se sincronizam sozinhos: ele manda currículo e respostas salvas, ela devolve as candidaturas que fez enquanto ele estava fechado.
+A partir da versão 0.2 ela também **candidata na vaga que está aberta**, quando você clica — e é autossuficiente: a configuração dela (perfil do LinkedIn, pretensão, anos de experiência, empresas bloqueadas, IA, ritmo e limites) fica guardada na própria extensão e funciona com o ACV fechado. Quando o ACV abre, os dois se sincronizam sozinhos: ele manda currículo e respostas salvas, ela devolve as candidaturas que fez enquanto ele estava fechado.
 
 No painel que aparece sobre a página você vê a vaga, o contador do dia, se a IA está ligada e se está sincronizado; e tem o botão **Iniciar candidatura**. Uma vaga por clique: ela não varre a lista de resultados sozinha.
 
-**O que ela nunca faz:** inventar resposta. Campo fixo vem do seu perfil, pergunta da empresa só é respondida com uma resposta que você já salvou — e se não houver, a candidatura **para** e mostra a pergunta. Autodeclaração (gênero, cor/raça, PcD) nunca é respondida por IA. Com o AutoCV aberto e a IA ligada, quem responde é a IA de lá, com as travas de lá.
+**O que ela nunca faz:** inventar resposta. Campo fixo vem do seu perfil, pergunta da empresa só é respondida com uma resposta que você já salvou — e se não houver, a candidatura **para** e mostra a pergunta. Autodeclaração (gênero, cor/raça, PcD) nunca é respondida por IA. Com o ACV aberto e a IA ligada, quem responde é a IA de lá, com as travas de lá.
 
-**Nas plataformas que o AutoCV já conhece** (InHire, Vagas PJ, Divulga Vagas, Quickin, Workable, Arbeitnow, Indeed) o painel mostra outro botão: **"Candidatar pelo AutoCV"**. É o caso de achar no LinkedIn uma vaga que leva para uma página do InHire — ali quem trabalha é o robô do AutoCV, com tudo o que ele já tem: schema da vaga pela API, adaptação do currículo, modo ensaio, trava de "uma vaga, uma candidatura" e confirmação pela resposta do servidor. Se a vaga ainda não estiver na sua lista, ele importa na hora (InHire) ou pede uma varredura. Ao clicar, a extensão **te leva para a tela do ACV** (abre a aba dela, ou foca a que já estiver aberta) e mostra "o ACV está trabalhando nesta vaga" enquanto ele trabalha; na tela do ACV aparece o aviso dizendo em qual vaga a extensão mandou mexer. Se você usa o app num navegador e a extensão em outro, não tem problema: o ACV é um servidor no seu computador, então a mesma tela abre nos dois — o endereço dela fica em Configurações da extensão (padrão `http://localhost:5173`). Precisa do ACV aberto; o botão diz quando não está.
+**Nas plataformas que o ACV já conhece** (InHire, Vagas PJ, Divulga Vagas, Quickin, Workable, Arbeitnow, Indeed) o painel mostra outro botão: **"Candidatar pelo ACV"**. É o caso de achar no LinkedIn uma vaga que leva para uma página do InHire — ali quem trabalha é o robô do ACV, com tudo o que ele já tem: schema da vaga pela API, adaptação do currículo, modo ensaio, trava de "uma vaga, uma candidatura" e confirmação pela resposta do servidor. Se a vaga ainda não estiver na sua lista, ele importa na hora (InHire) ou pede uma varredura. Ao clicar, a extensão **te leva para a tela do ACV** (abre a aba dela, ou foca a que já estiver aberta) e mostra "o ACV está trabalhando nesta vaga" enquanto ele trabalha; na tela do ACV aparece o aviso dizendo em qual vaga a extensão mandou mexer. Se você usa o app num navegador e a extensão em outro, não tem problema: o ACV é um servidor no seu computador, então a mesma tela abre nos dois — o endereço dela fica em Configurações da extensão (padrão `http://localhost:5173`). Precisa do ACV aberto; o botão diz quando não está.
 
 **Empresas bloqueadas:** em Configurações da extensão você lista empresas onde não quer se candidatar (a sua atual, por exemplo). "Acme", "Acme S.A." e "Acme Ltda" contam como a mesma.
 
-**Aviso sobre o LinkedIn:** o contrato de uso dele proíbe automação, e quem é detectado pode ter a conta suspensa — é a sua conta profissional em jogo. O AutoCV não disfarça nada: vai devagar (espera sorteada entre candidaturas), respeita o limite diário, segura plataforma recém-usada em 5 por dia nos 3 primeiros dias e para no primeiro sinal de restrição. Use com parcimônia, e a primeira candidatura acompanhe pela tela.
+**Aviso sobre o LinkedIn:** o contrato de uso dele proíbe automação, e quem é detectado pode ter a conta suspensa — é a sua conta profissional em jogo. O ACV não disfarça nada: vai devagar (espera sorteada entre candidaturas), respeita o limite diário, segura plataforma recém-usada em 5 por dia nos 3 primeiros dias e para no primeiro sinal de restrição. Use com parcimônia, e a primeira candidatura acompanhe pela tela.
 
 Para instalar: em `chrome://extensions`, ligue o "Modo do desenvolvedor", clique em "Carregar sem compactação" e escolha a pasta `extensao/`. Depois abra as Configurações dela e cole o token que aparece em **Plataformas › Extensão do navegador** (o núcleo é um servidor local sem senha; o token impede que outra extensão fale com ele).
 
@@ -76,7 +76,7 @@ Vem **ligado** por padrão: o robô abre a vaga, preenche todas as etapas, anexa
 
 ## Adaptação do currículo — regra absoluta
 
-O AutoCV **nunca inventa, exagera ou remove** informação. Sem IA, a adaptação só faz três coisas: reordena experiências, reordena habilidades e acrescenta ao resumo uma frase de foco com competências que já estão no currículo **e** na vaga. Depois, um validador compara palavra por palavra com o original; se aparecer qualquer termo novo, a adaptação é descartada e o original é enviado. `npm run check` exercita isso.
+O ACV **nunca inventa, exagera ou remove** informação. Sem IA, a adaptação só faz três coisas: reordena experiências, reordena habilidades e acrescenta ao resumo uma frase de foco com competências que já estão no currículo **e** na vaga. Depois, um validador compara palavra por palavra com o original; se aparecer qualquer termo novo, a adaptação é descartada e o original é enviado. `npm run check` exercita isso.
 
 ### Com IA (opcional)
 
@@ -84,7 +84,7 @@ Em **Configurações › Inteligência Artificial** escolha o provedor — **Goo
 
 ## Onde ficam os dados
 
-Em `%LOCALAPPDATA%\AutoCV`: banco SQLite (`autocv.sqlite`), PDFs originais (`curriculos/`), PDFs adaptados e capturas (`gerados/`) e o perfil do navegador (`navegador/`). Nada sai do computador além das próprias páginas de vagas. Em Configurações › Dados e Privacidade dá para apagar tudo.
+Em `%LOCALAPPDATA%\ACV`: banco SQLite (`acv.sqlite`), PDFs originais (`curriculos/`), PDFs adaptados e capturas (`gerados/`) e o perfil do navegador (`navegador/`). Nada sai do computador além das próprias páginas de vagas. Em Configurações › Dados e Privacidade dá para apagar tudo.
 
 ## Scripts
 

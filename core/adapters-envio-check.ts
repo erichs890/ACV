@@ -13,9 +13,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const DIR = mkdtempSync(join(tmpdir(), 'autocv-adapters-check-'));
-process.env.AUTOCV_DIR = DIR;
-process.env.AUTOCV_PERFIL = join(DIR, 'navegador');
+const DIR = mkdtempSync(join(tmpdir(), 'acv-adapters-check-'));
+process.env.ACV_DIR = DIR;
+process.env.ACV_PERFIL = join(DIR, 'navegador');
 
 const { divulgavagas } = await import('./platforms/divulgavagas/index.ts');
 const { quickin } = await import('./platforms/quickin/index.ts');

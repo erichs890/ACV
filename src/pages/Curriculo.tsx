@@ -108,7 +108,7 @@ export default function Curriculo() {
               {enviando ? <Orbe estado="lendo" tamanho={64} className="scale-[0.72]" rotulo="Lendo o currículo" /> : <CloudUpload size={26} aria-hidden />}
             </span>
             <p className="text-[15px] font-bold">{enviando ? 'Lendo o currículo...' : 'Arraste um currículo aqui'}</p>
-            <p className="text-xs text-ink-soft">PDF até {LIMITE_MB} MB — o AutoCV lê o texto e monta o perfil de busca</p>
+            <p className="text-xs text-ink-soft">PDF até {LIMITE_MB} MB — o ACV lê o texto e monta o perfil de busca</p>
             <label className="btn btn-secondary mt-1">
               <FolderOpen size={16} aria-hidden />
               Selecionar arquivo

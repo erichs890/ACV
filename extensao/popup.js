@@ -10,7 +10,7 @@ async function pintar() {
   if (!st?.ok && !st?.cfg) return mostrar('não consegui ler o estado da extensão', true);
   const quando = st.cacheEm ? new Date(st.cacheEm).toLocaleString('pt-BR') : 'nunca';
   $('conexao').innerHTML = st.sincronizado
-    ? '<span class="etiqueta ok">AutoCV conectado</span>'
+    ? '<span class="etiqueta ok">ACV conectado</span>'
     : `<span class="etiqueta atencao">operando em cache</span><br><small>cópia de ${quando}${st.pendentes ? ` · ${st.pendentes} candidatura(s) a sincronizar` : ''}</small>`;
   $('hoje').innerHTML = Object.entries(st.hoje ?? {})
     .map(([d, c]) => `<tr><td>${d}${c.aquecendo ? ' <span class="etiqueta atencao">aquecendo</span>' : ''}</td><td class="n">${c.feitasHoje} / ${c.limite}</td></tr>`)
@@ -22,7 +22,7 @@ $('config').addEventListener('click', () => chrome.runtime.openOptionsPage());
 $('sincronizar').addEventListener('click', async () => {
   mostrar('sincronizando...');
   const r = await aoFundo({ tipo: 'SINCRONIZAR' });
-  mostrar(r?.ok ? 'Sincronizado com o AutoCV.' : `Não consegui: ${r?.erro ?? 'AutoCV fechado'}`, !r?.ok);
+  mostrar(r?.ok ? 'Sincronizado com o ACV.' : `Não consegui: ${r?.erro ?? 'ACV fechado'}`, !r?.ok);
   pintar();
 });
 

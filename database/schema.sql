@@ -1,4 +1,4 @@
--- AutoCV — schema Supabase (Postgres 15+)
+-- ACV — schema Supabase (Postgres 15+)
 -- Rode no SQL Editor do Supabase (ou como migration) e depois o seed.sql.
 -- Tudo que é do usuário fica protegido por RLS: cada um só enxerga as próprias linhas.
 -- Tabelas escritas só pelo robô (envios, log, faturas, conexões) não têm policy de escrita:

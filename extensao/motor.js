@@ -2,22 +2,22 @@
 //
 // Três regras que mandam aqui, herdadas do núcleo e não negociáveis:
 //   1. SÓ PREENCHE O QUE JÁ É SEU. Campo fixo vem do seu perfil; pergunta da empresa só é respondida com uma
-//      resposta já salva (casamento quase exato) ou pela IA do AutoCV, que tem as travas dela. Nada é deduzido
+//      resposta já salva (casamento quase exato) ou pela IA do ACV, que tem as travas dela. Nada é deduzido
 //      por parecença — autodeclaração (gênero, raça, PcD) cai sempre no "pare e pergunte".
 //   2. ENVIAR PRIMEIRO, CONFIRMAR DEPOIS. O desfecho sai da resposta HTTP (rede.js) e, só na falta dela, da tela.
 //      Nunca clica no botão final duas vezes.
 //   3. SEM DISFARCE. Ritmo humano, limite por dia e parada imediata ao primeiro sinal de restrição da
 //      plataforma. Nenhuma tentativa de esconder que isto é um programa.
 (() => {
-  const { texto, visivel, todos, handlerDe, descobrirCamposFormulario, chaveDoCampo, respostaSalva } = globalThis.AutoCVExtensao;
-  const { empresaBloqueada, RESTRICAO } = globalThis.AutoCVComum;
+  const { texto, visivel, todos, handlerDe, descobrirCamposFormulario, chaveDoCampo, respostaSalva } = globalThis.ACVExtensao;
+  const { empresaBloqueada, RESTRICAO } = globalThis.ACVComum;
 
   const esperar = ms => new Promise(r => setTimeout(r, ms));
   const aoFundo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
   // ─── Prova de envio (rede.js, no mundo da página) ─────────────────────────────────────────────
   const respostas = [];
-  addEventListener('autocv-rede', e => {
+  addEventListener('acv-rede', e => {
     respostas.push(e.detail);
     if (respostas.length > 80) respostas.shift();
   });
@@ -116,18 +116,18 @@
           log(`Currículo anexado (${dados.curriculo.nome}).`);
           continue;
         }
-        if (campo.obrigatorio) return { pergunta: campo, motivo: 'o currículo ainda não está no cache — abra o AutoCV uma vez para a extensão copiá-lo' };
+        if (campo.obrigatorio) return { pergunta: campo, motivo: 'o currículo ainda não está no cache — abra o ACV uma vez para a extensão copiá-lo' };
         continue;
       }
 
-      // Sem resposta pronta: a IA do AutoCV pode responder (com as travas dela). Ela recusa dado pessoal e
-      // autodeclaração, e com o AutoCV fechado nem é consultada — nos dois casos a vaga para e espera você.
+      // Sem resposta pronta: a IA do ACV pode responder (com as travas dela). Ela recusa dado pessoal e
+      // autodeclaração, e com o ACV fechado nem é consultada — nos dois casos a vaga para e espera você.
       if (!valor && (campo.obrigatorio || campo.tipo === 'opcao')) {
         const opcoes = campo.el.tagName === 'SELECT' ? [...campo.el.options].map(o => o.text.trim()).filter(t => t && !/^(selecione|select|escolha)/i.test(t)) : [];
         const r = await aoFundo({ tipo: 'PERGUNTA', dados: { pergunta: campo.pergunta, opcoes, vaga } });
         if (r?.resposta) {
           valor = r.resposta;
-          log(`IA do AutoCV respondeu "${campo.pergunta}": ${valor}`);
+          log(`IA do ACV respondeu "${campo.pergunta}": ${valor}`);
         } else if (campo.obrigatorio) {
           return { pergunta: campo, motivo: r?.motivo ?? 'não tenho resposta salva para esta pergunta' };
         }
@@ -165,7 +165,7 @@
     const titulo = handler.tituloDaVaga?.() ?? document.title;
 
     if (RESTRICAO.test(document.body.innerText.slice(0, 2000)))
-      return { status: 'erro', motivo: 'a plataforma está pedindo verificação (anti-robô). O AutoCV não contorna isso: resolva na tela e tente mais tarde.' };
+      return { status: 'erro', motivo: 'a plataforma está pedindo verificação (anti-robô). O ACV não contorna isso: resolva na tela e tente mais tarde.' };
 
     const bloqueada = empresaBloqueada(empresa, cfg.empresasBloqueadas);
     if (bloqueada) return { status: 'bloqueada', motivo: `"${empresa}" está na sua lista de empresas bloqueadas (${bloqueada}).` };
@@ -175,7 +175,7 @@
       return { status: 'limite', motivo: `limite de ${cota?.limite ?? 0} candidatura(s) por dia nesta plataforma já alcançado${cota?.aquecendo ? ' (plataforma em aquecimento)' : ''}.` };
 
     const { dados } = await aoFundo({ tipo: 'DADOS' });
-    if (!dados?.perfil?.nome) return { status: 'erro', motivo: 'ainda não tenho os seus dados: abra o AutoCV uma vez com a extensão conectada (Plataformas › Extensão).' };
+    if (!dados?.perfil?.nome) return { status: 'erro', motivo: 'ainda não tenho os seus dados: abra o ACV uma vez com a extensão conectada (Plataformas › Extensão).' };
 
     log(`Vaga: ${titulo} — ${empresa || 'empresa não informada'}`);
     if (handler.abrir?.()) {
@@ -221,9 +221,9 @@
 
     const candidatura = { dominio, url: location.href, titulo, empresa, enviadaEm: new Date().toISOString() };
     const r = await aoFundo({ tipo: 'CANDIDATURA', candidatura });
-    log(r?.sincronizado ? 'Candidatura registrada no AutoCV.' : 'Candidatura registrada aqui; vai para o AutoCV assim que você abri-lo.');
-    return { status: 'enviada', espera: globalThis.AutoCVComum.proximaEspera(cfg) };
+    log(r?.sincronizado ? 'Candidatura registrada no ACV.' : 'Candidatura registrada aqui; vai para o ACV assim que você abri-lo.');
+    return { status: 'enviada', espera: globalThis.ACVComum.proximaEspera(cfg) };
   }
 
-  globalThis.AutoCVMotor = { candidatar, preencherEtapa, escrever, escolherOpcao, provaDeEnvio, valorFixo };
+  globalThis.ACVMotor = { candidatar, preencherEtapa, escrever, escolherOpcao, provaDeEnvio, valorFixo };
 })();

@@ -19,7 +19,7 @@ import { log, vagas } from './storage/db.ts';
  * (`PLATAFORMAS_COM_PAINEL` no painel, os `matches` do manifesto, os limites do `comum.js`), e nenhuma
  * consultava esta: um site podia estar em três delas e faltar na quarta sem ninguém perceber.
  *
- * `importa` diz se dá para trazer uma vaga que o AutoCV ainda não varreu; nas outras, a vaga precisa já estar
+ * `importa` diz se dá para trazer uma vaga que o ACV ainda não varreu; nas outras, a vaga precisa já estar
  * na lista (a varredura diária costuma dar conta).
  *
  * `motor` diz por onde a candidatura acontece:
@@ -96,10 +96,10 @@ function inhireDaUrl(url: string): { tenant: string; jobId: string } | null {
  */
 export async function vagaDaUrl(url: string): Promise<Vaga> {
   const plataforma = plataformaDaUrl(url);
-  if (!plataforma) throw new Error('o AutoCV não tem adapter para este site — use o motor da própria extensão');
+  if (!plataforma) throw new Error('o ACV não tem adapter para este site — use o motor da própria extensão');
   // A lista conhece sites que só a extensão atende (LinkedIn, Gupy). Conhecer não é saber candidatar:
   // aqui a ponte recusa com o nome da plataforma, em vez de um "não está carregada no núcleo" técnico.
-  if (plataforma.motor === 'extensao') throw new Error(`o AutoCV não tem adapter para ${plataforma.nome ?? plataforma.id} — a candidatura aí é pelo motor da própria extensão`);
+  if (plataforma.motor === 'extensao') throw new Error(`o ACV não tem adapter para ${plataforma.nome ?? plataforma.id} — a candidatura aí é pelo motor da própria extensão`);
   if (!adapters[plataforma.id]) throw new Error(`a plataforma ${plataforma.id} não está carregada no núcleo`);
 
   const chave = chaveUrl(url);
@@ -111,12 +111,12 @@ export async function vagaDaUrl(url: string): Promise<Vaga> {
     throw new Error(
       plataforma.importa
         ? 'não consegui entender o endereço desta vaga'
-        : `esta vaga do ${adapters[plataforma.id].nome} ainda não está na lista do AutoCV — rode uma varredura ("Buscar vagas agora") e tente de novo`,
+        : `esta vaga do ${adapters[plataforma.id].nome} ainda não está na lista do ACV — rode uma varredura ("Buscar vagas agora") e tente de novo`,
     );
   }
 
   const perfil = ler.curriculos()[0]?.perfilBusca;
-  if (!perfil) throw new Error('envie um currículo no AutoCV antes: é dele que sai o seu perfil de busca');
+  if (!perfil) throw new Error('envie um currículo no ACV antes: é dele que sai o seu perfil de busca');
   const cfg = ler.automacao();
   const detalhe = await detalheVaga(inhire.tenant, inhire.jobId).catch(() => null);
   if (!detalhe) throw new Error('o InHire não devolveu esta vaga (pode ter sido encerrada)');

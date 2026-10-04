@@ -340,7 +340,7 @@ export const NOTIFICACOES = [
   { id: 'resposta', titulo: 'Notificar quando houver resposta de empresa', descricao: 'Avisos de entrevistas e mensagens das plataformas.', padrao: true },
   { id: 'resumo', titulo: 'Resumo semanal por e-mail', descricao: 'Toda segunda-feira, com estatísticas da semana.', padrao: true },
   { id: 'erro-conexao', titulo: 'Alertas de erro de conexão', descricao: 'Quando uma plataforma desconectar ou expirar a sessão.', padrao: false },
-  { id: 'novidades', titulo: 'Novidades e dicas do AutoCV', descricao: 'Novidades do produto e dicas de currículo.', padrao: false },
+  { id: 'novidades', titulo: 'Novidades e dicas do ACV', descricao: 'Novidades do produto e dicas de currículo.', padrao: false },
 ];
 
 export const LIMITE_MB = 5;

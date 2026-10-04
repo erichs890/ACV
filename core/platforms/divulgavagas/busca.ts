@@ -127,7 +127,7 @@ export function montarVaga(item: ItemSitemap, html: string, perfil: PerfilBusca,
 }
 
 const baixar = async (url: string) => {
-  const r = await fetch(url, { headers: { accept: 'text/html,application/xml', 'user-agent': 'AutoCV/1.0 (uso pessoal)' }, signal: AbortSignal.timeout(30000) });
+  const r = await fetch(url, { headers: { accept: 'text/html,application/xml', 'user-agent': 'ACV/1.0 (uso pessoal)' }, signal: AbortSignal.timeout(30000) });
   if (!r.ok) throw new Error(`Divulga Vagas ${r.status} em ${new URL(url).pathname}`);
   return r.text();
 };

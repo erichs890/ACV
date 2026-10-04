@@ -29,10 +29,10 @@ const corAviso = { sucesso: 'border-aqua/60 bg-green-deep text-white', erro: 'bo
 function Layout() {
   const { avisos, fecharAviso } = useEstadoBruto();
   const [menuAberto, setMenuAberto] = useState(false);
-  const titulo = titulos[useLocation().pathname] ?? 'AutoCV';
+  const titulo = titulos[useLocation().pathname] ?? 'ACV';
 
   useEffect(() => {
-    document.title = `${titulo} — AutoCV`;
+    document.title = `${titulo} — ACV`;
   }, [titulo]);
 
   return (
@@ -71,7 +71,7 @@ function Conectando({ offline, tentar }: { offline: boolean; tentar: () => void 
         <Logo className="mx-auto h-[38px] self-center text-ink" />
         {offline ? (
           <>
-            <p className="mt-4 text-sm font-bold">O núcleo do AutoCV não está rodando.</p>
+            <p className="mt-4 text-sm font-bold">O núcleo do ACV não está rodando.</p>
             <p className="mt-1.5 text-xs text-ink-soft">
               Ele é o processo que busca vagas e preenche candidaturas. Abra o app pelo <code className="font-mono">start.bat</code> ou rode <code className="font-mono">npm run core</code> em outro
               terminal.
@@ -96,7 +96,7 @@ export default function App() {
   const { estado, offline, recarregar } = useEstadoBruto();
 
   useEffect(() => {
-    if (!estado?.perfil) document.title = 'AutoCV';
+    if (!estado?.perfil) document.title = 'ACV';
   }, [estado?.perfil]);
 
   if (!estado) return <Conectando offline={offline} tentar={recarregar} />;

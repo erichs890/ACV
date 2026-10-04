@@ -329,11 +329,11 @@
 
   // Usado pelo motor (motor.js), pelo painel (painel.js) e, fora do navegador, por core/extensao-check.ts
   const api = { diagnosticar, precisaLogin, descobrirCamposFormulario, handlerDe, temDado, respostaSalva, chaveDoCampo, texto, visivel, todos, rotuloDe, pareceVaga, GENERICO, INDEED, LINKEDIN };
-  globalThis.AutoCVExtensao = api;
+  globalThis.ACVExtensao = api;
   if (typeof chrome === 'undefined' || !chrome.runtime?.id) return;
 
   // Marca que a extensão leu esta página. Serve para você (e para o teste) saber se ela está ativa aqui.
-  document.documentElement.dataset.autocv = 'lido';
+  document.documentElement.dataset.acv = 'lido';
 
   const aoNucleo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
@@ -384,7 +384,7 @@
     if (!pareceVaga()) return;
     urlRelatada = location.href;
     tentativas = 0;
-    reportar().catch(e => console.debug('[AutoCV] não consegui relatar:', e.message)); // nunca atrapalhar a navegação
+    reportar().catch(e => console.debug('[ACV] não consegui relatar:', e.message)); // nunca atrapalhar a navegação
   }
 
   const agendar = () => {

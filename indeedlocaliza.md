@@ -1,4 +1,4 @@
-# PROMPT TÉCNICO — AUTOCV: PLATAFORMA INDEED (CANDIDATURA SIMPLIFICADA) + LOCALIZAÇÃO MULTI-PAÍS PARA REMOTO
+# PROMPT TÉCNICO — ACV: PLATAFORMA INDEED (CANDIDATURA SIMPLIFICADA) + LOCALIZAÇÃO MULTI-PAÍS PARA REMOTO
 
 Copie e cole o conteúdo abaixo na conversa com o Fable (complementa todos os prompts anteriores. Tem duas partes: a Parte A adiciona uma segunda plataforma usando a arquitetura modular `PlatformAdapter` já criada; a Parte B muda a estrutura de localização do perfil do usuário, e essa mudança afeta tanto o InHire quanto o Indeed).
 

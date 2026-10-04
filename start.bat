@@ -1,7 +1,7 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-title AutoCV
+title ACV
 
 where node >nul 2>nul
 if errorlevel 1 (
@@ -24,10 +24,10 @@ if not exist node_modules (
 )
 
 echo.
-echo Iniciando o nucleo do AutoCV (automacao) em uma segunda janela...
-start "AutoCV - nucleo" cmd /k "npm run core"
+echo Iniciando o nucleo do ACV (automacao) em uma segunda janela...
+start "ACV - nucleo" cmd /k "npm run core"
 
-echo AutoCV rodando em http://localhost:5173
+echo ACV rodando em http://localhost:5173
 echo Feche as duas janelas para parar.
 echo.
 call npm run dev -- --open

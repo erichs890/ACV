@@ -47,8 +47,8 @@ export async function navegador(mostrar: boolean): Promise<BrowserContext> {
   if (contexto && !(await saudavel(contexto))) await fecharNavegador();
   if (contexto) return contexto;
   const erros: string[] = [];
-  // AUTOCV_PERFIL: outro diretório de perfil (o self-check usa um temporário para não colidir com o núcleo rodando)
-  const base = process.env.AUTOCV_PERFIL ?? DIRS.navegador;
+  // ACV_PERFIL: outro diretório de perfil (o self-check usa um temporário para não colidir com o núcleo rodando)
+  const base = process.env.ACV_PERFIL ?? DIRS.navegador;
 
   if (motor === 'firefox') {
     try {
@@ -60,7 +60,7 @@ export async function navegador(mostrar: boolean): Promise<BrowserContext> {
       log.registrar(
         'alerta',
         /Executable doesn't exist/i.test(msg)
-          ? 'Firefox do Playwright não está instalado (rode "npx playwright install firefox" na pasta do AutoCV). Usando o Edge desta vez.'
+          ? 'Firefox do Playwright não está instalado (rode "npx playwright install firefox" na pasta do ACV). Usando o Edge desta vez.'
           : `Não consegui abrir o Firefox (${msg}). Usando o Edge desta vez.`,
       );
     }

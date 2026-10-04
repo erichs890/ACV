@@ -1,6 +1,6 @@
 // Login manual assistido para plataforma com conta (Indeed hoje; Gupy e outras depois).
 //
-// O AutoCV abre uma janela VISÍVEL do navegador do robô na página de login; a pessoa entra como sempre (senha,
+// O ACV abre uma janela VISÍVEL do navegador do robô na página de login; a pessoa entra como sempre (senha,
 // código, captcha — tudo com ela). O robô só observa o ESTADO da página (URL saiu do login + prova de "logado"
 // do adapter), nunca o que é digitado: nenhum campo do formulário é lido, instrumentado ou registrado.
 //
@@ -67,11 +67,11 @@ export async function validarSessao(id: string, mostrar = true): Promise<boolean
 let cancelar: (() => void) | null = null;
 export const entrando = () => cancelar !== null;
 
-/** Página de aviso que fica na primeira aba: identifica a janela como do AutoCV, para ninguém fechá-la sem querer. */
+/** Página de aviso que fica na primeira aba: identifica a janela como do ACV, para ninguém fechá-la sem querer. */
 const AVISO = (nome: string) =>
   `data:text/html;charset=utf-8,${encodeURIComponent(
-    `<!doctype html><html lang="pt-BR"><title>AutoCV — entre no ${nome} na outra aba</title><body style="font:16px system-ui;margin:48px;max-width:640px">
-<h1 style="font-size:22px">Esta janela é do robô do AutoCV</h1><p>Entre na sua conta do <b>${nome}</b> na outra aba desta janela. O AutoCV não vê nem guarda a sua senha: ele só espera a página sair da tela de login. Depois disso pode fechar tudo.</p></body></html>`,
+    `<!doctype html><html lang="pt-BR"><title>ACV — entre no ${nome} na outra aba</title><body style="font:16px system-ui;margin:48px;max-width:640px">
+<h1 style="font-size:22px">Esta janela é do robô do ACV</h1><p>Entre na sua conta do <b>${nome}</b> na outra aba desta janela. O ACV não vê nem guarda a sua senha: ele só espera a página sair da tela de login. Depois disso pode fechar tudo.</p></body></html>`,
   )}`;
 
 /**
@@ -95,7 +95,7 @@ export async function entrarNaJanela(id: string, mostrar = true): Promise<{ ok: 
     await aviso.goto(AVISO(nome)).catch(() => {});
     await page.goto(prova.urlLogin, { waitUntil: 'domcontentloaded', timeout: 60000 });
     await page.bringToFront().catch(() => {});
-    log.registrar('aguardo', `Entre na sua conta do ${nome} na janela que abriu (até ${MINUTOS_PARA_ENTRAR} min). O AutoCV não vê nem guarda a sua senha.`);
+    log.registrar('aguardo', `Entre na sua conta do ${nome} na janela que abriu (até ${MINUTOS_PARA_ENTRAR} min). O ACV não vê nem guarda a sua senha.`);
     const fim = Date.now() + MINUTOS_PARA_ENTRAR * 60_000;
     let fora = 0;
     while (Date.now() < fim) {

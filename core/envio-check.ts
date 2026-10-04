@@ -13,9 +13,9 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const DIR = mkdtempSync(join(tmpdir(), 'autocv-envio-'));
-process.env.AUTOCV_DIR = DIR;
-process.env.AUTOCV_PERFIL = join(DIR, 'navegador');
+const DIR = mkdtempSync(join(tmpdir(), 'acv-envio-'));
+process.env.ACV_DIR = DIR;
+process.env.ACV_PERFIL = join(DIR, 'navegador');
 
 const { inhire } = await import('./platforms/inhire/index.ts');
 const { fecharNavegador } = await import('./browser.ts');

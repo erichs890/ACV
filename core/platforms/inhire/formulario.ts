@@ -15,7 +15,7 @@ export type Raiz = Page | Frame;
 export type TipoCampo = 'texto' | 'textarea' | 'arquivo' | 'radio' | 'checkbox' | 'grupo' | 'select' | 'dropdown' | 'desconhecido';
 
 export interface CampoDom {
-  i: number; // índice marcado no DOM (data-autocv)
+  i: number; // índice marcado no DOM (data-acv)
   tipo: TipoCampo;
   nome: string;
   rotulo: string;
@@ -118,16 +118,16 @@ export async function descobrirCampos(raiz: Raiz): Promise<CampoDom[]> {
       }
       return (el as HTMLInputElement).placeholder ?? '';
     };
-    for (const el of document.querySelectorAll('[data-autocv], [data-autocv-grupo]')) {
-      el.removeAttribute('data-autocv');
-      el.removeAttribute('data-autocv-grupo');
-      el.removeAttribute('data-autocv-opcao');
+    for (const el of document.querySelectorAll('[data-acv], [data-acv-grupo]')) {
+      el.removeAttribute('data-acv');
+      el.removeAttribute('data-acv-grupo');
+      el.removeAttribute('data-acv-opcao');
     }
     const raizForm = document.querySelector('form') ?? document.body;
     const saida: { i: number; tipo: string; nome: string; rotulo: string; obrigatorio: boolean; opcoes: string[]; preenchido: boolean; subtipo?: string; html: string }[] = [];
     let n = 0;
     const marcar = (el: Element) => {
-      el.setAttribute('data-autocv', String(n));
+      el.setAttribute('data-acv', String(n));
       return n++;
     };
     const vistos = new Set<Element>();
@@ -224,8 +224,8 @@ export async function descobrirCampos(raiz: Raiz): Promise<CampoDom[]> {
       const bruto = rotuloBruto(grupo);
       const i = n++;
       const opcoes = lista.map((r, k) => {
-        r.setAttribute('data-autocv-grupo', String(i));
-        r.setAttribute('data-autocv-opcao', String(k));
+        r.setAttribute('data-acv-grupo', String(i));
+        r.setAttribute('data-acv-opcao', String(k));
         const lab = rotuloDaCaixa(r);
         return (lab ? textoCurto(lab) : '') || r.value || `opção ${k + 1}`;
       });
@@ -257,8 +257,8 @@ export async function descobrirCampos(raiz: Raiz): Promise<CampoDom[]> {
       const bruto = rotuloBruto(cont);
       const i = n++;
       const opcoes = lista.map((cb, k) => {
-        cb.setAttribute('data-autocv-grupo', String(i));
-        cb.setAttribute('data-autocv-opcao', String(k));
+        cb.setAttribute('data-acv-grupo', String(i));
+        cb.setAttribute('data-acv-opcao', String(k));
         const lab = rotuloDaCaixa(cb);
         return (lab ? textoCurto(lab) : '') || (cb.value !== 'on' ? cb.value : '') || `opção ${k + 1}`;
       });
@@ -426,8 +426,8 @@ export function resolverCampo(campo: CampoDom, dados: DadosCandidatura): Resoluc
 }
 
 // ─── 1.3 Preenchimento por tipo ─────────────────────────────────────────────
-const campoLoc = (raiz: Raiz, c: CampoDom): Locator => raiz.locator(`[data-autocv="${c.i}"]`).first();
-const opcaoLoc = (raiz: Raiz, c: CampoDom, k: number): Locator => raiz.locator(`[data-autocv-grupo="${c.i}"][data-autocv-opcao="${k}"]`).first();
+const campoLoc = (raiz: Raiz, c: CampoDom): Locator => raiz.locator(`[data-acv="${c.i}"]`).first();
+const opcaoLoc = (raiz: Raiz, c: CampoDom, k: number): Locator => raiz.locator(`[data-acv-grupo="${c.i}"][data-acv-opcao="${k}"]`).first();
 
 /** Abre um dropdown customizado, opcionalmente filtra digitando, e devolve os textos das opções visíveis. */
 /** Opção de dropdown: componentes "ricos" têm título + descrição; a comparação usa só o título. */
@@ -1144,7 +1144,7 @@ export async function executarFormulario(page: Page, dados: DadosCandidatura, lo
         }
         if (c.preenchido) continue;
         // Um campo anterior pode ter trocado a página (país → cidade vira dropdown): redescobre em vez de clicar no fantasma
-        if ((await page.locator(`[data-autocv="${c.i}"], [data-autocv-grupo="${c.i}"]`).count()) === 0) {
+        if ((await page.locator(`[data-acv="${c.i}"], [data-acv-grupo="${c.i}"]`).count()) === 0) {
           mexeu = true;
           break;
         }

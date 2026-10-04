@@ -1,8 +1,8 @@
 // Tela de Configurações da extensão. Grava em chrome.storage.local pelo service worker — a extensão é dona
-// desta configuração e funciona com o AutoCV fechado.
+// desta configuração e funciona com o ACV fechado.
 const $ = id => document.getElementById(id);
 const aoFundo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
-const { PADRAO } = globalThis.AutoCVComum;
+const { PADRAO } = globalThis.ACVComum;
 
 let cfg = { ...PADRAO };
 let empresas = [];
@@ -66,8 +66,8 @@ function mostrarSincronia(st) {
   if (!st) return;
   const quando = st.cacheEm ? new Date(st.cacheEm).toLocaleString('pt-BR') : 'nunca';
   $('sincronia').textContent = st.sincronizado
-    ? `Conectado ao AutoCV. Última cópia: ${quando}.${st.temCurriculo ? ' Currículo em cache.' : ' Sem currículo em cache ainda.'}`
-    : `AutoCV fechado — operando com a cópia de ${quando}.${st.pendentes ? ` ${st.pendentes} candidatura(s) esperando para subir.` : ''}`;
+    ? `Conectado ao ACV. Última cópia: ${quando}.${st.temCurriculo ? ' Currículo em cache.' : ' Sem currículo em cache ainda.'}`
+    : `ACV fechado — operando com a cópia de ${quando}.${st.pendentes ? ` ${st.pendentes} candidatura(s) esperando para subir.` : ''}`;
 }
 
 $('pretensaoSalarial').addEventListener('input', e => {
@@ -110,7 +110,7 @@ $('salvar').addEventListener('click', async () => {
 $('sincronizar').addEventListener('click', async () => {
   $('estado').textContent = 'Sincronizando...';
   const r = await aoFundo({ tipo: 'SINCRONIZAR' });
-  $('estado').textContent = r?.ok ? 'Sincronizado.' : `Não consegui: ${r?.erro ?? 'AutoCV fechado'}`;
+  $('estado').textContent = r?.ok ? 'Sincronizado.' : `Não consegui: ${r?.erro ?? 'ACV fechado'}`;
   mostrarSincronia(await aoFundo({ tipo: 'STATUS' }));
 });
 

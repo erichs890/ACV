@@ -92,7 +92,7 @@ export function registrarCamposFaltando(e: { dominio: string; url?: string; camp
 }
 
 /**
- * Tudo o que a extensão precisa para PREENCHER um formulário sozinha, inclusive com o AutoCV fechado depois
+ * Tudo o que a extensão precisa para PREENCHER um formulário sozinha, inclusive com o ACV fechado depois
  * (ela guarda isto em cache).
  *
  * Aqui saem valores de verdade — nome, e-mail, telefone, respostas salvas, currículo. É uma mudança de
@@ -130,7 +130,7 @@ export function dadosParaExtensao(comCurriculo: boolean): Record<string, unknown
 }
 
 /**
- * A extensão candidatou numa plataforma e manda o que fez (inclusive o que aconteceu com o AutoCV fechado).
+ * A extensão candidatou numa plataforma e manda o que fez (inclusive o que aconteceu com o ACV fechado).
  * Entra no histórico junto com as candidaturas do robô: o Painel é a visão consolidada de tudo.
  */
 export function receberCandidaturas(lista: { dominio?: string; url?: string; titulo?: string; empresa?: string; enviadaEm?: string }[]): number {
@@ -181,7 +181,7 @@ export async function responderParaExtensao(e: {
   if (sensivel) return { resposta: null, motivo: `${sensivel.rotulo.toLowerCase()} é autodeclaração: só você responde (Configurações › Autodeclaração)` };
   if (DADO_PESSOAL.test(pergunta)) return { resposta: null, motivo: 'é um dado pessoal: a IA não adivinha isso' };
   const curriculo = ler.curriculos()[0]?.markdown;
-  if (!curriculo || !iaAtiva()) return { resposta: null, motivo: 'IA não configurada no AutoCV' };
+  if (!curriculo || !iaAtiva()) return { resposta: null, motivo: 'IA não configurada no ACV' };
   const vaga = { titulo: String(e.vaga?.titulo ?? '').slice(0, 200), empresa: String(e.vaga?.empresa ?? '').slice(0, 120), descricao: String(e.vaga?.descricao ?? '').slice(0, 4000) };
   const resposta = await responderPergunta(curriculo, vaga, { rotulo: pergunta, tipo: e.opcoes?.length ? 'opcoes' : 'texto', opcoes: e.opcoes }, { cauteloso: true });
   return resposta ? { resposta } : { resposta: null, motivo: 'a IA preferiu não chutar' };

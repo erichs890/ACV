@@ -1,4 +1,4 @@
--- AutoCV — dados iniciais (catálogo de plataformas). Rode depois do schema.sql.
+-- ACV — dados iniciais (catálogo de plataformas). Rode depois do schema.sql.
 insert into public.plataformas (id, nome, sigla, cor, disponivel, ordem) values
   ('linkedin',  'LinkedIn',        'in', 'bg-blue-deep',   true,  1),
   ('catho',     'Catho',           'ca', 'bg-orange-deep', true,  2),

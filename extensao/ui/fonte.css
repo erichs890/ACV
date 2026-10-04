@@ -6,12 +6,12 @@
  *
  * A fonte é local e não vem do Google: o painel entra em TODA página de vaga que a pessoa abre, e um webfont
  * remoto ali entregaria ao Google a lista de tudo que ela navega. Além disso, o produto promete funcionar com
- * o AutoCV fechado — buscar fonte na internet para desenhar a interface contradiz isso.
+ * o ACV fechado — buscar fonte na internet para desenhar a interface contradiz isso.
  *
  * PT Sans, subconjunto latino (cobre o português: á é í ó ú â ê ô ã õ à ç). SIL Open Font License 1.1.
  */
 @font-face {
-  font-family: 'AutoCV PT Sans';
+  font-family: 'ACV PT Sans';
   font-style: normal;
   font-weight: 400;
   font-display: swap;
@@ -19,7 +19,7 @@
 }
 
 @font-face {
-  font-family: 'AutoCV PT Sans';
+  font-family: 'ACV PT Sans';
   font-style: normal;
   font-weight: 700;
   font-display: swap;

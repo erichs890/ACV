@@ -6,7 +6,7 @@ import { existsSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-process.env.AUTOCV_PERFIL = join(tmpdir(), 'autocv-self-check'); // não colide com o núcleo rodando
+process.env.ACV_PERFIL = join(tmpdir(), 'acv-self-check'); // não colide com o núcleo rodando
 import { markdownParaPdf } from './resume/mdToPdf.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
@@ -47,7 +47,7 @@ const VAGA = {
 VAGA.skills = extrairSkills(`${VAGA.titulo}\n${VAGA.descricao}`);
 
 // 1) PDF ⇄ Markdown
-const pdf = join(tmpdir(), `autocv-selfcheck-${Date.now()}.pdf`);
+const pdf = join(tmpdir(), `acv-selfcheck-${Date.now()}.pdf`);
 await markdownParaPdf(CV, pdf);
 const lido = await pdfParaMarkdown(pdf);
 for (const trecho of ['marina pitanga', 'resumo', 'experiência', 'habilidades', 'spring boot', 'postgresql']) assert.ok(lido.toLowerCase().includes(trecho), `PDF→MD perdeu "${trecho}":\n${lido}`);

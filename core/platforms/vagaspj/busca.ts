@@ -81,7 +81,7 @@ export function modeloDe(jp: JobPosting, titulo: string, descricao: string): Vag
   return localDe(jp) ? 'presencial' : 'indefinido';
 }
 
-/** Página da vaga → Vaga do AutoCV, já pontuada. `null` = a vaga não serve (candidatura externa ou vencida). */
+/** Página da vaga → Vaga do ACV, já pontuada. `null` = a vaga não serve (candidatura externa ou vencida). */
 export function montarVaga(item: ItemFeed, html: string, perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao): Vaga | null {
   const jp = lerJobPosting(html);
   if (!jp) return null;
@@ -122,7 +122,7 @@ export function montarVaga(item: ItemFeed, html: string, perfil: PerfilBusca, cf
 }
 
 const baixar = async (url: string) => {
-  const r = await fetch(url, { headers: { accept: 'text/html,application/xml', 'user-agent': 'AutoCV/1.0 (uso pessoal)' }, signal: AbortSignal.timeout(20000) });
+  const r = await fetch(url, { headers: { accept: 'text/html,application/xml', 'user-agent': 'ACV/1.0 (uso pessoal)' }, signal: AbortSignal.timeout(20000) });
   if (!r.ok) throw new Error(`Vagas PJ ${r.status} em ${new URL(url).pathname}`);
   return r.text();
 };

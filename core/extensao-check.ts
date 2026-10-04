@@ -12,9 +12,9 @@ import { createContext, runInContext } from 'node:vm';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-const DIR = mkdtempSync(join(tmpdir(), 'autocv-extensao-'));
-process.env.AUTOCV_DIR = DIR;
-process.env.AUTOCV_PERFIL = join(DIR, 'navegador');
+const DIR = mkdtempSync(join(tmpdir(), 'acv-extensao-'));
+process.env.ACV_DIR = DIR;
+process.env.ACV_PERFIL = join(DIR, 'navegador');
 
 const { autorizado, lerDeteccoes, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } = await import('./extensao.ts');
 const { fecharNavegador, navegador } = await import('./browser.ts');
@@ -120,8 +120,8 @@ const ctx = await navegador(false); // headless: aqui nenhuma plataforma real é
 const page = await ctx.newPage();
 const abrir = async (caminho: string): Promise<Diagnostico> => {
   await page.goto(base + caminho, { waitUntil: 'domcontentloaded' });
-  await page.addScriptTag({ content: CONTEUDO }); // fora da extensão, o script se expõe em globalThis.AutoCVExtensao
-  return page.evaluate(() => (globalThis as unknown as { AutoCVExtensao: { diagnosticar: () => Diagnostico } }).AutoCVExtensao.diagnosticar());
+  await page.addScriptTag({ content: CONTEUDO }); // fora da extensão, o script se expõe em globalThis.ACVExtensao
+  return page.evaluate(() => (globalThis as unknown as { ACVExtensao: { diagnosticar: () => Diagnostico } }).ACVExtensao.diagnosticar());
 };
 
 try {
@@ -147,13 +147,13 @@ try {
   await page.goto(`${base}/indeed`, { waitUntil: 'domcontentloaded' });
   await page.addScriptTag({ content: CONTEUDO });
   const indeed = await page.evaluate(() =>
-    (globalThis as unknown as { AutoCVExtensao: { INDEED: { precisaLogin: () => { precisa: boolean | null; logado: boolean } } } }).AutoCVExtensao.INDEED.precisaLogin(),
+    (globalThis as unknown as { ACVExtensao: { INDEED: { precisaLogin: () => { precisa: boolean | null; logado: boolean } } } }).ACVExtensao.INDEED.precisaLogin(),
   );
   assert.deepEqual(indeed.precisa, true, 'Indeed sempre exige conta para candidatar');
   assert.equal(indeed.logado, false, '"Acessar" à vista = deslogado');
   const desafiado = await page.evaluate(() => {
     document.body.insertAdjacentHTML('afterbegin', '<p>Verificação adicional necessária</p>');
-    return (globalThis as unknown as { AutoCVExtensao: { INDEED: { precisaLogin: () => { precisa: boolean | null } } } }).AutoCVExtensao.INDEED.precisaLogin().precisa;
+    return (globalThis as unknown as { ACVExtensao: { INDEED: { precisaLogin: () => { precisa: boolean | null } } } }).ACVExtensao.INDEED.precisaLogin().precisa;
   });
   assert.equal(desafiado, null, 'com a verificação anti-robô na tela, não dá para diagnosticar nada');
   console.log('✓ Extensão: handler dedicado do Indeed (registro por domínio) e recuo diante da verificação anti-robô');
@@ -162,7 +162,7 @@ try {
   // O do Indeed define 4 dos 12 campos; antes `handlerDe` devolvia o dedicado puro e o motor ficava sem
   // `abrir`, `botaoProximo`, `botaoFinal` e `sucesso` naquele site — nunca achava o botão de enviar.
   const herdado = await page.evaluate(() => {
-    const { handlerDe, GENERICO } = (globalThis as unknown as { AutoCVExtensao: Record<string, (h: string) => Record<string, unknown>> & { GENERICO: Record<string, unknown> } }).AutoCVExtensao;
+    const { handlerDe, GENERICO } = (globalThis as unknown as { ACVExtensao: Record<string, (h: string) => Record<string, unknown>> & { GENERICO: Record<string, unknown> } }).ACVExtensao;
     const h = handlerDe('br.indeed.com') as Record<string, unknown>;
     const g = GENERICO as Record<string, unknown>;
     return {
@@ -200,7 +200,7 @@ try {
   };
   const faltando = await page.evaluate(
     ([campos, perfil]) => {
-      const api = (globalThis as unknown as { AutoCVExtensao: { temDado: (c: unknown, p: unknown) => boolean } }).AutoCVExtensao;
+      const api = (globalThis as unknown as { ACVExtensao: { temDado: (c: unknown, p: unknown) => boolean } }).ACVExtensao;
       return (campos as Campo[]).filter(c => (c.obrigatorio || c.incerto) && !api.temDado(c, perfil)).map(c => c.pergunta);
     },
     [publica.campos, perfilFalso] as const,
@@ -238,7 +238,7 @@ try {
   for (const segredo of ['Marina', 'marina@exemplo.com', '11982324410', '52998224725', '4.500']) assert.ok(!serializado.includes(segredo), `valor de dado pessoal vazou para a extensão: ${segredo}`);
   console.log('✓ Núcleo: token protege as rotas da extensão, a detecção se acumula e nenhum dado pessoal vaza');
 
-  // ─── C2) "Candidata nesta vaga daqui pelo AutoCV": a ponte por URL ─────────────────────────────
+  // ─── C2) "Candidata nesta vaga daqui pelo ACV": a ponte por URL ─────────────────────────────
   // O caso real: a pessoa acha no LinkedIn uma vaga que leva para uma página do InHire. Lá o núcleo já tem
   // adapter testado, então a extensão manda a URL em vez de usar o motor dela.
   assert.equal(plataformaDaUrl('https://radix.inhire.app/vagas/1fe8ca9c/profissional-ai-specialist')?.id, 'inhire');
@@ -282,7 +282,7 @@ try {
   // A URL que você tem no navegador quase nunca é idêntica à que o robô gravou: www, barra no fim e rastreio
   const achada = await vagaDaUrl('https://vagaspj.com.br/vagas/acme/123?utm_source=linkedin#topo');
   assert.equal(achada.id, 'vagaspj:123', 'a vaga tem de ser reconhecida apesar de www, barra final e parâmetros');
-  await assert.rejects(vagaDaUrl('https://www.vagaspj.com.br/vagas/acme/999/'), /ainda não está na lista/, 'vaga que o AutoCV não varreu dá instrução, não erro técnico');
+  await assert.rejects(vagaDaUrl('https://www.vagaspj.com.br/vagas/acme/999/'), /ainda não está na lista/, 'vaga que o ACV não varreu dá instrução, não erro técnico');
   await assert.rejects(vagaDaUrl('https://exemplo.com/vaga/1'), /não tem adapter/, 'site sem adapter é caso do motor da própria extensão');
   console.log('✓ Ponte por URL: reconhece a plataforma do núcleo e acha a vaga mesmo com www, barra e rastreio na URL');
 
@@ -383,7 +383,7 @@ try {
   };
   const CFG_FALSA = { ...comum.PADRAO, empresasBloqueadas: [] as string[] };
   const CABEM_LIVRE = { cabem: 5, limite: 5, feitasHoje: 0, aquecendo: false };
-  const candidatar = () => page.evaluate(() => (globalThis as unknown as { AutoCVMotor: { candidatar: () => Promise<Record<string, unknown>> } }).AutoCVMotor.candidatar());
+  const candidatar = () => page.evaluate(() => (globalThis as unknown as { ACVMotor: { candidatar: () => Promise<Record<string, unknown>> } }).ACVMotor.candidatar());
 
   // Empresa bloqueada: nem abre o formulário
   await prepararCandidatura({ cfg: { ...CFG_FALSA, empresasBloqueadas: ['Acme'] }, dados: DADOS_FALSOS, cabem: CABEM_LIVRE, enviadas: [] });
@@ -419,7 +419,7 @@ try {
   assert.equal(envios, 1, 'exatamente um envio');
   assert.equal(await page.inputValue('#exp'), 'Mais de 3 anos', 'a resposta salva escolheu a opção certa da lista');
   const registradas = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as { titulo: string; empresa: string }[];
-  assert.equal(registradas.length, 1, 'a candidatura tem de ser registrada para contar no limite e subir ao AutoCV');
+  assert.equal(registradas.length, 1, 'a candidatura tem de ser registrada para contar no limite e subir ao ACV');
   assert.match(registradas[0].empresa, /Acme/);
   assert.ok((r.espera as number) >= 5000, 'o motor devolve quanto esperar antes da próxima');
 

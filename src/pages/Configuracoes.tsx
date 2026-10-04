@@ -170,7 +170,7 @@ function BarraSalvar({ texto, cancelar = true }: { texto: string; cancelar?: boo
 }
 
 /**
- * Campo do formulário. `exigido` marca com * o que o AutoCV precisa para acertar: ou porque as vagas do
+ * Campo do formulário. `exigido` marca com * o que o ACV precisa para acertar: ou porque as vagas do
  * InHire pedem (LinkedIn, pretensão), ou porque é o que decide a compatibilidade (senioridade, área, cargo).
  */
 function Campo({ label, children, exigido, ajuda }: { label: string; children: ReactNode; exigido?: boolean; ajuda?: string }) {
@@ -580,9 +580,9 @@ function AbaPrivacidade() {
 
   return (
     <div className="flex flex-1 flex-col gap-4">
-      <Cabecalho titulo="Dados e privacidade" sub="esta é uma instalação local do AutoCV" />
+      <Cabecalho titulo="Dados e privacidade" sub="esta é uma instalação local do ACV" />
       <p className="max-w-[70ch] text-[13px] text-ink-soft">
-        Tudo fica neste computador, na pasta <code className="font-mono text-ink">%LOCALAPPDATA%\AutoCV</code>: seus dados, os PDFs, as vagas encontradas e o perfil do navegador que o robô usa. Nada é
+        Tudo fica neste computador, na pasta <code className="font-mono text-ink">%LOCALAPPDATA%\ACV</code>: seus dados, os PDFs, as vagas encontradas e o perfil do navegador que o robô usa. Nada é
         enviado a servidor nenhum além das próprias páginas de vagas. O InHire não pede login, então nenhuma senha é guardada.
       </p>
 
@@ -601,7 +601,7 @@ function AbaPrivacidade() {
           type="button"
           className="btn btn-danger"
           onClick={() => {
-            if (confirm('Apagar todos os dados do AutoCV neste computador?')) void limpar();
+            if (confirm('Apagar todos os dados do ACV neste computador?')) void limpar();
           }}
         >
           <Trash2 size={16} aria-hidden />

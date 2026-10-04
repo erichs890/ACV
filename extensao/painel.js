@@ -1,4 +1,4 @@
-// Painel flutuante do AutoCV sobre a página da plataforma.
+// Painel flutuante do ACV sobre a página da plataforma.
 //
 // Por que um painel na própria página e não só o popup da barra: a candidatura acontece aqui, e o que você
 // precisa ver (a vaga, o contador do dia, o motivo de uma vaga ter sido pulada) é sobre a vaga que está na tela.
@@ -8,9 +8,9 @@
 // página só e no `document_idle` a tela quase sempre ainda está vazia. Decidindo uma vez só, ele simplesmente
 // não aparecia no InHire.
 (() => {
-  if (!globalThis.AutoCVMotor) return;
-  const { handlerDe, pareceVaga } = globalThis.AutoCVExtensao;
-  const { empresaBloqueada, montarUrlBuscaLinkedIn } = globalThis.AutoCVComum;
+  if (!globalThis.ACVMotor) return;
+  const { handlerDe, pareceVaga } = globalThis.ACVExtensao;
+  const { empresaBloqueada, montarUrlBuscaLinkedIn } = globalThis.ACVComum;
   const aoFundo = msg => new Promise(r => chrome.runtime.sendMessage(msg, r));
 
   const handler = handlerDe(location.hostname);
@@ -26,7 +26,7 @@
   let raiz = null;
 
   /**
-   * Este site é um dos que o AutoCV já sabe candidatar sozinho (InHire, Vagas PJ, Divulga Vagas...)? Então o
+   * Este site é um dos que o ACV já sabe candidatar sozinho (InHire, Vagas PJ, Divulga Vagas...)? Então o
    * caminho bom não é o motor daqui: é mandar a URL para o núcleo e deixar o adapter dele trabalhar — ele tem
    * schema da API, adaptação de currículo, modo ensaio e prova de envio. A lista vem do próprio núcleo.
    */
@@ -121,7 +121,7 @@
 
   function montar() {
     const hospedeiro = document.createElement('div');
-    hospedeiro.id = 'autocv-painel';
+    hospedeiro.id = 'acv-painel';
     raiz = hospedeiro.attachShadow({ mode: 'open' });
     raiz.innerHTML = `<style>${CSS}</style>
     <div class="caixa">
@@ -151,7 +151,7 @@
     </div>`;
     document.documentElement.appendChild(hospedeiro);
 
-    // Candidatura pelo NÚCLEO: o adapter testado do AutoCV, na vaga que está aberta aqui
+    // Candidatura pelo NÚCLEO: o adapter testado do ACV, na vaga que está aberta aqui
     $('nucleo').addEventListener('click', async () => {
       ocupado = true;
       await pintar();
@@ -181,7 +181,7 @@
       await pintar();
       registrar('— iniciando —');
       try {
-        const r = await globalThis.AutoCVMotor.candidatar(registrar);
+        const r = await globalThis.ACVMotor.candidatar(registrar);
         registrar(r.status === 'enviada' ? '✓ Candidatura enviada.' : `${r.status === 'pergunta' ? 'Parei nesta pergunta' : 'Não enviei'}: ${r.pergunta ? `"${r.pergunta}" — ` : ''}${r.motivo ?? ''}`);
         if (r.status === 'enviada' && r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
       } catch (e) {
@@ -223,7 +223,7 @@
   }
 
   async function tentar() {
-    if (document.getElementById('autocv-painel') || ++tentativas > MAX_TENTATIVAS) return;
+    if (document.getElementById('acv-painel') || ++tentativas > MAX_TENTATIVAS) return;
     if (await devoAparecer()) montar();
   }
 

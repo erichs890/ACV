@@ -1,4 +1,4 @@
-/* Tokens do AutoCV — os mesmos valores do `@theme` de src/index.css.
+/* Tokens do ACV — os mesmos valores do `@theme` de src/index.css.
  *
  * Estão copiados, e não importados, porque a extensão é carregada descompactada: ela não passa pelo Vite nem
  * pelo Tailwind e só lê arquivos de dentro da própria pasta. O que não se duplica é a DECISÃO — qualquer cor
@@ -40,8 +40,8 @@
 
   --radius: 8px;
 
-  /* A família é "AutoCV PT Sans", não "PT Sans": se o site hospedeiro tiver uma PT Sans própria (variável,
+  /* A família é "ACV PT Sans", não "PT Sans": se o site hospedeiro tiver uma PT Sans própria (variável,
    * outro subconjunto, outro hinting), o painel não pega a dele por acidente. */
-  --font-ui: 'AutoCV PT Sans', 'PT Sans', system-ui, sans-serif;
+  --font-ui: 'ACV PT Sans', 'PT Sans', system-ui, sans-serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
 }

@@ -115,7 +115,7 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     if (a && (filtrosMudaram || a.modo !== antes.modo || a.regimes.join() !== antes.regimes.join() || a.limiteDiario !== antes.limiteDiario)) enfileirarCompativeis('configuração salva');
     json(res, 200, montarEstado());
   },
-  // Login manual assistido (qualquer plataforma com `adapter.sessao`): a pessoa entra na janela do robô; o AutoCV
+  // Login manual assistido (qualquer plataforma com `adapter.sessao`): a pessoa entra na janela do robô; o ACV
   // não vê nem guarda a senha. Só fica conectada depois da prova de login (core/sessao.ts grava em `conexoes`).
   'POST /sessao/entrar': async (req, res) => {
     const { plataforma } = JSON.parse((await corpo(req)).toString('utf8')) as { plataforma: string };
@@ -152,7 +152,7 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
     json(res, 200, await responderParaExtensao(JSON.parse((await corpo(req)).toString('utf8'))));
   },
-  // A extensão pergunta onde o núcleo tem adapter próprio — nesses sites o botão dela chama o AutoCV
+  // A extensão pergunta onde o núcleo tem adapter próprio — nesses sites o botão dela chama o ACV
   'GET /extensao/plataformas': (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
     json(res, 200, { plataformas: plataformasConhecidas() });
@@ -215,7 +215,7 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     json(res, 200, { ok: true });
   },
   'GET /arquivo': (_r, res, url) => {
-    // Serve PDFs/capturas gerados localmente (só dentro das pastas do AutoCV)
+    // Serve PDFs/capturas gerados localmente (só dentro das pastas do ACV)
     const caminho = url.searchParams.get('caminho') ?? '';
     const permitido = Object.values(DIRS).some(d => caminho.startsWith(d));
     if (!permitido || !existsSync(caminho)) return json(res, 404, { erro: 'arquivo não encontrado' });
@@ -439,7 +439,7 @@ createServer(async (req, res) => {
     if (!res.headersSent) json(res, 500, { erro: (e as Error).message });
   }
 }).listen(PORTA, '127.0.0.1', () => {
-  console.log(`AutoCV núcleo em http://localhost:${PORTA} — dados em ${DIRS.curriculos.replace(/[\\/]curriculos$/, '')}`);
+  console.log(`ACV núcleo em http://localhost:${PORTA} — dados em ${DIRS.curriculos.replace(/[\\/]curriculos$/, '')}`);
   migrarTenantsAntigos(registrar);
   migrarModelo(registrar);
   if (ler.conexoes().inhire) importarSeed(registrar);

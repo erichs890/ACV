@@ -149,7 +149,7 @@ export default function Cadastro() {
 
           <button type="submit" className="btn btn-primary btn-lg" disabled={enviando}>
             {enviando && <Orbe estado="lendo" />}
-            {enviando ? 'Analisando o currículo...' : 'Entrar no AutoCV'}
+            {enviando ? 'Analisando o currículo...' : 'Entrar no ACV'}
             <ArrowRight size={18} aria-hidden />
           </button>
           <p className="text-center text-[11px] text-ink-soft">Seus dados ficam neste computador.</p>

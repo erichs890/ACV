@@ -153,8 +153,8 @@ export default function ConfigIA({ onSalvar }: { onSalvar: (t: string) => void }
       <div className="rounded-lg border border-amber bg-amber/15 p-3 text-xs text-amber-ink">
         <p className="mb-1 font-bold">O que a IA pode e não pode fazer</p>
         <p>
-          Ela só reordena, reescreve frases com termos da vaga quando sua experiência já sustenta e ajusta o resumo. Depois, o AutoCV confere o texto: qualquer competência, número, sigla ou nome que
-          não esteja no seu currículo original faz a reescrita ser descartada — aí entra a adaptação por regras. A chave fica gravada só neste computador e é usada apenas para essas chamadas.
+          Ela só reordena, reescreve frases com termos da vaga quando sua experiência já sustenta e ajusta o resumo. Depois, o ACV confere o texto: qualquer competência, número, sigla ou nome que não
+          esteja no seu currículo original faz a reescrita ser descartada — aí entra a adaptação por regras. A chave fica gravada só neste computador e é usada apenas para essas chamadas.
         </p>
       </div>
 

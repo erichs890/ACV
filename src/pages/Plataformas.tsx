@@ -360,7 +360,7 @@ function Extensao() {
       <p className="text-xs text-ink-soft">
         A extensão olha as páginas de vaga que <strong className="text-ink">você</strong> abre no seu navegador de sempre e diz duas coisas: se aquela plataforma exige conta e quais campos
         obrigatórios ela vai pedir que o seu perfil ainda não responde. Ela não preenche, não clica e não envia nada — quem candidata continua sendo o robô. Para instalar: em
-        <code className="mx-1 font-mono">chrome://extensions</code>, ligue o "Modo do desenvolvedor" e use "Carregar sem compactação" na pasta <code className="font-mono">extensao/</code> do AutoCV.
+        <code className="mx-1 font-mono">chrome://extensions</code>, ligue o "Modo do desenvolvedor" e use "Carregar sem compactação" na pasta <code className="font-mono">extensao/</code> do ACV.
         Depois abra o popup dela e cole o token abaixo.
       </p>
       <div className="flex flex-wrap items-center gap-2">
@@ -408,7 +408,7 @@ function Extensao() {
 
 /**
  * "Fazer login manualmente": o núcleo abre uma janela visível do navegador do robô na página de login; a pessoa
- * entra como sempre (senha, código, captcha) e o AutoCV só espera a página sair do login e provar a sessão.
+ * entra como sempre (senha, código, captcha) e o ACV só espera a página sair do login e provar a sessão.
  * Genérico: vale para qualquer plataforma com `login: true` no catálogo e `sessao` no adapter.
  */
 function ModalLogin({ plataforma, onFechar }: { plataforma: string | null; onFechar: () => void }) {
@@ -464,9 +464,9 @@ function ModalLogin({ plataforma, onFechar }: { plataforma: string | null; onFec
         </div>
       ) : (
         <p className="text-xs text-ink-soft">
-          Vai abrir uma janela do navegador do robô, identificada como do AutoCV, na página de login de {p?.nome}. Entre como sempre — senha, código por e-mail, captcha, o que {p?.nome} pedir. O
-          AutoCV não vê nem guarda a sua senha: ele só espera a página sair do login e confere se a sessão ficou ativa. A sessão fica no perfil do navegador do robô, e cai de volta para "Sessão
-          expirada" se {p?.nome} deslogar.
+          Vai abrir uma janela do navegador do robô, identificada como do ACV, na página de login de {p?.nome}. Entre como sempre — senha, código por e-mail, captcha, o que {p?.nome} pedir. O ACV não
+          vê nem guarda a sua senha: ele só espera a página sair do login e confere se a sessão ficou ativa. A sessão fica no perfil do navegador do robô, e cai de volta para "Sessão expirada" se{' '}
+          {p?.nome} deslogar.
         </p>
       )}
       {erro && (

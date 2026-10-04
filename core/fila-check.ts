@@ -1,7 +1,7 @@
 // Verificação executável da FILA (o que faz o robô enviar um currículo atrás do outro sozinho):
 //   node core/fila-check.ts   — ou `npm run check`, que roda este arquivo junto
 //
-// Não toca em plataforma nenhuma: usa um adapter falso e um banco temporário (AUTOCV_DIR), então cada cenário
+// Não toca em plataforma nenhuma: usa um adapter falso e um banco temporário (ACV_DIR), então cada cenário
 // é determinístico e roda em segundos. O que é verificado aqui é exatamente o que quebrou na prática:
 // encadeamento, portões de agendamento, pedido do usuário durante uma candidatura, nova tentativa e duplicidade.
 import assert from 'node:assert/strict';
@@ -9,7 +9,7 @@ import { mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-process.env.AUTOCV_DIR = mkdtempSync(join(tmpdir(), 'autocv-fila-'));
+process.env.ACV_DIR = mkdtempSync(join(tmpdir(), 'acv-fila-'));
 
 const { kv, vagas, candidaturas, log, apagarTudo } = await import('./storage/db.ts');
 const { registrarAdapter } = await import('./platforms/adapter.ts');
@@ -36,7 +36,7 @@ registrarAdapter({
 });
 
 // ─── Cenário base ────────────────────────────────────────────────────────────────────────────────
-const curriculo = join(process.env.AUTOCV_DIR, 'cv.pdf');
+const curriculo = join(process.env.ACV_DIR, 'cv.pdf');
 writeFileSync(curriculo, '%PDF-1.4 teste');
 
 function cenario(automacao: Partial<typeof AUTOMACAO_PADRAO> = {}) {

@@ -4,7 +4,7 @@ import { MODELOS_IA, modeloPadrao } from '../src/dados.ts';
 import { kv } from './storage/db.ts';
 import { similaridade } from './resume/texto.ts';
 
-// Provedor de IA para a adaptação de currículo. A chave fica só no SQLite local (%LOCALAPPDATA%\AutoCV)
+// Provedor de IA para a adaptação de currículo. A chave fica só no SQLite local (%LOCALAPPDATA%\ACV)
 // e nunca é devolvida ao front — o front só vê se existe e os 4 últimos caracteres.
 
 // As opções válidas e o padrão saem de `src/dados.ts` — uma lista só, com id, preço e nota juntos.

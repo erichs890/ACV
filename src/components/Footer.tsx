@@ -13,7 +13,7 @@ export default function Footer() {
 
   return (
     <footer className="flex h-[30px] shrink-0 items-center gap-2.5 border-t border-panel-border bg-panel px-4 text-[11px] text-ink-soft max-md:hidden">
-      <span>AutoCV © {new Date().getFullYear()} — automação de envio de currículos</span>
+      <span>ACV © {new Date().getFullYear()} — automação de envio de currículos</span>
       <span className="ml-auto">versão local</span>
       <span className={`flex items-center gap-1.5 rounded-[9px] border px-[9px] py-px font-bold ${pill[estado.robo]}`}>
         <span aria-hidden className={`size-2 rounded-full ${status.dot}`} />

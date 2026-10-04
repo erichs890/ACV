@@ -116,7 +116,7 @@ export async function buscarVagas(manual = false): Promise<number> {
   const cfg = ler.automacao();
   const principal = ler.curriculos()[0];
   if (!principal?.perfilBusca) {
-    registrar('alerta', 'Varredura cancelada: envie um currículo para o AutoCV montar o perfil de busca.');
+    registrar('alerta', 'Varredura cancelada: envie um currículo para o ACV montar o perfil de busca.');
     return 0;
   }
   const conectadas = Object.keys(ler.conexoes()).filter(id => adapters[id]);
@@ -386,7 +386,7 @@ export function candidatarAgora(id: string): Promise<void> {
   vagas.atualizar(id, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
-  // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do AutoCV continua ignorando
+  // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do ACV continua ignorando
   return processarProxima(true);
 }
 

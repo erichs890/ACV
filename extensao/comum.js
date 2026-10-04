@@ -1,4 +1,4 @@
-// Configuração e regras que a extensão usa sozinha, SEM depender do AutoCV aberto.
+// Configuração e regras que a extensão usa sozinha, SEM depender do ACV aberto.
 //
 // Este arquivo é carregado tanto pelos content scripts quanto pelas telas (popup e Configurações), e é puro o
 // suficiente para rodar fora do navegador — `core/extensao-check.ts` o executa em Node para testar as regras.
@@ -14,7 +14,7 @@
     pretensaoSalarial: 0,
     anosExperiencia: 0,
     empresasBloqueadas: [],
-    iaAtiva: false, // só tem efeito com o AutoCV aberto: é lá que a IA roda, com as travas dela
+    iaAtiva: false, // só tem efeito com o ACV aberto: é lá que a IA roda, com as travas dela
     limiteDiarioPorPlataforma: { 'linkedin.com': 10, 'indeed.com': 10, 'gupy.io': 10 },
     urlApp: 'http://localhost:5173', // tela do ACV (o start.bat sobe nela); o núcleo em si fica na 4780
     intervaloMinSegundos: 45,
@@ -109,6 +109,6 @@
     /unusual activity|atividade incomum|verifique que voc[êe] [ée] humano|verify you are human|security check|verifica[çc][ãa]o adicional|captcha|tempor?ariamente restrit|conta restrita|too many requests/i;
 
   const api = { PADRAO, JANELAS, normalizarEmpresa, empresaBloqueada, montarUrlBuscaLinkedIn, quantasCabemHoje, proximaEspera, RESTRICAO, hoje };
-  globalThis.AutoCVComum = api;
+  globalThis.ACVComum = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // core/extensao-check.ts roda isto em Node
 })();

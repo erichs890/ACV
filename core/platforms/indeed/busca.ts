@@ -86,7 +86,7 @@ export function modeloDe(r: Pick<ResultadoIndeed, 'suidsRemoto' | 'local'>, cons
   return consultaRemota ? 'remoto' : 'presencial';
 }
 
-/** Card → Vaga do AutoCV (mesma tabela e mesmo score do InHire; `plataforma` e `pais` distinguem a origem). */
+/** Card → Vaga do ACV (mesma tabela e mesmo score do InHire; `plataforma` e `pais` distinguem a origem). */
 export function montarVagaIndeed(r: ResultadoIndeed, c: Consulta, perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao): Vaga {
   const descricao = htmlParaTexto(r.trecho);
   const modelo = modeloDe(r, c.remoto);

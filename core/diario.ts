@@ -10,11 +10,11 @@ import { join } from 'node:path';
 import type { LinhaLog } from '../src/types.ts';
 
 export const DIR_DIARIO = join(process.cwd(), 'diario');
-// Teste roda com AUTOCV_DIR apontando para uma pasta temporária: o diário do uso real não pode receber as
+// Teste roda com ACV_DIR apontando para uma pasta temporária: o diário do uso real não pode receber as
 // linhas dos cenários falsos ("Vaga 53 em Acme"), senão o histórico que existe para investigar vira ficção.
-const LIGADO = !process.env.AUTOCV_DIR;
+const LIGADO = !process.env.ACV_DIR;
 const DIAS_GUARDADOS = 14;
-const ARQUIVO = /^autocv-(\d{4}-\d{2}-\d{2})\.log$/;
+const ARQUIVO = /^acv-(\d{4}-\d{2}-\d{2})\.log$/;
 
 if (LIGADO) mkdirSync(DIR_DIARIO, { recursive: true });
 
@@ -25,7 +25,7 @@ if (LIGADO) mkdirSync(DIR_DIARIO, { recursive: true });
  * gravava a data de amanhã ao lado da hora de hoje. Bug visto no primeiro dia de uso (28/09/2026).
  */
 const dia = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-export const caminhoDoDia = (d = new Date()) => join(DIR_DIARIO, `autocv-${dia(d)}.log`);
+export const caminhoDoDia = (d = new Date()) => join(DIR_DIARIO, `acv-${dia(d)}.log`);
 
 /** Apaga os diários velhos. Roda uma vez por dia, na primeira linha escrita. */
 let ultimaFaxina = '';
@@ -62,5 +62,5 @@ export function anotar(linha: LinhaLog): void {
 
 /** Marca o começo de uma execução: sem isto, dois dias de log viram um borrão só. */
 export function abrirDiario(versao: string): void {
-  anotar({ hora: new Date().toLocaleTimeString('pt-BR', { hour12: false }), tipo: 'info', msg: `─── AutoCV iniciado (${versao}) ───` });
+  anotar({ hora: new Date().toLocaleTimeString('pt-BR', { hour12: false }), tipo: 'info', msg: `─── ACV iniciado (${versao}) ───` });
 }
