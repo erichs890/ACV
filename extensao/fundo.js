@@ -282,6 +282,20 @@ const ACOES = {
     return paraONucleo('/extensao/plataforma', m);
   },
   VALIDACAO_CAMPOS: m => paraONucleo('/extensao/campos', m),
+  // "Escondi o painel neste site": quem guarda é o worker, não o content script. `chrome.storage.session`
+  // nasce fechada para content script e lá isso vira "Access to storage is not allowed from this context" —
+  // erro que derrubava a montagem inteira do painel. Session e não local de propósito: esconder vale até
+  // fechar o navegador, não para sempre.
+  ESCONDER_PAINEL: async m => {
+    const mapa = await ler('paineisEscondidos', {});
+    mapa[m.origem] = true;
+    await chrome.storage.session?.set({ paineisEscondidos: mapa }).catch(() => gravar('paineisEscondidos', mapa));
+    return { ok: true };
+  },
+  PAINEL_ESCONDIDO: async m => {
+    const { paineisEscondidos = {} } = (await chrome.storage.session?.get('paineisEscondidos').catch(() => ({}))) ?? {};
+    return { escondido: !!paineisEscondidos[m.origem] };
+  },
   ABRIR_OPCOES: () => chrome.runtime.openOptionsPage(),
 };
 

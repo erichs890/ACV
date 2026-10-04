@@ -103,6 +103,38 @@ for n, (oc, r) in DA_EXTENSAO.items():
 
 shutil.copyfile('public/logo.png', f'{MARCA_EXT}/logo.png')
 
+# A marca da extensão vai EMBUTIDA no CSS, como data: URI.
+#
+# Embutida porque isso tira do caminho qualquer dúvida sobre carregar recurso de extensão a partir da página
+# hospedeira (CORS, CSP do site, web_accessible_resources). O custo é ~22 KB de CSS, uma vez.
+#
+# E o monograma precisa ser ESTE arquivo, não o `icone-32.png`: máscara CSS usa o canal ALFA da imagem, e o
+# ícone é um quadrado navy opaco — o alfa dele é um quadrado cheio, então usá-lo como máscara desenha um
+# quadrado, não o monograma. Custou uma depuração inteira descobrir isso olhando um quadrado branco no
+# cabeçalho do painel.
+import base64, io
+
+rgba(mono, (255, 255, 255)).save(f'{MARCA_EXT}/monograma.png', optimize=True)
+
+
+def datauri(caminho):
+    return 'data:image/png;base64,' + base64.b64encode(open(caminho, 'rb').read()).decode('ascii')
+
+
+css = f"""/* Gerado por brand/gerar-logo.py — não edite à mão.
+ *
+ * A arte vai embutida para não depender de o site hospedeiro deixar carregar um recurso da extensão.
+ * As duas são BRANCAS com fundo transparente: máscara CSS usa o canal alfa, e `currentColor` pinta por cima.
+ */
+:root,
+:host {{
+  --marca-url: url('{datauri('public/logo.png')}');
+  --monograma-url: url('{datauri(f'{MARCA_EXT}/monograma.png')}');
+}}
+"""
+io.open('extensao/ui/marca.css', 'w', encoding='utf-8', newline=chr(10)).write(css)
+print('  extensao/ui/marca.css      %6.1f KB' % (len(css.encode('utf-8')) / 1024))
+
 for f in sorted(os.listdir('public')):
     print('  public/%-22s %6.1f KB' % (f, os.path.getsize('public/' + f) / 1024))
 for f in sorted(os.listdir(MARCA_EXT)):

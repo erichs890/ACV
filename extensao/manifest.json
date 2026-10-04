@@ -12,7 +12,7 @@
   "content_scripts": [
     {
       "matches": ["http://*/*", "https://*/*"],
-      "js": ["comum.js", "conteudo.js", "motor.js", "painel.js"],
+      "js": ["comum.js", "ui/tema.js", "ui/orbe.js", "ui/plataformas.js", "ui/acao.js", "conteudo.js", "motor.js", "painel.js"],
       "run_at": "document_idle",
       "all_frames": false,
       "css": ["ui/fonte.css"]
@@ -42,7 +42,7 @@
   },
   "web_accessible_resources": [
     {
-      "resources": ["ui/tokens.css", "ui/base.css", "ui/painel.css", "ui/fontes/*.woff2", "ui/marca/*.png"],
+      "resources": ["ui/tokens.css", "ui/marca.css", "ui/base.css", "ui/painel.css", "ui/fontes/*.woff2"],
       "matches": ["http://*/*", "https://*/*"],
       "use_dynamic_url": false
     }

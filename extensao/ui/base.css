@@ -274,21 +274,30 @@ input[type='radio'] {
  * sobre a barra azul e sobre o fundo branco, e a cor vem do contexto. A largura sai da proporção.
  * `--marca-url` é definida por quem monta a superfície: nas páginas o caminho é relativo, no painel ele
  * precisa ser absoluto (`chrome.runtime.getURL`), senão resolveria contra o site hospedeiro. */
-.marca {
-  display: inline-block;
-  flex-shrink: 0;
-  background: currentColor;
-  aspect-ratio: 666 / 390;
-  mask: var(--marca-url) no-repeat center / contain;
-  -webkit-mask: var(--marca-url) no-repeat center / contain;
-}
+/* Propriedades separadas, não o atalho `mask`: com `var()` dentro do atalho o Chrome não aplica a máscara e
+ * o elemento aparece como um retângulo cheio de `currentColor` — foi o que aconteceu no primeiro teste, um
+ * quadrado branco no lugar do monograma. `Logo.tsx` no app também usa as separadas, pelo mesmo motivo. */
+.marca,
 .monograma {
   display: inline-block;
   flex-shrink: 0;
   background: currentColor;
+  mask-repeat: no-repeat;
+  mask-position: center;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  -webkit-mask-size: contain;
+}
+.marca {
+  aspect-ratio: 666 / 390;
+  mask-image: var(--marca-url);
+  -webkit-mask-image: var(--marca-url);
+}
+.monograma {
   aspect-ratio: 1 / 1;
-  mask: var(--monograma-url) no-repeat center / contain;
-  -webkit-mask: var(--monograma-url) no-repeat center / contain;
+  mask-image: var(--monograma-url);
+  -webkit-mask-image: var(--monograma-url);
 }
 
 .sr-only {

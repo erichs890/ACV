@@ -1,0 +1,264 @@
+/* O painel que a extensão injeta sobre a página da plataforma.
+ *
+ * Esta folha é adotada por um shadow root (`adoptedStyleSheets`), junto com tokens.css e base.css.
+ */
+
+/* `all: initial` zera as ~25 propriedades herdáveis que a página empurra para dentro do painel: font, color,
+ * line-height, letter-spacing, text-transform, direction, visibility, cursor, white-space. Nenhuma delas é
+ * alcançável por seletor nosso — herança atravessa o limite do shadow DOM sempre. */
+:host {
+  all: initial;
+  color-scheme: light; /* site com color-scheme: dark reajustaria os controles do nosso formulário */
+  contain: layout style; /* o painel não participa do layout do site */
+  isolation: isolate;
+}
+
+/* A geometria vai com importância explícita, e este é o ÚNICO lugar do projeto com `!important`.
+ *
+ * O host é a única parte do painel que a página alcança por seletor, e `#painel { display: none !important }`
+ * é o ataque real — plataformas de recrutamento fazem isso com extensões. Pela cascata, declaração de árvore
+ * shadow perde da do documento quando é normal e GANHA quando é `!important`. Dentro do painel nada usa
+ * `!important`: lá não há com quem competir. */
+/* biome-ignore-start lint/complexity/noImportantStyles: a página hospedeira não decide a geometria do painel */
+:host {
+  display: block !important;
+  position: fixed !important;
+  inset: auto 16px 16px auto !important;
+  z-index: 2147483000 !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  transform: none !important;
+  filter: none !important;
+  pointer-events: auto !important;
+  width: 348px !important;
+  max-width: calc(100vw - 32px) !important;
+  max-height: min(78vh, 620px) !important;
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: fim da exceção */
+
+.caixa {
+  display: flex;
+  flex-direction: column;
+  max-height: inherit;
+  overflow: hidden;
+  border: 1px solid var(--color-panel-border);
+  border-radius: 10px;
+  background: var(--color-panel);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+  /* A sombra existe aqui e não no app: o painel flutua sobre página de terceiros e precisa se descolar dela */
+  box-shadow: 0 10px 34px rgb(0 0 0 / 18%);
+}
+
+/* ─── Barra do topo ───────────────────────────────────────────────────────────────────────────── */
+.topo {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  height: 35px;
+  padding: 0 8px 0 12px;
+  background: var(--color-blue-dark);
+  color: #fff;
+}
+/* Monograma + a palavra: se a máscara for bloqueada pela CSP do site (img-src 'self'), sobra o nome escrito
+ * e a identidade sobrevive. Antes aqui havia só a sigla "ACV" em texto, que ninguém tinha visto antes. */
+.topo .monograma {
+  width: 16px;
+  border-radius: 3px;
+}
+.topo h2 {
+  flex: 1;
+  margin: 0;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+.topo button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 1px solid rgb(255 255 255 / 45%);
+  border-radius: 6px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 0.75rem;
+  line-height: 1;
+}
+.topo button:hover {
+  background: rgb(255 255 255 / 15%);
+}
+
+/* ─── Corpo ───────────────────────────────────────────────────────────────────────────────────── */
+.corpo {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  padding: 12px;
+}
+
+.contexto {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.6875rem;
+  color: var(--color-ink-soft);
+}
+.contexto strong {
+  color: var(--color-ink);
+}
+
+.vaga {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 700;
+  line-height: 1.3;
+}
+.empresa {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+}
+
+.etiquetas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.trabalhando {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 10px;
+  border: 1px solid var(--color-blue-dark);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--color-blue-dark) 8%, #fff);
+  color: var(--color-blue-deep);
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.motivo {
+  margin: -4px 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-ink-soft);
+}
+
+/* ─── Diário do painel ────────────────────────────────────────────────────────────────────────── */
+/* Era um despejo monoespaçado onde tudo tinha a mesma cor, inclusive "Erro:". Agora cada passo carrega a
+ * própria severidade — e a lista é `role="log"`, então leitor de tela anuncia o que vai acontecendo. */
+.log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 160px;
+  overflow-y: auto;
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--color-panel-border);
+  border-radius: var(--radius);
+  background: var(--color-page-bg);
+  list-style: none;
+}
+.log li {
+  display: flex;
+  gap: 7px;
+  align-items: flex-start;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-ink-soft);
+}
+.log li::before {
+  flex-shrink: 0;
+  width: 10px;
+  text-align: center;
+  content: '·';
+}
+.log li.ok {
+  color: var(--color-green-deep);
+  font-weight: 700;
+}
+.log li.ok::before {
+  content: '✓';
+}
+.log li.erro {
+  color: var(--color-orange-deep);
+  font-weight: 700;
+}
+.log li.erro::before {
+  content: '!';
+}
+.log li.atencao {
+  color: var(--color-amber-ink);
+}
+
+/* ─── Rodapé de links ─────────────────────────────────────────────────────────────────────────── */
+/* Antes eram até quatro botões empilhados de peso quase igual. Uma ação principal, uma alternativa, e o
+ * resto vira link: é o que deixa claro o que se espera que você faça. */
+.rodape {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding-top: 2px;
+  border-top: 1px solid var(--color-panel-border);
+  margin-top: 2px;
+  padding-block-start: 8px;
+}
+.rodape button {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-blue-dark);
+  font: inherit;
+  font-size: 0.6875rem;
+  font-weight: 700;
+}
+.rodape button:hover {
+  text-decoration: underline;
+}
+
+/* Guia e aviso vêm recolhidos: ocupavam quatro linhas em toda visita, empurrando a vaga para baixo */
+details summary {
+  font-size: 0.6875rem;
+  font-weight: 700;
+  color: var(--color-ink-soft);
+}
+details ol {
+  margin: 6px 0 0;
+  padding-left: 18px;
+  font-size: 0.6875rem;
+  color: var(--color-ink-soft);
+}
+.passo-guia {
+  margin-bottom: 3px;
+}
+
+.vazio {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 0 6px;
+  text-align: center;
+  color: var(--color-ink-soft);
+}
+.vazio .marca {
+  height: 26px;
+  opacity: 0.18;
+}
+
+/* `hidden` tem de vencer os `display: flex` declarados acima, senão esconder um bloco não esconde nada */
+/* biome-ignore-start lint/complexity/noImportantStyles: o atributo hidden vence o display do componente */
+[hidden] {
+  display: none !important;
+}
+/* biome-ignore-end lint/complexity/noImportantStyles: fim da exceção */
