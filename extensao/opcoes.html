@@ -2,91 +2,131 @@
 <html lang="pt-BR">
   <head>
     <meta charset="utf-8" />
-    <title>ACV — Configurações da extensão</title>
-    <style>
-      body { font: 14px/1.5 system-ui, sans-serif; color: #1b1b1f; max-width: 640px; margin: 0 auto; padding: 24px 16px 60px; }
-      h1 { font-size: 19px; margin: 0 0 4px; }
-      h2 { font-size: 14px; margin: 22px 0 8px; padding-bottom: 4px; border-bottom: 1px solid #e3e3e8; }
-      p.ajuda { color: #55555f; font-size: 12px; margin: 0 0 10px; }
-      label { display: block; font-weight: 700; font-size: 12px; margin: 10px 0 3px; }
-      input[type='text'], input[type='url'], input[type='number'] { width: 100%; box-sizing: border-box; padding: 7px 9px; border: 1px solid #c9c9d1; border-radius: 7px; font: inherit; }
-      input[type='range'] { width: 100%; }
-      .linha { display: flex; gap: 10px; align-items: flex-end; }
-      .linha > * { flex: 1; }
-      button { font: inherit; padding: 7px 12px; border-radius: 7px; border: 1px solid #c9c9d1; background: #fff; cursor: pointer; }
-      button.principal { background: #1b3a8f; color: #fff; border-color: #1b3a8f; font-weight: 700; }
-      ul { list-style: none; padding: 0; margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
-      li { border: 1px solid #c9c9d1; border-radius: 9px; padding: 2px 6px 2px 9px; font-size: 12px; display: flex; gap: 6px; align-items: center; }
-      li button { border: 0; background: transparent; padding: 0 2px; color: #a03000; font-weight: 700; }
-      .switch { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; }
-      .aviso { background: #fdf3e2; border: 1px solid #a86a00; color: #7a4d00; border-radius: 8px; padding: 10px; font-size: 12px; margin-top: 10px; }
-      .rodape { position: fixed; left: 0; right: 0; bottom: 0; background: #fff; border-top: 1px solid #e3e3e8; padding: 10px 16px; display: flex; gap: 10px; align-items: center; justify-content: center; }
-      #estado { font-size: 12px; color: #55555f; }
-    </style>
+    <link rel="icon" href="ui/marca/icone-32.png" />
+    <link rel="stylesheet" href="ui/fonte.css" />
+    <link rel="stylesheet" href="ui/tokens.css" />
+    <link rel="stylesheet" href="ui/marca.css" />
+    <link rel="stylesheet" href="ui/base.css" />
+    <link rel="stylesheet" href="ui/paginas.css" />
+    <title>Configurações do ACV</title>
   </head>
-  <body>
-    <h1>Configurações da extensão</h1>
-    <p class="ajuda">Isto fica guardado <b>na extensão</b>: funciona com o ACV fechado. Currículo, respostas salvas e histórico continuam sendo do ACV — a extensão guarda uma cópia e avisa quando está operando por ela.</p>
+  <body class="opcoes">
+    <!-- Aqui a marca assina e o título informa, ao contrário do popup, onde a marca ocupa o lugar do título -->
+    <header>
+      <span class="marca" role="img" aria-label="ACV"></span>
+      <h1>Configurações da extensão</h1>
+      <p class="ajuda">
+        Isto fica guardado <b>na extensão</b>: funciona com o ACV fechado. Currículo, respostas salvas e histórico continuam sendo do ACV — a extensão guarda uma cópia e avisa quando está operando
+        por ela.
+      </p>
+    </header>
 
-    <h2>Sobre você</h2>
-    <label for="linkedinPerfilUrl">Endereço do seu perfil no LinkedIn</label>
-    <input id="linkedinPerfilUrl" type="url" placeholder="https://www.linkedin.com/in/seu-perfil" />
-    <p class="ajuda">Serve para a IA ter o seu histórico real na hora de responder. Ela nunca inventa, exagera ou tira nada do que é seu — só reorganiza o que existe.</p>
+    <main class="grade">
+      <section class="cartao">
+        <header><h2>Sobre você</h2></header>
+        <div class="corpo">
+          <div class="campo">
+            <label class="label" for="linkedinPerfilUrl">Endereço do seu perfil no LinkedIn</label>
+            <input class="field" id="linkedinPerfilUrl" type="url" placeholder="https://www.linkedin.com/in/seu-perfil" />
+            <p class="ajuda">Serve para a IA ter o seu histórico real na hora de responder. Ela nunca inventa, exagera ou tira nada do que é seu — só reorganiza o que existe.</p>
+          </div>
+          <div class="campo linha">
+            <div>
+              <label class="label" for="pretensaoSalarial">Pretensão: <span id="pretensaoTexto">não informada</span></label>
+              <input id="pretensaoSalarial" type="range" min="0" max="30000" step="500" />
+            </div>
+            <div>
+              <label class="label" for="anosExperiencia">Anos de experiência</label>
+              <input class="field" id="anosExperiencia" type="number" min="0" max="50" />
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div class="linha">
-      <div>
-        <label for="pretensaoSalarial">Pretensão salarial: <span id="pretensaoTexto">não informada</span></label>
-        <input id="pretensaoSalarial" type="range" min="0" max="30000" step="500" />
-      </div>
-      <div>
-        <label for="anosExperiencia">Anos de experiência</label>
-        <input id="anosExperiencia" type="number" min="0" max="50" />
-      </div>
+      <section class="cartao cartao-laranja">
+        <header><h2>Empresas bloqueadas</h2></header>
+        <div class="corpo">
+          <p class="ajuda">O robô nunca se candidata nelas. Serve para a empresa onde você trabalha hoje, por exemplo. "Acme", "Acme S.A." e "Acme Ltda" contam como a mesma.</p>
+          <div class="campo linha">
+            <input class="field" id="novaEmpresa" type="text" placeholder="Nome da empresa" aria-label="Nome da empresa a bloquear" />
+            <button class="btn btn-sm btn-secondary" id="addEmpresa" type="button" style="flex: 0 0 auto">Bloquear</button>
+          </div>
+          <ul class="chips" id="empresas"></ul>
+          <p class="ajuda" id="semEmpresas">Nenhuma empresa bloqueada.</p>
+        </div>
+      </section>
+
+      <section class="cartao cartao-roxo">
+        <header><h2>Inteligência artificial</h2></header>
+        <div class="corpo">
+          <label class="toggle"><input class="switch" id="iaAtiva" type="checkbox" /> Deixar a IA responder perguntas novas</label>
+          <p class="ajuda">
+            A IA roda dentro do ACV, com as travas dele: nunca responde autodeclaração (gênero, cor/raça, PcD) nem dado pessoal, e nunca inventa experiência. Com o ACV fechado ela não é consultada —
+            a candidatura para e espera você.
+          </p>
+        </div>
+      </section>
+
+      <section class="cartao cartao-ambar">
+        <header><h2>Ritmo e limites</h2></header>
+        <div class="corpo">
+          <div class="campo linha">
+            <div>
+              <label class="label" for="intervaloMinSegundos">Espera mínima (s)</label>
+              <input class="field" id="intervaloMinSegundos" type="number" min="5" max="3600" />
+            </div>
+            <div>
+              <label class="label" for="intervaloMaxSegundos">Espera máxima (s)</label>
+              <input class="field" id="intervaloMaxSegundos" type="number" min="5" max="7200" />
+            </div>
+          </div>
+          <div class="campo">
+            <span class="label">Limite por dia, por plataforma</span>
+            <div class="limites" id="limites"></div>
+          </div>
+          <div class="aviso aviso-atencao" style="margin-top: 10px">
+            Plataforma recém-usada entra em <b>aquecimento</b>: no máximo 5 candidaturas por dia nos 3 primeiros dias, mesmo que o limite seja maior. E o LinkedIn <b>proíbe automação</b> no contrato
+            de uso — quem é detectado pode perder a conta. O ACV não disfarça nada: vai devagar, respeita o limite e para no primeiro sinal de restrição.
+          </div>
+        </div>
+      </section>
+
+      <section class="cartao cartao-neutro largo">
+        <header><h2>Ligação com o ACV</h2></header>
+        <div class="corpo">
+          <div class="campo">
+            <label class="label" for="urlApp">Endereço da tela do ACV</label>
+            <input class="field" id="urlApp" type="url" placeholder="http://localhost:5173" />
+            <p class="ajuda">
+              É para onde a extensão te leva ao clicar em "Candidatar pelo ACV". Como o ACV é um servidor no seu computador, a mesma tela abre em qualquer navegador — inclusive neste, se você usa o
+              app em outro.
+            </p>
+          </div>
+          <p class="ajuda" id="sincronia" role="status" aria-live="polite">—</p>
+          <button class="btn btn-sm btn-secondary" id="sincronizar" type="button">Sincronizar agora</button>
+        </div>
+      </section>
+
+      <!-- Seção nova: a lista que o núcleo já servia e a extensão nunca mostrou -->
+      <section class="cartao cartao-verde largo">
+        <header>
+          <h2>Sites que o ACV automatiza</h2>
+          <span class="aside" id="sitesEm"></span>
+        </header>
+        <div class="corpo">
+          <ul class="sites" id="sites"></ul>
+          <p class="ajuda" id="semSites">Ainda não recebi a lista. Sincronize com o ACV.</p>
+        </div>
+      </section>
+    </main>
+
+    <div class="rodape-fixo">
+      <button class="btn btn-primary" id="salvar" type="button">Salvar</button>
+      <span class="estado" id="estado" role="status" aria-live="polite"></span>
     </div>
 
-    <h2>Empresas bloqueadas</h2>
-    <p class="ajuda">O robô nunca se candidata nelas. Serve para a empresa onde você trabalha hoje, por exemplo. "Acme", "Acme S.A." e "Acme Ltda" contam como a mesma.</p>
-    <div class="linha">
-      <input id="novaEmpresa" type="text" placeholder="Nome da empresa" />
-      <button id="addEmpresa" type="button" style="flex: 0 0 auto">Bloquear</button>
-    </div>
-    <ul id="empresas"></ul>
-
-    <h2>Inteligência artificial</h2>
-    <label class="switch"><input id="iaAtiva" type="checkbox" /> Deixar a IA responder perguntas novas</label>
-    <p class="ajuda">A IA roda dentro do ACV, com as travas dele: nunca responde autodeclaração (gênero, cor/raça, PcD) nem dado pessoal, e nunca inventa experiência. Com o ACV fechado ela não é consultada — a candidatura para e espera você.</p>
-
-    <h2>Ritmo e limites</h2>
-    <div class="linha">
-      <div>
-        <label for="intervaloMinSegundos">Espera mínima (s)</label>
-        <input id="intervaloMinSegundos" type="number" min="5" max="3600" />
-      </div>
-      <div>
-        <label for="intervaloMaxSegundos">Espera máxima (s)</label>
-        <input id="intervaloMaxSegundos" type="number" min="5" max="7200" />
-      </div>
-    </div>
-    <label for="limites">Limite por dia, por plataforma</label>
-    <div id="limites"></div>
-    <div class="aviso">
-      Plataforma recém-usada entra em <b>aquecimento</b>: no máximo 5 candidaturas por dia nos 3 primeiros dias, mesmo que o limite seja maior. E o LinkedIn <b>proíbe automação</b> no contrato de
-      uso — quem é detectado pode perder a conta. O ACV não disfarça nada: ele vai devagar, respeita o limite e para no primeiro sinal de restrição.
-    </div>
-
-    <h2>Ligação com o ACV</h2>
-    <label for="urlApp">Endereço da tela do ACV</label>
-    <input id="urlApp" type="url" placeholder="http://localhost:5173" />
-    <p class="ajuda">É para onde a extensão te leva ao clicar em "Candidatar pelo ACV". Como o ACV é um servidor no seu computador, a mesma tela abre em qualquer navegador — inclusive neste, se você usa o app em outro.</p>
-
-    <p class="ajuda" id="sincronia">—</p>
-    <button id="sincronizar" type="button">Sincronizar agora</button>
-
-    <div class="rodape">
-      <button class="principal" id="salvar" type="button">Salvar</button>
-      <span id="estado"></span>
-    </div>
     <script src="comum.js"></script>
+    <script src="ui/plataformas.js"></script>
     <script src="opcoes.js"></script>
   </body>
 </html>

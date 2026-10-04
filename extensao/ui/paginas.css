@@ -1,0 +1,261 @@
+/* Layout das páginas da extensão: o popup da barra e a página de opções.
+ *
+ * O painel injetado não usa nada daqui — ele tem a própria folha. Separar evita que o painel baixe e adote,
+ * em toda página de vaga que a pessoa abre, regras de layout que ele nunca vai usar.
+ */
+
+body {
+  margin: 0;
+  background: var(--color-page-bg);
+  color: var(--color-ink);
+  font-family: var(--font-ui);
+  font-size: 0.8125rem;
+  line-height: 1.45;
+}
+
+/* ─── Popup ───────────────────────────────────────────────────────────────────────────────────── */
+/* 360px em vez de 300: a largura antiga não cabia o nome de uma plataforma e o contador na mesma linha.
+ * Fica em px, e não em rem, porque é uma caixa dentro do chrome do navegador — esticar com a fonte do
+ * usuário quebraria o layout do próprio popup. */
+body.popup {
+  width: 360px;
+  padding: 12px;
+}
+
+.cabecalho {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+.cabecalho .marca {
+  height: 20px;
+  color: var(--color-blue-deep);
+}
+.cabecalho .espaco {
+  margin-left: auto;
+}
+
+.pilha {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ─── Página de opções ────────────────────────────────────────────────────────────────────────── */
+body.opcoes {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 26px 16px 86px;
+}
+body.opcoes h1 {
+  margin: 6px 0 2px;
+  font-size: 1.1875rem;
+}
+body.opcoes .marca {
+  height: 26px;
+  color: var(--color-ink);
+}
+
+.grade {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: start;
+}
+.grade .largo {
+  grid-column: 1 / -1;
+}
+
+@media (width <= 760px) {
+  .grade {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  body.opcoes {
+    padding: 18px 12px 86px;
+  }
+}
+
+.campo + .campo {
+  margin-top: 10px;
+}
+.linha {
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+}
+.linha > * {
+  flex: 1;
+}
+
+.ajuda {
+  margin: 4px 0 0;
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  color: var(--color-ink-soft);
+}
+
+/* Lista de empresas bloqueadas: o ✕ tinha `padding: 0 2px`, alvo impossível de acertar */
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+}
+.chips li {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 9px;
+  border: 1px solid var(--color-panel-border);
+  border-radius: 9px;
+  font-size: 0.75rem;
+}
+.chips button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-orange-deep);
+  font: inherit;
+  font-weight: 700;
+}
+.chips button:hover {
+  color: #000;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+/* Limites por plataforma: o rótulo era um <label> sem `for`, órfão, com aria-label no input */
+.limites {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.limites > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.limites label {
+  flex: 1;
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+.limites .field {
+  width: 78px;
+  flex: 0 0 auto;
+}
+
+/* ─── Catálogo de sites ───────────────────────────────────────────────────────────────────────── */
+.sites {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.sites li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 2px;
+}
+.sites li + li {
+  border-top: 1px solid var(--color-panel-border);
+}
+.sites .nome {
+  min-width: 112px;
+  font-weight: 700;
+}
+.sites .dominios {
+  color: var(--color-ink-soft);
+  font-size: 0.6875rem;
+}
+.sites .nota {
+  flex-basis: 100%;
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+}
+
+/* ─── Contadores do dia ───────────────────────────────────────────────────────────────────────── */
+.hoje {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.hoje > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.hoje .topo {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 0.75rem;
+}
+.hoje .conta {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+}
+.barra {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--color-page-bg);
+}
+.barra > span {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-blue-dark);
+}
+.barra.cheia > span {
+  background: var(--color-orange-deep);
+}
+
+.vazio {
+  margin: 0;
+  color: var(--color-ink-soft);
+  font-size: 0.75rem;
+}
+
+/* Rodapé fixo da página de opções */
+.rodape-fixo {
+  position: fixed;
+  inset: auto 0 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--color-panel-border);
+  background: var(--color-panel);
+}
+.rodape-fixo .estado {
+  font-size: 0.75rem;
+  color: var(--color-ink-soft);
+}
+.rodape-fixo .estado.sujo {
+  color: var(--color-amber-ink);
+  font-weight: 700;
+}

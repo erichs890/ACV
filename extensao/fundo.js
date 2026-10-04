@@ -296,6 +296,14 @@ const ACOES = {
     const { paineisEscondidos = {} } = (await chrome.storage.session?.get('paineisEscondidos').catch(() => ({}))) ?? {};
     return { escondido: !!paineisEscondidos[m.origem] };
   },
+  // O popup pede para o painel reaparecer num site onde a pessoa o escondeu
+  MOSTRAR_PAINEL: async m => {
+    const mapa = (await chrome.storage.session?.get('paineisEscondidos').catch(() => ({})))?.paineisEscondidos ?? {};
+    delete mapa[m.origem];
+    await chrome.storage.session?.set({ paineisEscondidos: mapa }).catch(() => {});
+    if (m.abaId) await chrome.tabs.reload(m.abaId);
+    return { ok: true };
+  },
   ABRIR_OPCOES: () => chrome.runtime.openOptionsPage(),
 };
 
