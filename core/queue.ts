@@ -17,7 +17,7 @@ import { esperaDaTentativa, falhaRepetivel, MAX_TENTATIVAS } from './falhas.ts';
 import { fecharNavegador } from './browser.ts';
 import { sessaoValida } from './sessao.ts';
 import { DADO_PESSOAL, categoriaSensivel } from '../src/sensiveis.ts';
-import { dentroDaJanela, perguntaSoDestaVaga, textoIntervalo } from '../src/dados.ts';
+import { dentroDaJanela, motivoDeEspera, perguntaSoDestaVaga } from '../src/dados.ts';
 
 const registrar = log.registrar;
 let ocupado = false; // uma candidatura por vez, sempre
@@ -533,16 +533,8 @@ function tratarFalha(vaga: Vaga, motivo: string) {
   registrar('alerta', `"${vaga.titulo}": ${motivo}. Tentativa ${tentativas} de ${MAX_TENTATIVAS}; volto a tentar em ${minutos} min.`);
 }
 
-/** Por que a fila não anda agora — mensagem única, para o usuário não ficar no escuro. */
-function motivoDeEspera(cfg: ReturnType<typeof ler.automacao>): string | null {
-  if (ler.robo() !== 'ativo') return 'o robô está pausado';
-  if (cfg.modo !== 'automatico') return 'o modo é manual (use "Quero me candidatar" em cada vaga)';
-  if (!dentroDaJanela(cfg.janela)) return `estamos fora da janela de envio (${cfg.janela})`;
-  if (enviosHoje() >= cfg.limiteDiario) return `o limite diário de ${cfg.limiteDiario} envio(s) foi atingido`;
-  const prox = ler.proximoEnvioEm();
-  if (prox && new Date(prox) > new Date()) return `o próximo envio está agendado para ${new Date(prox).toLocaleTimeString('pt-BR')} (intervalo de ${textoIntervalo(cfg.intervaloSegundos)})`;
-  return null;
-}
+/** Por que a fila não anda agora. A regra mora em `src/dados.ts`: a tela mostra o mesmo motivo. */
+const porQueParada = (cfg: ReturnType<typeof ler.automacao>) => motivoDeEspera({ robo: ler.robo(), cfg, enviadasHoje: enviosHoje(), proximoEnvioEm: ler.proximoEnvioEm() });
 
 // Quantas perguntas a IA já respondeu nesta vaga (modo Sem Piedade). Teto por vaga: formulário que não para de
 // perguntar é sinal de que algo fugiu do previsto, e reabrir a página sem fim não ajuda ninguém.
@@ -688,7 +680,7 @@ async function girarFila(forcar: boolean) {
     const forcarAgora = forcar || pedidoForcado;
     pedidoForcado = false;
     if (!forcarAgora) {
-      const espera = motivoDeEspera(cfg);
+      const espera = porQueParada(cfg);
       if (espera) {
         await liberarNavegador();
         // Só avisa quando há fila de verdade e o motivo mudou (senão vira ruído a cada 20 s)

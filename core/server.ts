@@ -128,7 +128,8 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     if (filtrosMudaram || (parcial.perfil && JSON.stringify(ler.localizacao()) !== localAntes) || (parcial.perfil && (parcial.perfil.cargo ?? '') !== cargoAntes)) repontuar();
     // Trocou para automático (ou mexeu nos filtros/limite) com o robô ligado: a fila é reavaliada na hora,
     // senão salvar a configuração não teria efeito nenhum até a próxima varredura.
-    if (a && (filtrosMudaram || a.modo !== antes.modo || a.regimes.join() !== antes.regimes.join() || a.limiteDiario !== antes.limiteDiario)) enfileirarCompativeis('configuração salva');
+    if (a && (filtrosMudaram || a.modo !== antes.modo || a.regimes.join() !== antes.regimes.join() || a.limiteDiario !== antes.limiteDiario || a.filaAlvo !== antes.filaAlvo))
+      enfileirarCompativeis('configuração salva');
     json(res, 200, montarEstado());
   },
   // Login manual assistido (qualquer plataforma com `adapter.sessao`): a pessoa entra na janela do robô; o ACV

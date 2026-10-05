@@ -1,4 +1,4 @@
-import type { Conexao, Envio, Plataforma, StatusVaga } from './types.ts';
+import type { ConfigAutomacao, Conexao, Envio, EstadoRobo, Plataforma, StatusVaga } from './types.ts';
 
 // Catálogo do produto: só plataformas em que vale a pena automatizar. O critério que decidiu a poda de
 // 21/09/2026 é um só — **a candidatura tem de acontecer dentro da plataforma**. Site que redireciona para o
@@ -266,6 +266,43 @@ export function dentroDaJanela(janela: string): boolean {
 
 /** "10 s", "1 min", "8 min", "1 min 30 s": rótulo legível para uma espera em segundos. */
 export const textoIntervalo = (s: number) => (s < 60 ? `${s} s` : s % 60 === 0 ? `${s / 60} min` : `${Math.floor(s / 60)} min ${s % 60} s`);
+
+/**
+ * Por que a fila não anda agora — ou `null` quando ela anda.
+ *
+ * Mora aqui, e não em `core/queue.ts`, porque tem DOIS leitores: o núcleo decide a rodada por ela (em
+ * `girarFila`, que é o ponto de uso que autoriza envio) e a tela mostra o motivo em cima da fila. Era só do
+ * núcleo, e o motivo ia apenas para o log — então a pergunta mais frequente de quem olha a tela ("por que
+ * está parado?") não tinha resposta ali. Duas cópias divergiriam, e o sintoma seria a tela dizer que está
+ * tudo bem com o robô parado.
+ *
+ * A ordem importa: é da causa mais geral para a mais passageira, porque é essa a ordem em que a pessoa
+ * consegue agir.
+ */
+export function motivoDeEspera(p: {
+  robo: EstadoRobo;
+  cfg: Pick<ConfigAutomacao, 'modo' | 'janela' | 'limiteDiario' | 'intervaloSegundos'>;
+  enviadasHoje: number;
+  proximoEnvioEm: string | null;
+}): string | null {
+  if (p.robo !== 'ativo') return 'o robô está pausado';
+  if (p.cfg.modo !== 'automatico') return 'o modo é manual (use "Quero me candidatar" em cada vaga)';
+  if (!dentroDaJanela(p.cfg.janela)) return `estamos fora da janela de envio (${p.cfg.janela})`;
+  if (p.enviadasHoje >= p.cfg.limiteDiario) return `o limite diário de ${p.cfg.limiteDiario} envio(s) foi atingido`;
+  if (p.proximoEnvioEm && new Date(p.proximoEnvioEm) > new Date())
+    return `o próximo envio está agendado para ${new Date(p.proximoEnvioEm).toLocaleTimeString('pt-BR')} (intervalo de ${textoIntervalo(p.cfg.intervaloSegundos)})`;
+  return null;
+}
+
+/**
+ * Quantas vagas ainda entram na fila agora: o menor entre o que você pediu para ver e o que cabe hoje.
+ *
+ * `filaAlvo` e `limiteDiario` respondem perguntas diferentes (quantas revisar × quantos currículos podem
+ * sair), e o menor sempre vence — que é o limite diário, porque é ele que protege você. A tela usa este mesmo
+ * número para dizer quantas faltam, em vez de recalcular por fora e discordar do núcleo.
+ */
+export const cabemNaFila = (cfg: Pick<ConfigAutomacao, 'filaAlvo' | 'limiteDiario'>, enviadasHoje: number, naFila: number) =>
+  Math.max(0, Math.min(cfg.filaAlvo - naFila, cfg.limiteDiario - enviadasHoje - naFila));
 
 /**
  * A plataforma desta vaga está no foco da automação? (Automação › "Plataformas que entram na fila".)

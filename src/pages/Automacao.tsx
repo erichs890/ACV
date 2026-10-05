@@ -28,7 +28,21 @@ import Modal from '../components/Modal';
 import { statusRobo } from '../components/Sidebar';
 import { useEstado, type ConfigAutomacao } from '../estado';
 import { post, urlArquivo } from '../api';
-import { MODELO, PLATAFORMAS, REGIMES, plataformaNoFoco, REGIME_VAGA, STATUS_VAGA, dentroDaJanela, formatarTamanho, getPlataforma, perguntaSoDestaVaga, textoIntervalo } from '../dados';
+import {
+  MODELO,
+  PLATAFORMAS,
+  REGIMES,
+  plataformaNoFoco,
+  REGIME_VAGA,
+  STATUS_VAGA,
+  cabemNaFila,
+  dentroDaJanela,
+  formatarTamanho,
+  getPlataforma,
+  motivoDeEspera,
+  perguntaSoDestaVaga,
+  textoIntervalo,
+} from '../dados';
 
 const titulos = { ativo: 'Robô ligado', pausado: 'Robô parado', erro: 'Robô com erro' };
 const coresLog: Record<LinhaLog['tipo'], string> = { sucesso: 'text-aqua', info: 'text-white/85', aguardo: 'text-amber', erro: 'text-orange-light', alerta: 'text-amber' };
@@ -106,6 +120,27 @@ export default function Automacao() {
   const conectadas = PLATAFORMAS.filter(p => estado.conexoes[p.id]);
   const empresasAtivas = estado.empresas.filter(e => e.ativo).length;
   const ativo = estado.robo === 'ativo';
+
+  // Quantas saíram hoje: a mesma conta do núcleo (`enviosHoje`). Daqui saem o portão e o "faltam N".
+  const hoje = new Date().toDateString();
+  const enviadasHoje = estado.candidaturas.filter(c => c.resultado === 'enviada' && new Date(c.enviadaEm).toDateString() === hoje).length;
+  const parada = motivoDeEspera({ robo: estado.robo, cfg: estado.automacao, enviadasHoje, proximoEnvioEm: estado.proximoEnvioEm });
+  const faltamNaFila = cabemNaFila(estado.automacao, enviadasHoje, estado.fila.length);
+
+  /**
+   * Quando esta posição da fila deve sair.
+   *
+   * Com o robô PAUSADO não mostra hora de relógio: seria mentira, porque o cronômetro só começa no start.
+   * Mostra o deslocamento ("1ª a sair", "+3 min"), que é verdade nos dois estados. E a partir do limite diário
+   * o item aparece como "amanhã", em vez de ganhar um horário que não vai acontecer.
+   */
+  const quandoSai = (i: number): string => {
+    if (enviadasHoje + i >= estado.automacao.limiteDiario) return 'amanhã';
+    if (!ativo) return i === 0 ? '1ª a sair' : `+${textoIntervalo(i * estado.automacao.intervaloSegundos)}`;
+    const base = estado.proximoEnvioEm ? new Date(estado.proximoEnvioEm) : new Date();
+    return new Date(base.getTime() + i * estado.automacao.intervaloSegundos * 1000).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  };
+
   // Perguntas postas em espera nesta sessão: a vaga continua pendente no núcleo, só o modal não volta.
   // Sem isto não havia saída não-destrutiva: fechar no X, no Esc ou clicando fora descartava a vaga.
   const [adiadas, setAdiadas] = useState<string[]>([]);
@@ -562,6 +597,13 @@ export default function Automacao() {
                     <input type="number" min={1} max={100} value={cfg.limiteDiario} onChange={e => set({ limiteDiario: +e.target.value })} className="field tabular-nums" />
                   </label>
                   <label>
+                    <span className="label">Vagas na fila</span>
+                    <input type="number" min={1} max={100} value={cfg.filaAlvo} onChange={e => set({ filaAlvo: +e.target.value })} className="field tabular-nums" />
+                    <span className="block text-[10px] text-ink-soft">
+                      Quantas o robô mantém na fila para você revisar. Ele enche até aí mesmo pausado, e repõe quando você tira uma. Quem limita o envio continua sendo o limite por dia.
+                    </span>
+                  </label>
+                  <label>
                     <span className="label">Janela de funcionamento</span>
                     <select value={cfg.janela} onChange={e => set({ janela: e.target.value })} className="field">
                       <option value="08:00-20:00">08:00 às 20:00</option>
@@ -650,21 +692,38 @@ export default function Automacao() {
       </div>
 
       <div className="flex flex-col gap-4">
-        <Panel icon={ListOrdered} title="Fila de envio" tone="green" aside={estado.fila.length > 0 ? `${estado.fila.length} vagas` : undefined} bodyClassName="flex flex-col">
+        <Panel icon={ListOrdered} title="Fila de envio" tone="green" aside={`${estado.fila.length} de ${estado.automacao.filaAlvo}`} bodyClassName="flex flex-col">
+          {/* O portão que está segurando a fila AGORA. Antes isto só ia para o log de texto, e a pergunta mais
+              frequente de quem olha a tela — "por que não está andando?" — não tinha resposta aqui. */}
+          {parada ? (
+            <p className="flex items-start gap-1.5 border-b border-amber bg-amber/20 px-2.5 py-2 text-[11px] text-amber-ink">
+              <Pause size={13} aria-hidden className="mt-px shrink-0" />
+              <span>
+                <b>Fila parada:</b> {parada}.
+              </span>
+            </p>
+          ) : (
+            estado.fila.length > 0 && <p className="border-b border-panel-border bg-green-deep/10 px-2.5 py-2 text-[11px] font-bold text-green-deep">Enviando, uma vaga por vez.</p>
+          )}
+
           {estado.fila.length === 0 ? (
             <p className="p-4 text-center text-xs text-ink-soft">
-              {estado.automacao.modo === 'manual' ? 'Escolha vagas na lista ao lado com "Quero me candidatar".' : 'A fila enche sozinha quando o robô encontrar vagas compatíveis.'}
+              {estado.automacao.modo === 'manual'
+                ? 'Escolha vagas na lista ao lado com "Quero me candidatar".'
+                : 'A fila enche sozinha até o alvo assim que houver vagas compatíveis — com o robô ligado ou pausado.'}
             </p>
           ) : (
             <VerMais itens={estado.fila} nome="vagas">
               {visiveis => (
                 <ol className="flex-1 overflow-y-auto">
                   {visiveis.map((v, i) => (
-                    <li key={v.id} className="flex h-12 items-center gap-2 border-b border-panel-border px-2.5">
+                    <li key={v.id} className="flex min-h-12 items-center gap-2 border-b border-panel-border px-2.5 py-1.5">
                       <span className="w-6 text-[11px] font-bold text-ink-soft tabular-nums">{String(i + 1).padStart(2, '0')}</span>
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-xs font-bold">{v.titulo}</p>
-                        <p className="truncate text-[10px] text-ink-soft">{v.empresa}</p>
+                        <p className="truncate text-[10px] text-ink-soft">
+                          {v.empresa} <span className="tabular-nums">· {quandoSai(i)}</span>
+                        </p>
                       </div>
                       <span className={`rounded-[9px] px-2 py-0.5 text-[10px] font-bold ${STATUS_VAGA[v.status].classe}`}>{STATUS_VAGA[v.status].rotulo}</span>
                       <button
@@ -682,11 +741,17 @@ export default function Automacao() {
               )}
             </VerMais>
           )}
-          {estado.proximoEnvioEm && ativo && (
-            <p className="border-t border-panel-border px-2.5 py-2 text-[11px] text-ink-soft tabular-nums">
-              Próxima candidatura liberada às {new Date(estado.proximoEnvioEm).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+
+          <div className="flex items-center gap-2 border-t border-panel-border px-2.5 py-2">
+            <p className="flex-1 text-[11px] text-ink-soft tabular-nums">
+              {enviadasHoje} de {estado.automacao.limiteDiario} enviadas hoje
+              {faltamNaFila > 0 && ` · faltam ${faltamNaFila} para encher a fila`}
             </p>
-          )}
+            <button type="button" onClick={() => post('/robo', { ligar: !ativo })} className={`btn btn-sm ${ativo ? 'btn-secondary' : 'btn-primary'}`}>
+              {ativo ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
+              {ativo ? 'Pausar envio' : 'Começar a enviar'}
+            </button>
+          </div>
         </Panel>
 
         <Panel icon={Terminal} title="Log de atividade" tone="slate" className="h-[300px]" bodyClassName="flex flex-col bg-side-bottom">
@@ -748,6 +813,14 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
           <span className={`inline-flex items-center gap-1 rounded-[9px] px-2 py-0.5 text-[10px] font-bold text-white ${plataforma.cor}`} title={`Encontrada em ${origemDaVaga(v)}`}>
             {plataforma.nome}
           </span>
+          {/* "Você tirou da fila" é diferente de "a nota caiu", e a tela tem de distinguir: a primeira é uma
+              decisão sua e tem desfazer; a segunda é o critério, e muda sozinha quando o critério muda. */}
+          {v.recusadaPorVoce && (
+            <span className="inline-flex items-center gap-1 rounded-[9px] bg-panel-border px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+              <X size={11} aria-hidden />
+              Você tirou da fila
+            </span>
+          )}
         </p>
         <p className="text-[11px] text-ink-soft">
           {v.empresa} · {MODELO[v.modelo]} · {v.local || v.pais || 'local não informado'} · {REGIME_VAGA[v.regime]}
@@ -777,6 +850,13 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
             <a href={urlArquivo(v.captura)} target="_blank" rel="noreferrer" className="text-blue-dark hover:underline">
               Ver captura de tela
             </a>
+          )}
+          {/* Clique errado não pode ser definitivo: sem isto a vaga sairia do jogo para sempre */}
+          {v.recusadaPorVoce && (
+            <button type="button" onClick={() => post('/fila/devolver', { id: v.id })} className="inline-flex items-center gap-1 text-blue-dark hover:underline">
+              <RefreshCw size={12} aria-hidden />
+              Devolver à fila
+            </button>
           )}
         </p>
       </div>

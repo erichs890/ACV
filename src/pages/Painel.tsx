@@ -52,7 +52,7 @@ export default function Painel() {
       <section aria-label="Resumo" className="grid grid-cols-4 gap-4 max-md:grid-cols-2 max-md:gap-2.5">
         <StatCard icon={Send} tom="bg-blue-dark" valor={enviados.length} label="Candidaturas" nota={ensaios > 0 ? `${ensaios} ensaio(s) não contam: preenchem sem enviar` : undefined} />
         <StatCard icon={Clock} tom="bg-green-dark" valor={enviados.filter(e => e.data === hoje).length} label="Envios hoje" />
-        <StatCard icon={ListOrdered} tom="bg-orange" valor={fila.length} label="Vagas na fila" />
+        <StatCard icon={ListOrdered} tom="bg-orange" valor={`${fila.length}/${estado.automacao.filaAlvo}`} label="Vagas na fila" />
         <StatCard
           icon={Target}
           tom="bg-purple"
