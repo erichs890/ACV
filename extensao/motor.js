@@ -22,6 +22,23 @@
     if (respostas.length > 80) respostas.shift();
   });
 
+  /**
+   * Arma (ou desarma) o corte de escrita do ensaio em `rede.js`, que roda no mundo da página.
+   *
+   * O corte vale só enquanto a tentativa dura: armado para sempre, o ensaio quebraria a navegação normal da
+   * pessoa naquela aba. Por isso quem arma também desarma, no `finally`.
+   */
+  const armarEnsaio = armado => {
+    try {
+      window.dispatchEvent(new CustomEvent('acv-ensaio', { detail: { armado } }));
+    } catch {
+      // sem rede.js nesta página (domínio fora dos `matches` do manifesto): o motor avisa e não ensaia
+    }
+  };
+
+  /** As escritas que o ensaio recusou — a resposta para "por onde isso teria enviado?". */
+  const escritasBarradas = desde => respostas.filter(r => r.em >= desde && r.bloqueado).map(r => `${r.metodo} ${r.url}`);
+
   /** Houve POST/PUT para o próprio site, com 2xx, depois do clique final? É a prova de que a vaga recebeu. */
   async function provaDeEnvio(desde, segundos = 20) {
     const fim = Date.now() + segundos * 1000;
@@ -157,7 +174,14 @@
    * Candidata na vaga que está aberta nesta aba. Um clique seu = uma candidatura: o motor não varre a lista de
    * resultados sozinho. Devolve sempre o que aconteceu, inclusive quando desiste no meio.
    */
-  async function candidatar(log = () => {}) {
+  /**
+   * Uma candidatura, ponta a ponta, nesta página.
+   *
+   * O corte de escrita do ensaio é desarmado no `finally` abaixo, em `candidatar`: armado e esquecido, ele
+   * quebraria a navegação normal da pessoa nesta aba depois do ensaio terminar — qualquer formulário do site
+   * pararia de funcionar, e ninguém ligaria uma coisa à outra.
+   */
+  async function tentarCandidatar(log = () => {}) {
     const handler = handlerDe(location.hostname);
     const dominio = location.hostname.replace(/^www\./, '');
     const { cfg } = await aoFundo({ tipo: 'CONFIG' });
@@ -184,7 +208,30 @@
      * espera a prova de rede. Clicar aqui mandaria a candidatura antes de preencher, e o motor devolveria
      * `erro` depois de um envio consumado: era isso que a invariante 1 proíbe.
      */
+    /**
+     * Invariante 5 do projeto, agora valendo aqui: ensaio não envia.
+     *
+     * O ensaio é configuração do núcleo (Automação › modo ensaio) e chega junto dos dados. Até hoje o motor da
+     * extensão não o conhecia: a tela do ACV dizia "nada será enviado" e um clique no painel mandava currículo
+     * de verdade. Enquanto o painel preferia o adapter do núcleo isso quase não aparecia — no momento em que a
+     * extensão virou o caminho principal de um site com login, virou armadilha.
+     *
+     * Com o ACV fechado vale o último valor sincronizado (fica no `cache` do worker), como todo o resto.
+     */
+    const ensaio = dados.ensaio === true;
+    if (ensaio) {
+      if (!window.__acvRede)
+        return {
+          status: 'erro',
+          motivo:
+            'o modo ensaio está ligado no ACV, mas nesta página eu não consigo garantir que nada seja enviado (falta o monitor de rede). Não vou arriscar: desligue o ensaio para candidatar de verdade, ou me peça para incluir este site.',
+        };
+      armarEnsaio(true);
+      log('Modo ensaio LIGADO: vou preencher tudo e nenhuma escrita sai desta página.');
+    }
     const aberturaEm = Date.now();
+    // No ensaio o clique de abrir acontece normalmente: quem segura o envio é o corte de escrita, não a
+    // recusa do clique — formulário que abre por botão de JavaScript só revela os campos depois dele
     const abertura = handler.abrir?.();
     if (abertura === 'envia_direto') log('Aqui a candidatura é de um clique só: vou preencher o que houver e então enviar.');
     else if (abertura) {
@@ -211,7 +258,18 @@
          * JavaScript não deixa ver o destino antes, e `reconhecerEnvio` devolveu `talvez`. Antes de acusar
          * erro, pergunto à rede. Sucesso é a resposta HTTP, não o que está na tela: dizer "erro" aqui faria a
          * pessoa clicar de novo e mandar a segunda candidatura.
+         *
+         * No ensaio a mesma pergunta tem outra resposta: a escrita que o corte recusou prova que ali era o
+         * envio. Isso é o ensaio dando certo — e a rota recusada é justamente o que eu preciso saber para
+         * escrever o adapter desta plataforma.
          */
+        if (ensaio) {
+          const barradas = escritasBarradas(aberturaEm);
+          if (barradas.length) {
+            log(`Ensaio: a candidatura era de um clique, e o envio foi bloqueado em ${barradas.join(', ')}.`);
+            return { status: 'ensaio', motivo: `modo ensaio: aqui a candidatura é de um clique, e o envio foi bloqueado em ${barradas[0]}. Nada chegou à plataforma.`, rotas: barradas };
+          }
+        }
         const prova = await provaDeEnvio(aberturaEm, 3);
         if (prova) {
           log(`A candidatura saiu no próprio clique de abrir. Prova de envio: ${prova.metodo} ${new URL(prova.url, location.origin).pathname} → HTTP ${prova.status}.`);
@@ -226,6 +284,23 @@
       alvo.click();
 
       if (final) {
+        /**
+         * No ensaio o botão final É clicado — é o único jeito de saber se a plataforma liberou o envio, que é
+         * a pergunta que o ensaio existe para responder. O que impede a candidatura de sair é o corte de
+         * escrita armado acima, e o que ele recusou vira o relatório: a rota por onde o envio teria ido.
+         */
+        if (ensaio) {
+          await esperar(1200);
+          const barradas = escritasBarradas(desde);
+          log(barradas.length ? `Ensaio: o envio foi bloqueado em ${barradas.join(', ')}.` : 'Ensaio: cliquei em enviar e nenhuma escrita saiu — nada chegou à plataforma.');
+          return {
+            status: 'ensaio',
+            motivo: barradas.length
+              ? `modo ensaio: o formulário foi preenchido e o envio foi bloqueado em ${barradas[0]}. Nada chegou à plataforma.`
+              : 'modo ensaio: o formulário foi preenchido e nada foi enviado.',
+            rotas: barradas,
+          };
+        }
         // Daqui para a frente NÃO se clica de novo: se o envio saiu, clicar outra vez manda duas candidaturas
         const prova = await provaDeEnvio(desde);
         const naTela = handler.sucesso?.test(document.body.innerText);
@@ -248,5 +323,13 @@
     return { status: 'enviada', espera: globalThis.ACVComum.proximaEspera(cfg) };
   }
 
-  globalThis.ACVMotor = { candidatar, preencherEtapa, escrever, escolherOpcao, provaDeEnvio, valorFixo };
+  const candidatar = async (log = () => {}) => {
+    try {
+      return await tentarCandidatar(log);
+    } finally {
+      armarEnsaio(false);
+    }
+  };
+
+  globalThis.ACVMotor = { candidatar, preencherEtapa, escrever, escolherOpcao, provaDeEnvio, valorFixo, armarEnsaio };
 })();

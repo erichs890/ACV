@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (106 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (107 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -34,7 +34,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 2. **Nunca inventar nada no currículo.** `validarAdaptacao` compara palavra a palavra; qualquer termo novo descarta a adaptação e manda o original.
 3. **Autodeclaração** (gênero, raça, PcD, religião, saúde) nunca sai de similaridade, de currículo nem de IA — só da escolha explícita do usuário (`src/sensiveis.ts`). **Dado pessoal** (`DADO_PESSOAL`: documento, endereço, contato, dinheiro, data) também não passa pela IA: errar isso vai num formulário real.
 4. **Uma vaga, uma candidatura.** Em qualquer caminho: fila, clique manual, retomada de pendência.
-5. **Ensaio não envia.** As rotas de envio ficam abortadas no navegador. Desligar o ensaio devolve as vagas ensaiadas à fila (`podeEntrarNaFila`) — senão elas ficam órfãs: a tela mostra, o robô nunca pega.
+5. **Ensaio não envia.** No núcleo, as rotas de envio ficam abortadas no navegador do robô; **na extensão**, `rede.js` recusa toda escrita (POST/PUT/PATCH/DELETE e `submit` de form) enquanto o ensaio está armado — por MÉTODO, não por caminho, e desarmado no fim da tentativa. Nos dois casos o motor preenche e clica normalmente: o que segura é a rede, porque formulário que abre por botão de JavaScript só revela os campos depois do clique. Desligar o ensaio devolve as vagas ensaiadas à fila (`podeEntrarNaFila`) — senão elas ficam órfãs: a tela mostra, o robô nunca pega.
 
 ## Uma fonte por campo
 

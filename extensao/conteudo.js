@@ -237,7 +237,7 @@
     empresaDaVaga: () => doJsonLd()?.empresa || texto(document.querySelector('[class*="company" i],[data-testid*="company" i]')).slice(0, 120),
     descricaoDaVaga: () => (doJsonLd()?.descricao || texto(document.querySelector('[class*="description" i],[id*="description" i]'))).slice(0, 4000),
     reconhecerEnvio,
-    abrir: () => {
+    abrir() {
       // O formulário já está na página? Então não há o que abrir (InHire, Vagas PJ e afins são assim)
       if (descobrirCamposFormulario().length) return false;
       // `this` é o handler fundido: plataforma com CTA próprio (ProgramaThor) reconhece o botão certo

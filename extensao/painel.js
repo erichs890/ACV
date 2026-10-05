@@ -89,7 +89,7 @@
       bloqueada ? pilula('empresa bloqueada', 'erro') : '',
     ].join('');
 
-    const { principal, alternativa, motivo } = decidir({ ocupado, sincronizado: st?.sincronizado, temVaga, bloqueada, cota, sitio, restrita });
+    const { principal, alternativa, motivo } = decidir({ ocupado, sincronizado: st?.sincronizado, temVaga, bloqueada, cota, sitio, restrita, ensaio: st?.ensaio === true });
 
     const b = $('acaoPrincipal');
     b.dataset.acao = principal.id;
@@ -145,6 +145,11 @@
       if (r.status === 'enviada') {
         registrar('Candidatura enviada.', 'ok');
         if (r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
+      } else if (r.status === 'ensaio') {
+        // Ensaio é desfecho BOM: sem este ramo ele caía no `else` e aparecia em vermelho, como falha
+        registrar('Ensaio concluído: o formulário foi preenchido e nada chegou à plataforma.', 'ok');
+        if (r.rotas?.length) registrar(`O envio teria ido por ${r.rotas.join(', ')}.`);
+        registrar('Desligue o modo ensaio no ACV (Automação) para candidatar de verdade.', 'atencao');
       } else {
         registrar(`${r.status === 'pergunta' ? 'Parei nesta pergunta' : 'Não enviei'}: ${r.pergunta ? `"${r.pergunta}" — ` : ''}${r.motivo ?? ''}`, r.status === 'pergunta' ? 'atencao' : 'erro');
       }

@@ -16,12 +16,13 @@
    *   cota         — { cabem, feitasHoje, limite, aquecendo }
    *   sitio        — o que `plataformas.classificar` devolveu (ou null)
    *   restrita     — a plataforma mostrou verificação anti-robô
+   *   ensaio       — o modo ensaio está ligado no ACV (Automação): preencher sim, enviar não
    *
    * Devolve `{ principal, alternativa }`, cada uma `{ id, rotulo, variante, desabilitado, orbe }`, mais um
    * `motivo` que explica por que o botão está como está — o painel o mostra abaixo quando desabilitado.
    */
   function decidir(situacao = {}) {
-    const { ocupado, sincronizado, temVaga, bloqueada, cota, sitio, restrita } = situacao;
+    const { ocupado, sincronizado, temVaga, bloqueada, cota, sitio, restrita, ensaio } = situacao;
     const nivel = sitio?.nivel ?? null;
     const b = (id, rotulo, extra = {}) => ({ id, rotulo, variante: 'primary', desabilitado: false, orbe: null, ...extra });
 
@@ -76,14 +77,28 @@
         motivo: '',
       };
 
+    /**
+     * O ensaio entra no RÓTULO, não só no aviso depois.
+     *
+     * Dizer "Iniciar candidatura" e então explicar que nada foi enviado inverte a ordem: quem clica precisa
+     * saber o que vai acontecer antes. E o contrário é pior ainda — acreditar que o ensaio protege e descobrir
+     * pelo e-mail do recrutador que não protegia.
+     */
+    const AVISO_ENSAIO = 'Modo ensaio ligado no ACV (Automação): eu preencho tudo e paro antes de enviar.';
+
     if (nivel === 'extensao')
       return {
-        principal: b('extensao', 'Iniciar candidatura'),
+        principal: b('extensao', ensaio ? 'Ensaiar candidatura (não envia)' : 'Iniciar candidatura'),
         alternativa: { id: 'buscar', rotulo: 'Buscar vagas com meus critérios', variante: 'secondary', desabilitado: false, orbe: null },
-        motivo: '',
+        motivo: ensaio ? AVISO_ENSAIO : (sitio?.semSessaoDoNucleo && sitio?.nota) || '',
       };
 
-    if (nivel === 'generico') return { principal: b('generico', 'Tentar no modo genérico'), alternativa: null, motivo: sitio?.nota ?? '' };
+    if (nivel === 'generico')
+      return {
+        principal: b('generico', ensaio ? 'Ensaiar no modo genérico (não envia)' : 'Tentar no modo genérico'),
+        alternativa: null,
+        motivo: ensaio ? `${AVISO_ENSAIO} ${sitio?.nota ?? ''}`.trim() : (sitio?.nota ?? ''),
+      };
 
     // Site que não é vaga e não está na lista: o painel nem deveria ter aparecido
     return { principal: b('nada', 'Nada para fazer nesta página', { variante: 'secondary', desabilitado: true }), alternativa: null, motivo: '' };

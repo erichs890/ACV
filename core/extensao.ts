@@ -150,6 +150,15 @@ export function dadosParaExtensao(comCurriculo: boolean): Record<string, unknown
       cargo: p?.cargo ?? '',
     },
     regimePreferido: ler.automacao().regimePreferido,
+    /**
+     * Invariante 5 valendo também fora do núcleo.
+     *
+     * O ensaio é uma configuração do núcleo, e o motor da extensão nunca soube dela: a pessoa ligava "ensaio"
+     * em Automação, via a tela dizer que nada seria enviado, e um clique no painel mandava currículo de
+     * verdade. Enquanto o painel preferia o adapter do núcleo isso quase nunca aparecia; no momento em que a
+     * extensão virou o caminho principal de um site com login, virou armadilha.
+     */
+    ensaio: ler.automacao().ensaio === true,
     perguntas: ler
       .perguntas()
       .filter(q => q.resposta.trim())

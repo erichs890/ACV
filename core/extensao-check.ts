@@ -649,6 +649,51 @@ try {
   const umaSo = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as unknown[];
   assert.equal(umaSo.length, 1, 'registrada uma vez, para contar no limite do dia e travar a repetição');
   console.log('✓ Motor: clique que já enviou é reconhecido pela prova de rede, nunca reportado como falha');
+
+  /**
+   * Invariante 5 valendo fora do núcleo: ensaio não envia.
+   *
+   * O ensaio é configuração do núcleo e o motor da extensão não o conhecia — a tela do ACV dizia "nada será
+   * enviado" e um clique no painel mandava currículo de verdade.
+   *
+   * O corte é na REDE, por método, como o do núcleo: o motor clica em tudo (senão formulário que abre por
+   * botão de JavaScript nunca revelaria os campos, e o ensaio não mostraria nada), e `rede.js` recusa toda
+   * escrita. Os dois caminhos entram aqui porque escrevem de formas diferentes: o formulário de etapas manda
+   * por `fetch`, e a candidatura de um clique manda pelo `submit` de um `<form method="post">`, que não passa
+   * por `fetch` nem por XHR.
+   */
+  await prepararCandidatura(
+    { cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: true, perguntas: [{ pergunta: 'Quantos anos de experiência com React?', resposta: 'Mais de 3 anos' }] }, cabem: CABEM_LIVRE, enviadas: [] },
+    '/candidatura',
+  );
+  const antesDoEnsaio = envios;
+  r = await candidatar();
+  assert.equal(r.status, 'ensaio', `com ensaio ligado o desfecho é ensaio, não enviada (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, antesDoEnsaio, 'e NADA pode ter saído');
+  assert.equal(await page.inputValue('#nome'), 'Marina Pitanga', 'mas o formulário foi preenchido de verdade — é o que o ensaio existe para mostrar');
+  const nadaRegistrado = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as unknown[];
+  assert.equal(nadaRegistrado.length, 0, 'ensaio não conta no limite do dia nem sobe como candidatura');
+
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: true }, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-js');
+  const antesDoEnsaioDireto = envios;
+  r = await candidatar();
+  assert.equal(r.status, 'ensaio', `na candidatura de um clique o ensaio também é ensaio (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, antesDoEnsaioDireto, 'e a escrita foi recusada antes de chegar ao servidor');
+
+  // Envio por <form method="post">, que não passa por fetch nem por XHR: sem o `submit` barrado, o caso mais
+  // direto de todos escaparia justamente do ensaio
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: true }, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-form');
+  const antesDoForm = envios;
+  r = await candidatar();
+  assert.equal(envios, antesDoForm, 'o submit de um <form method="post"> também é barrado no ensaio');
+
+  // E o corte não pode sobrar na aba: armado e esquecido, ele quebraria a navegação normal da pessoa
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: false }, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-js');
+  const antesDeVoltar = envios;
+  r = await candidatar();
+  assert.equal(r.status, 'enviada', `com o ensaio desligado o envio volta a acontecer (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, antesDeVoltar + 1, 'o corte de escrita do ensaio foi desarmado ao fim da tentativa');
+  console.log('✓ Motor: ensaio preenche, clica e NENHUMA escrita sai da página — e o corte não sobra na aba');
 } finally {
   await page.close().catch(() => {});
   servidor.close();

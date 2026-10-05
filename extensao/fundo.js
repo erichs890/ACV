@@ -137,6 +137,8 @@ async function status() {
     contadores,
     hoje: Object.fromEntries(Object.keys(cfg.limiteDiarioPorPlataforma ?? {}).map(d => [d, quantasCabemHoje(d, cfg, contadores)])),
     cacheCarregado: !!cache.perfil,
+    // O painel precisa do ensaio para avisar no RÓTULO do botão, antes do clique — e não depois do envio
+    ensaio: atual.ensaio === true,
   };
 }
 
