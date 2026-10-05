@@ -420,7 +420,21 @@ export function resolverCampo(campo: CampoDom, dados: DadosCandidatura): Resoluc
     default:
       if (campo.tipo === 'arquivo') return { acao: 'pular', motivo: 'anexo que não é o currículo' };
       if (campo.tipo === 'checkbox') return campo.obrigatorio ? { acao: 'marcar' } : extra('opcoes');
-      if (campo.tipo === 'desconhecido') return { acao: 'pergunta', pergunta: { rotulo: campo.rotulo || campo.nome, tipo: 'texto' } };
+      if (campo.tipo === 'desconhecido') {
+        /**
+         * Campo que o motor não soube classificar ia DIRETO para pendência, sem consultar `dados.responder`.
+         * Duas consequências que ninguém via: uma pergunta já respondida uma vez parava a vaga de novo, e a
+         * política de autodeclaração (inclusive a do Sem Piedade) nunca era aplicada aqui — era o buraco por
+         * onde "a IA responde tudo" deixava de ser verdade.
+         *
+         * `dados.responder` é o caminho único (resposta salva, similaridade e, para sensível,
+         * `decidirSensivel`): **nenhuma IA entra por aqui.** Se devolver null a vaga fica pendente como
+         * antes, e aí sim o Sem Piedade entra em `responderComIA`, com as travas de `core/ia.ts` em pé.
+         */
+        const pergunta: PerguntaExtra = { rotulo: campo.rotulo || campo.nome, tipo: 'texto', obrigatoria: campo.obrigatorio };
+        const salva = dados.responder(pergunta);
+        return salva !== null ? { acao: 'valor', valor: salva } : { acao: 'pergunta', pergunta };
+      }
       return extra(campo.tipo === 'grupo' ? 'multipla' : campo.tipo === 'radio' || campo.tipo === 'select' || campo.tipo === 'dropdown' ? 'opcoes' : 'texto');
   }
 }

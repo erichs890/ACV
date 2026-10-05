@@ -429,7 +429,48 @@ assert.equal(decidirSensivel({ ...genero, opcoes: ['Homem', 'Mulher'] }, [], { m
 assert.equal(decidirSensivel({ ...genero, obrigatoria: true }, [], { modo: 'padrao', padroes: { genero: 'Homem Cisgênero' } }, casar), 'Homem Cisgênero');
 assert.equal(decidirSensivel({ ...genero, obrigatoria: true }, [], { modo: 'padrao', padroes: { genero: 'Agênero' } }, casar), null, 'padrão que não existe na vaga → pausa');
 assert.equal(decidirSensivel({ rotulo: 'Nível de inglês', opcoes: ['Básico'] }, [], { modo: 'padrao', padroes: {} }, casar), null, 'pergunta comum não passa por aqui');
-console.log('✓ Autodeclaração: detecção por palavra-chave e política sem similaridade');
+
+/**
+ * 5) Sem Piedade (`aceitarPreferirNao`): marca "prefiro não declarar" quando a vaga oferece, inclusive em
+ * pergunta obrigatória — e NUNCA inventa uma característica dele.
+ *
+ * O que está sendo fixado aqui é o limite: a única coisa que o Sem Piedade pode responder em autodeclaração é
+ * a RECUSA a declarar, que é verdadeira para qualquer pessoa. Sem opção de recusa, pausa.
+ */
+const semPiedade = { aceitarPreferirNao: true };
+assert.equal(decidirSensivel({ ...genero, obrigatoria: true }, [], { modo: 'perguntar', padroes: {} }, casar, semPiedade), 'Prefiro não responder', 'obrigatória COM a opção de recusa: marca e segue');
+assert.equal(decidirSensivel(genero, [], { modo: 'perguntar', padroes: {} }, casar, semPiedade), 'Prefiro não responder', 'opcional também');
+assert.equal(
+  decidirSensivel(
+    { ...genero, opcoes: ['Homem Cisgênero', 'Mulher Cisgênero'], obrigatoria: true },
+    [],
+    { modo: 'perguntar', padroes: {} },
+    casarOp(['Homem Cisgênero', 'Mulher Cisgênero']),
+    semPiedade,
+  ),
+  null,
+  'sem opção de recusa não há resposta segura: nem o Sem Piedade declara gênero por ele',
+);
+assert.equal(
+  decidirSensivel({ rotulo: 'Qual é a sua cor ou raça?' }, [], { modo: 'perguntar', padroes: {} }, (r: string) => r, semPiedade),
+  null,
+  'texto livre sensível: escrever a recusa seria o robô redigindo em nome dele num campo de autodeclaração',
+);
+// A precedência não muda: a resposta DELE ganha da recusa
+assert.equal(
+  decidirSensivel({ ...genero, obrigatoria: true }, [{ pergunta: 'qual e a sua identidade de genero?', resposta: 'Mulher Cisgênero' }], { modo: 'perguntar', padroes: {} }, casar, semPiedade),
+  'Mulher Cisgênero',
+  'o que ele já respondeu ganha de tudo, em qualquer modo',
+);
+// E sem o flag (modos `manual` e `duvida`) nada disso vale
+assert.equal(decidirSensivel({ ...genero, obrigatoria: true }, [], { modo: 'perguntar', padroes: {} }, casar), null, 'a regra é só do Sem Piedade');
+// Nenhuma combinação pode devolver uma opção que não é a recusa, sem resposta salva nem padrão
+for (const obrigatoria of [true, false])
+  for (const flag of [{}, semPiedade]) {
+    const r = decidirSensivel({ ...genero, obrigatoria }, [], { modo: 'perguntar', padroes: {} }, casar, flag);
+    assert.ok(r === null || PREFIRO_NAO.test(r), `sem resposta sua, a única saída possível é a recusa (veio "${r}")`);
+  }
+console.log('✓ Autodeclaração: detecção por palavra-chave, política sem similaridade, e o Sem Piedade só podendo recusar a declarar');
 
 // 5b) Descoberta: subdomínio a partir de qualquer forma de entrada, URL com página de carreira, seed bem formado
 const { extrairSubdominio } = await import('./platforms/inhire/discovery.ts');

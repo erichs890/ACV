@@ -112,14 +112,29 @@ export const SENSIVEIS_PADRAO: ConfigSensiveis = { modo: 'perguntar', padroes: {
  *  1. resposta que o usuário já deu para esta pergunta LITERAL (igualdade, não similaridade);
  *  2. resposta padrão da categoria definida em Configurações (modo "padrao"), se bater com uma opção;
  *  3. modo "prefiro_nao" + pergunta opcional + opção "prefiro não responder" disponível;
- *  4. null → pausar e perguntar ao usuário, sinalizando que é autodeclaração.
+ *  4. Sem Piedade (`aceitarPreferirNao`): a opção "prefiro não declarar", quando a vaga oferece — inclusive
+ *     em pergunta OBRIGATÓRIA;
+ *  5. null → pausar e perguntar ao usuário, sinalizando que é autodeclaração.
  * `casar` aproxima a resposta às opções da vaga (ou devolve o texto quando a pergunta é livre).
+ *
+ * Sobre a regra 4, que é a delicada: **não é a IA respondendo autodeclaração**, e não fere a invariante 3.
+ * Escolher "prefiro não declarar" é a única resposta que não afirma nada sobre a pessoa — é a recusa a
+ * declarar, e ela é verdadeira para qualquer um. Quem escolheu foi o usuário, um nível acima, ao marcar Sem
+ * Piedade ("responda tudo e não me pare"). A regra 3 continua existindo porque o modo `prefiro_nao` de
+ * Configurações vale para TODOS os modos de pergunta e só em campo opcional: o dono de `sensiveis.modo`
+ * segue sendo Configurações › Autodeclaração, e isto aqui é um segundo LEITOR, com a condição escrita no
+ * nome do parâmetro.
+ *
+ * E a regra 4 exige `opcoes`: em pergunta sensível de TEXTO LIVRE ela não vale. Escrever "prefiro não
+ * declarar" num campo aberto seria o robô redigindo uma frase em nome da pessoa num campo de autodeclaração,
+ * que é coisa diferente de marcar uma opção que o próprio formulário oferece.
  */
 export function decidirSensivel(
   pergunta: { rotulo: string; opcoes?: string[]; obrigatoria?: boolean },
   salvas: { pergunta: string; resposta: string }[],
   cfg: ConfigSensiveis,
   casar: (resposta: string) => string | null,
+  opcoes: { aceitarPreferirNao?: boolean } = {},
 ): string | null {
   const cat = categoriaSensivel(pergunta.rotulo);
   if (!cat) return null;
@@ -131,10 +146,11 @@ export function decidirSensivel(
     const r = casar(padrao);
     if (r) return r;
   }
-  if (cfg.modo === 'prefiro_nao' && pergunta.obrigatoria === false) {
-    const pn = (pergunta.opcoes ?? []).find(o => PREFIRO_NAO.test(o));
-    if (pn) return pn;
-  }
+  const recusa = (pergunta.opcoes ?? []).find(o => PREFIRO_NAO.test(o));
+  if (cfg.modo === 'prefiro_nao' && pergunta.obrigatoria === false && recusa) return recusa;
+  // Sem Piedade: a obrigatoriedade deixa de importar, porque marcar a recusa SATISFAZ o formulário sem
+  // declarar nada falso. O que continua importando é a opção existir — sem ela não há resposta segura.
+  if (opcoes.aceitarPreferirNao && recusa) return recusa;
   return null;
 }
 

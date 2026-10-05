@@ -16,10 +16,12 @@ const { registrarAdapter } = await import('./platforms/adapter.ts');
 const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila, removerDaFila, devolverAFila, repontuar } = await import('./queue.ts');
 const { AUTOMACAO_PADRAO, ler } = await import('./estado.ts');
 import type { PerguntaExtra, Vaga } from '../src/types.ts';
-import type { ResultadoCandidatura } from './platforms/adapter.ts';
+import type { DadosCandidatura, ResultadoCandidatura } from './platforms/adapter.ts';
 
 // ─── Adapter falso: devolve o resultado combinado por vaga e conta as chamadas ───────────────────
-type Roteiro = ResultadoCandidatura | ((tentativa: number) => ResultadoCandidatura);
+// O roteiro recebe `dados` para poder chamar `dados.responder`, que é por onde uma plataforma de verdade
+// pergunta ao núcleo "já sei responder isto?" — e é o caminho que resolve autodeclaração sem IA nenhuma.
+type Roteiro = ResultadoCandidatura | ((tentativa: number, dados: DadosCandidatura) => ResultadoCandidatura);
 const roteiro = new Map<string, Roteiro>();
 const chamadas = new Map<string, number>();
 
@@ -27,11 +29,11 @@ registrarAdapter({
   id: 'teste',
   nome: 'Teste',
   buscarVagas: async () => [],
-  candidatar: async vaga => {
+  candidatar: async (vaga, dados) => {
     const n = (chamadas.get(vaga.id) ?? 0) + 1;
     chamadas.set(vaga.id, n);
     const r = roteiro.get(vaga.id) ?? { status: 'enviada' as const };
-    return typeof r === 'function' ? r(n) : r;
+    return typeof r === 'function' ? r(n, dados) : r;
   },
 });
 
@@ -345,7 +347,61 @@ roteiro.set(sensivel, t =>
 await processarProxima();
 assert.equal(st(sensivel), 'aguardando_pergunta', 'autodeclaração jamais é respondida pela IA');
 assert.equal(chamadas.get(sensivel), 1, 'não pode reabrir a vaga tentando responder sozinha');
+// O que se garante acima é que a IA não INVENTA característica dele — não que ela não possa RECUSAR a
+// declarar. A diferença é o que os três cenários seguintes fixam.
 console.log('✓ Autodeclaração continua fora do alcance da IA no modo Sem Piedade');
+
+// ─── 7h) Sem Piedade: autodeclaração com "prefiro não declarar" é marcada e a fila não para ──────
+// Antes isto pausava mesmo tendo saída na própria vaga: `decidirSensivel` exigia a pergunta ser opcional.
+// Marcar a recusa satisfaz o formulário e não afirma nada sobre a pessoa — e quem escolheu isso foi ela, ao
+// ligar o Sem Piedade. Note que a resposta vem de `dados.responder`, dentro do formulário: a IA não entra.
+const COM_RECUSA = ['Homem Cisgênero', 'Mulher Cisgênero', 'Prefiro não declarar'];
+const perguntaGenero = (opcoes: string[], obrigatoria: boolean): PerguntaExtra => ({ rotulo: 'Qual é a sua identidade de gênero?', tipo: 'opcoes', opcoes, obrigatoria });
+/** Imita uma plataforma de verdade: pergunta ao núcleo e só pausa se ele não souber. */
+const roteiroQuePergunta = (pergunta: PerguntaExtra) => (_t: number, dados: DadosCandidatura) => {
+  const r = dados.responder(pergunta);
+  return r !== null ? ({ status: 'enviada' } as const) : ({ status: 'pergunta', pergunta } as const);
+};
+
+cenario({ modoPerguntas: 'sem_piedade' });
+const comSaida = enfileirar();
+roteiro.set(comSaida, roteiroQuePergunta(perguntaGenero(COM_RECUSA, true)));
+await processarProxima();
+assert.equal(st(comSaida), 'enviada', 'obrigatória COM opção de recusa: o Sem Piedade marca a recusa e segue');
+assert.ok(!ler.perguntas().some(p => /identidade de g[êe]nero/i.test(p.pergunta)), 'e a recusa NÃO vira resposta salva: autodeclaração nunca é reaproveitada por outro caminho');
+
+// 7i) Sem a opção de recusa, pausa — e a mensagem diz por que nem o Sem Piedade responde
+cenario({ modoPerguntas: 'sem_piedade' });
+const semSaida = enfileirar();
+roteiro.set(semSaida, roteiroQuePergunta(perguntaGenero(['Homem Cisgênero', 'Mulher Cisgênero'], true)));
+await processarProxima();
+assert.equal(st(semSaida), 'aguardando_pergunta', 'sem opção de recusa não existe resposta segura');
+assert.ok(
+  log.listar(50).some(l => /n[ãa]o oferece "prefiro n[ãa]o declarar"/i.test(l.msg)),
+  'e o log explica o motivo, em vez de a pessoa achar que o modo está quebrado',
+);
+
+// 7j) Nos outros modos a regra não vale: a vaga espera por ela, como sempre
+for (const modo of ['manual', 'duvida'] as const) {
+  cenario({ modoPerguntas: modo });
+  const noutroModo = enfileirar();
+  roteiro.set(noutroModo, roteiroQuePergunta(perguntaGenero(COM_RECUSA, true)));
+  await processarProxima();
+  assert.equal(st(noutroModo), 'aguardando_pergunta', `em "${modo}" a autodeclaração continua voltando para você`);
+}
+
+// 7k) E a resposta que ELA já deu ganha da recusa, em qualquer modo
+cenario({ modoPerguntas: 'sem_piedade' });
+kv.set('perguntas', [{ id: 1, icone: '', pergunta: 'Qual é a sua identidade de gênero?', resposta: 'Mulher Cisgênero', personalizada: true }]);
+const comRespostaDela = enfileirar();
+let escolhida: string | null = null;
+roteiro.set(comRespostaDela, (_t, dados) => {
+  escolhida = dados.responder(perguntaGenero(COM_RECUSA, true));
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(escolhida, 'Mulher Cisgênero', 'o que ela respondeu ganha da recusa automática');
+console.log('✓ Sem Piedade: a única autodeclaração que ele responde é a RECUSA a declarar, e só quando a vaga oferece');
 
 // ─── 8) Ensaio não cria candidatura enviada ──────────────────────────────────────────────────────
 cenario({ ensaio: true });

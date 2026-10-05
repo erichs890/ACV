@@ -40,7 +40,13 @@ function casarComOpcoes(pergunta: PerguntaExtra, resposta: string): string | nul
  * ou a política de Configurações → Autodeclaração; senão null, e a pendência avisa que é dado sensível.
  */
 export function respostaSalva(pergunta: PerguntaExtra): string | null {
-  if (categoriaSensivel(pergunta.rotulo)) return decidirSensivel(pergunta, ler.perguntas(), ler.sensiveis(), r => casarComOpcoes(pergunta, r));
+  if (categoriaSensivel(pergunta.rotulo))
+    // No Sem Piedade a autodeclaração é resolvida AQUI, marcando "prefiro não declarar" quando a vaga
+    // oferece — e então ela nem chega a virar pendência nem passa perto da IA. É o que faz a fila não parar
+    // sem ninguém inventar característica de ninguém (ver `decidirSensivel`, regra 4).
+    return decidirSensivel(pergunta, ler.perguntas(), ler.sensiveis(), r => casarComOpcoes(pergunta, r), {
+      aceitarPreferirNao: ler.automacao().modoPerguntas === 'sem_piedade',
+    });
   let melhor: { resposta: string; s: number } | null = null;
   for (const p of ler.perguntas()) {
     if (!p.resposta.trim()) continue;

@@ -641,7 +641,14 @@ export default function Automacao() {
                   <p className="rounded-lg border border-amber bg-amber/15 p-2.5 text-[11px] text-amber-ink">
                     Em qualquer modo com IA: autodeclaração (gênero, cor/raça, deficiência, religião, saúde) e dado pessoal (CPF, endereço, contato, pretensão) nunca vão para a IA — vêm da sua
                     política em Configurações ou voltam para você. Resposta longa, com jeito de texto de IA, ou opção que não existe na vaga é recusada e a vaga volta a esperar.
-                    {cfg.modoPerguntas === 'sem_piedade' && ' No Sem Piedade, tudo o mais é respondido e enviado sem você conferir.'}
+                    {cfg.modoPerguntas === 'sem_piedade' && (
+                      <>
+                        {' '}
+                        No Sem Piedade, tudo o mais é respondido e enviado sem você conferir. Em autodeclaração, quando a vaga oferece <b>"prefiro não declarar"</b> é essa a opção marcada, mesmo sendo
+                        obrigatória — é a única resposta que não afirma nada sobre você. Quando a vaga <b>não</b> oferece e você não definiu a sua resposta, aquela vaga espera por você: o robô não
+                        declara gênero, cor, deficiência, religião nem saúde no seu lugar. A fila continua com as outras.
+                      </>
+                    )}
                   </p>
                 )}
               </div>

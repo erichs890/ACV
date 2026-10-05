@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (108 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (109 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -38,7 +38,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 
 1. **Sucesso é a resposta HTTP**, não texto na tela: 2xx em `ROTAS_ENVIO` = enviada. Texto muda, API não. Nunca reportar erro depois de um envio comprovado; nunca clicar no botão final duas vezes.
 2. **Nunca inventar nada no currículo.** `validarAdaptacao` compara palavra a palavra; qualquer termo novo descarta a adaptação e manda o original.
-3. **Autodeclaração** (gênero, raça, PcD, religião, saúde) nunca sai de similaridade, de currículo nem de IA — só da escolha explícita do usuário (`src/sensiveis.ts`). **Dado pessoal** (`DADO_PESSOAL`: documento, endereço, contato, dinheiro, data) também não passa pela IA: errar isso vai num formulário real.
+3. **Autodeclaração** (gênero, raça, PcD, religião, saúde) nunca sai de similaridade, de currículo nem de IA — só da escolha explícita do usuário (`src/sensiveis.ts`). No **Sem Piedade** a única coisa que o robô pode responder sozinho é a **recusa a declarar**, e só quando a vaga oferece a opção (`decidirSensivel`, regra 4): é a resposta que não afirma nada sobre a pessoa. Vaga que exige a declaração e não oferece recusa **para e espera por ela** — esse é o limite honesto de "delega tudo para a IA". **Dado pessoal** (`DADO_PESSOAL`: documento, endereço, contato, dinheiro, data) também não passa pela IA: errar isso vai num formulário real.
 4. **Uma vaga, uma candidatura.** Em qualquer caminho: fila, clique manual, retomada de pendência.
 5. **Ensaio não envia.** No núcleo, as rotas de envio ficam abortadas no navegador do robô; **na extensão**, `rede.js` recusa toda escrita (POST/PUT/PATCH/DELETE e `submit` de form) enquanto o ensaio está armado — por MÉTODO, não por caminho, e desarmado no fim da tentativa. Nos dois casos o motor preenche e clica normalmente: o que segura é a rede, porque formulário que abre por botão de JavaScript só revela os campos depois do clique. Desligar o ensaio devolve as vagas ensaiadas à fila (`podeEntrarNaFila`) — senão elas ficam órfãs: a tela mostra, o robô nunca pega.
 

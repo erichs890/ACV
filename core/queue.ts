@@ -498,6 +498,9 @@ export function responder(id: string, resposta: string, salvar: boolean) {
     vagas.atualizar(id, { status: 'na_fila', pendencia: undefined, proximaTentativaEm: undefined, respostaTemporaria: salvar ? undefined : rotulo });
   }
   registrar('info', `Resposta registrada para "${rotulo}".`);
+  // Você destravou a vaga à mão: o orçamento de respostas da IA dela recomeça. Sem isto o teto continuava
+  // gasto e a vaga voltava a parar no próximo formulário, agora por um motivo que não era mais verdade.
+  respostasIA.delete(id);
   emitir({ tipo: 'estado' });
   void processarProxima(true);
 }
@@ -553,17 +556,37 @@ async function responderComIA(vaga: Vaga, cauteloso: boolean): Promise<boolean> 
   const q = vaga.pendencia.pergunta;
   const sensivel = categoriaSensivel(q.rotulo);
   if (sensivel) {
-    registrar('aguardo', `"${vaga.titulo}": ${sensivel.rotulo.toLowerCase()} é autodeclaração — a IA não responde isso. Defina em Configurações › Autodeclaração ou responda aqui.`);
+    /**
+     * Chegar aqui no Sem Piedade quer dizer uma coisa específica: a pergunta é obrigatória E a vaga não
+     * oferece "prefiro não declarar" (se oferecesse, `respostaSalva` já teria marcado, pela regra 4 de
+     * `decidirSensivel`, e isto nem seria alcançado). Então não existe resposta segura, e a mensagem precisa
+     * dizer isso — senão a pessoa fica achando que o modo está quebrado.
+     */
+    const semPiedade = ler.automacao().modoPerguntas === 'sem_piedade';
+    registrar(
+      'aguardo',
+      semPiedade
+        ? `"${vaga.titulo}": ${sensivel.rotulo.toLowerCase()} é autodeclaração obrigatória e esta vaga não oferece "prefiro não declarar". Nem no Sem Piedade eu respondo isso por você — seria inventar uma característica sua num formulário real. Responda aqui, ou defina em Configurações › Autodeclaração e nenhuma vaga para por isso de novo.`
+        : `"${vaga.titulo}": ${sensivel.rotulo.toLowerCase()} é autodeclaração — a IA não responde isso. Defina em Configurações › Autodeclaração ou responda aqui.`,
+    );
     return false;
   }
   // Dado pessoal não é dúvida de currículo, é fato: a IA não chuta CPF, endereço nem pretensão. Nem chega nela.
   if (DADO_PESSOAL.test(q.rotulo)) {
-    registrar('aguardo', `"${vaga.titulo}" pergunta um dado pessoal ("${q.rotulo.slice(0, 50)}") — isso é com você, a IA não adivinha.`);
+    registrar(
+      'aguardo',
+      `"${vaga.titulo}" pergunta um dado pessoal ("${q.rotulo.slice(0, 50)}"). Nem o Sem Piedade chuta isso: a IA erraria num formulário de uma empresa real. Responda aqui, ou preencha em Configurações › Meus Dados e nenhuma vaga para por causa disso de novo.`,
+    );
     return false;
   }
   const usadas = respostasIA.get(vaga.id) ?? 0;
   if (usadas >= MAX_RESPOSTAS_IA) {
-    registrar('alerta', `"${vaga.titulo}" já teve ${usadas} perguntas respondidas pela IA; parei para você conferir.`);
+    // O teto não é cautela com a IA: é quebra-laço. Formulário que não para de perguntar é sinal de que o
+    // motor está relendo a mesma etapa — e aí nenhum número salva, então o que falta é dizer onde travou.
+    registrar(
+      'alerta',
+      `"${vaga.titulo}" já teve ${usadas} perguntas respondidas pela IA e travou em "${q.rotulo.slice(0, 60)}". Parei para você conferir: formulário que não para de perguntar costuma ser sinal de que algo saiu do previsto.`,
+    );
     return false;
   }
   const curriculo = ler.curriculos()[0]?.markdown;
