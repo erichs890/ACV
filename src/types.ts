@@ -110,6 +110,16 @@ export interface ConfigAutomacao {
   regimes: string[]; // remoto | hibrido | presencial
   intervaloSegundos: number; // espera entre uma candidatura e a próxima
   limiteDiario: number;
+  /**
+   * Quantas vagas manter enfileiradas esperando a sua revisão.
+   *
+   * NÃO é o mesmo que `limiteDiario`, e a diferença é o que faz a fila virar um plano: `filaAlvo` governa o
+   * PLANEJAMENTO (quantas o robô alinha para você olhar, com ele pausado); `limiteDiario` governa o ENVIO e
+   * continua sendo portão em `motivoDeEspera`. Por isso a fila pode conter mais do que cabe hoje — e a tela
+   * marca, item a item, o que sai hoje e o que fica para amanhã. Antes o tamanho da fila era derivado do
+   * limite diário, e não havia como dizer "me mostre 10 e mantenha 10".
+   */
+  filaAlvo: number;
   janela: string; // "08:00-20:00"
   modo: 'automatico' | 'manual';
   adaptar: boolean; // adaptar o currículo por vaga
@@ -230,6 +240,16 @@ export interface Vaga {
   adaptado?: { markdown: string; diff: string[]; viaIA: boolean; pdf?: string }; // última adaptação gerada para esta vaga
   status: StatusVaga;
   posicao?: number;
+  /**
+   * Você tirou esta vaga da fila. Ela não volta — nem pela reposição automática, nem depois de uma
+   * repontuação.
+   *
+   * Precisa ser um campo próprio e não um status: `repontuar()` reescreve o status de toda vaga
+   * `encontrada`/`ignorada` em função da nota, então marcar a excluída como `ignorada` seria desfeito sozinho
+   * dias depois, numa troca de filtro, sem ninguém ligar uma coisa à outra. Quem respeita isto é
+   * `podeEntrarNaFila`, que é o único ponto de entrada da fila.
+   */
+  recusadaPorVoce?: boolean;
   pedidaPorVoce?: boolean; // você clicou em "Candidatar": nenhum filtro do robô (foco, score) tira esta da fila
   pendencia?: Pendencia;
   erro?: string;

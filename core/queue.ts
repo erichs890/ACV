@@ -281,7 +281,7 @@ export function limparForaDoFoco(): number {
  *
  * Com o ensaio LIGADO ela não volta, senão a mesma vaga seria ensaiada sem parar.
  */
-const podeEntrarNaFila = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => v.status === 'encontrada' || (v.status === 'ensaio' && !cfg.ensaio);
+const podeEntrarNaFila = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => !v.recusadaPorVoce && (v.status === 'encontrada' || (v.status === 'ensaio' && !cfg.ensaio));
 
 /**
  * Põe na fila as vagas JÁ ENCONTRADAS que passam nos filtros atuais, da mais compatível para a menos.
@@ -319,12 +319,36 @@ export function limparDuplicatasDaFila(): number {
 
 export function enfileirarCompativeis(motivo: string): number {
   const cfg = ler.automacao();
-  if (ler.robo() !== 'ativo' || cfg.modo !== 'automatico') return 0;
+  /**
+   * A fila se forma com o robô PAUSADO. Isto é de propósito, e é o que a torna um plano.
+   *
+   * Antes esta linha também exigia `ler.robo() === 'ativo'`, então a fila só existia depois do start: não
+   * havia como mapear, olhar o que vai sair e só então mandar. Agora o mapeamento enche a fila até `filaAlvo`,
+   * você revisa, e o start só libera o envio.
+   *
+   * E isto NÃO afrouxa invariante nenhuma: o portão de envio nunca morou aqui. Ele está em `motivoDeEspera`,
+   * conferido em `girarFila` a cada rodada — `robo !== 'ativo'` continua sendo a primeira linha de lá. Formar
+   * fila é planejar; enviar é outra coisa, e quem decide é o ponto de uso.
+   *
+   * O modo manual continua de fora: ali quem escolhe cada vaga é você, e uma fila se formando sozinha seria
+   * uma lista que nunca anda.
+   */
+  if (cfg.modo !== 'automatico') return 0;
 
   limparDuplicatasDaFila();
   const todas = vagas.listar();
   const naFila = todas.filter(v => NA_FILA.includes(v.status));
-  const restantes = cfg.limiteDiario - enviosHoje() - naFila.length;
+  /**
+   * Quantas ainda entram agora: o MENOR entre o que você pediu para ver e o que cabe hoje.
+   *
+   * São duas perguntas diferentes, com donos diferentes — `filaAlvo` é quantas você quer na tela para revisar,
+   * `limiteDiario` é quantos currículos podem sair hoje. E o menor sempre vence, que é o limite diário, porque
+   * é ele que protege você: uma fila com 10 itens dos quais 3 não poderiam sair seria a tela prometendo o que o
+   * núcleo não faz. Quando é o limite que aperta, o log diz isso em voz alta, em vez de a fila parecer quebrada.
+   */
+  const faltamNoAlvo = cfg.filaAlvo - naFila.length;
+  const cabemHoje = cfg.limiteDiario - enviosHoje() - naFila.length;
+  const restantes = Math.min(faltamNoAlvo, cabemHoje);
   // Uma publicação por empresa+título: o InHire repete a mesma vaga com outro id, e três currículos iguais
   // chegando ao mesmo recrutador é pior do que não se candidatar
   const jaVistas = new Set(naFila.map(chaveDaVaga));
@@ -355,7 +379,15 @@ export function enfileirarCompativeis(motivo: string): number {
     return 0;
   }
   if (restantes <= 0) {
-    registrar('info', `${candidatas.length} vaga(s) compatível(is) aguardando: o limite de ${cfg.limiteDiario} por dia já está tomado (${enviosHoje()} enviada(s), ${naFila.length} na fila).`);
+    // Com o laço rodando a cada 20 s, esta linha sairia três vezes por minuto para sempre: `avisoNovo` é o que
+    // impede a fila cheia de afogar no log as linhas das candidaturas, que é o que importa ali
+    if (avisoNovo(`fila-cheia:${naFila.length}:${cabemHoje}`))
+      registrar(
+        'info',
+        cabemHoje <= 0
+          ? `A fila tem ${naFila.length} vaga(s) e para hoje já deu: ${enviosHoje()} enviada(s) de um limite de ${cfg.limiteDiario}. Ela completa sozinha amanhã.`
+          : `A fila já está no alvo de ${cfg.filaAlvo} vaga(s); outras ${candidatas.length} compatível(is) esperam uma sair.`,
+      );
     return 0;
   }
 
@@ -365,7 +397,7 @@ export function enfileirarCompativeis(motivo: string): number {
   const sobra = candidatas.length - escolhidas.length;
   registrar(
     'info',
-    `${escolhidas.length} vaga(s) compatível(is) entraram na fila (${motivo})${deEnsaio ? `, ${deEnsaio} dela(s) já ensaiada(s) e agora para envio de verdade` : ''}${sobra ? `; outras ${sobra} ficam para quando abrir espaço no limite diário` : ''}.`,
+    `${escolhidas.length} vaga(s) entraram na fila, que agora tem ${naFila.length + escolhidas.length} de ${cfg.filaAlvo} (${motivo})${deEnsaio ? `, ${deEnsaio} dela(s) já ensaiada(s) e agora para envio de verdade` : ''}${sobra ? `; outras ${sobra} ficam para quando abrir espaço na fila` : ''}.`,
   );
   emitir({ tipo: 'estado' });
   return escolhidas.length;
@@ -384,15 +416,53 @@ export function candidatarAgora(id: string): Promise<void> {
   if (!v) throw new Error('vaga não encontrada');
   if (jaEnviada(id)) throw new Error('você já se candidatou a esta vaga');
   if (jaCandidatado(v)) throw new Error(`você já se candidatou a "${v.titulo}" em ${v.empresa} (outra publicação da mesma vaga)`);
-  vagas.atualizar(id, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao(), pendencia: undefined, erro: undefined, tentativas: undefined, proximaTentativaEm: undefined });
+  // `recusadaPorVoce: undefined` porque o filtro é do robô, não seu: se você clicou, você quer esta vaga —
+  // mesmo que a tenha tirado da fila cinco minutos antes
+  vagas.atualizar(id, {
+    status: 'na_fila',
+    pedidaPorVoce: true,
+    recusadaPorVoce: undefined,
+    posicao: vagas.proximaPosicao(),
+    pendencia: undefined,
+    erro: undefined,
+    tentativas: undefined,
+    proximaTentativaEm: undefined,
+  });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
   // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do ACV continua ignorando
   return processarProxima(true);
 }
 
+/**
+ * "Esta não" — você tira a vaga da fila e o robô repõe com outra, na mesma chamada.
+ *
+ * Duas coisas que não são óbvias:
+ *
+ * 1. A marca `recusadaPorVoce` é obrigatória, senão excluir vira um laço. `podeEntrarNaFila` aceita
+ *    `encontrada`, e a vaga que você acabou de recusar costuma ser justamente a candidata mais compatível que
+ *    sobrou — a reposição a traria de volta no mesmo segundo.
+ * 2. Candidatura em voo não se cancela por aqui (invariante 4): o currículo pode já estar no servidor sem o
+ *    robô ter visto a resposta. A tela desabilita o X nesse estado, mas a rota é alcançável, e trava que só
+ *    existe na tela não é trava.
+ */
 export function removerDaFila(id: string) {
-  vagas.atualizar(id, { status: 'encontrada', pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
+  const v = vagas.get(id);
+  if (!v) throw new Error('vaga não encontrada');
+  if (v.status === 'em_andamento') throw new Error('esta vaga já está sendo enviada; não dá para tirar da fila agora');
+  vagas.atualizar(id, { status: 'encontrada', recusadaPorVoce: true, pedidaPorVoce: undefined, posicao: undefined, pendencia: undefined });
+  registrar('info', `"${v.titulo}" saiu da fila por sua decisão e não volta sozinha.`);
+  if (!enfileirarCompativeis('você tirou uma vaga da fila')) registrar('info', 'Não achei outra compatível para repor agora; a fila completa na próxima varredura.');
+  emitir({ tipo: 'estado' });
+}
+
+/** "Mudei de ideia": desfaz a exclusão e devolve a vaga ao jogo. */
+export function devolverAFila(id: string): void {
+  const v = vagas.get(id);
+  if (!v) throw new Error('vaga não encontrada');
+  vagas.atualizar(id, { recusadaPorVoce: undefined });
+  registrar('info', `"${v.titulo}" voltou a concorrer a uma posição na fila.`);
+  enfileirarCompativeis('você devolveu uma vaga');
   emitir({ tipo: 'estado' });
 }
 
@@ -437,8 +507,10 @@ export function decidirPreview(id: string, decisao: 'adaptado' | 'original' | 'c
   const v = vagas.get(id);
   if (v?.pendencia?.tipo !== 'aprovacao') throw new Error('nada para aprovar nesta vaga');
   if (decisao === 'cancelar') {
-    vagas.atualizar(id, { status: 'encontrada', pendencia: undefined, posicao: undefined });
-    registrar('alerta', `Candidatura a "${v.titulo}" cancelada por você.`);
+    // Mesma decisão de `removerDaFila`, e precisa da mesma marca: sem ela a reposição recoloca esta vaga na
+    // rodada seguinte, e o "cancelar" que você clicou não teria significado nenhum
+    vagas.atualizar(id, { status: 'encontrada', recusadaPorVoce: true, pendencia: undefined, posicao: undefined });
+    registrar('alerta', `Candidatura a "${v.titulo}" cancelada por você; ela não volta para a fila sozinha.`);
   } else {
     vagas.atualizar(id, { status: 'na_fila', decisaoPreview: decisao, proximaTentativaEm: undefined, pendencia: decisao === 'adaptado' ? v.pendencia : undefined });
     registrar('info', `Você escolheu enviar o currículo ${decisao} para "${v.titulo}".`);
@@ -699,10 +771,19 @@ export function iniciarLaco() {
         agendando = false;
       }
     }
+    /**
+     * A reposição vem ANTES do portão do robô, e a ordem é o requisito.
+     *
+     * Estava depois: com o robô pausado o `return` acontecia primeiro e a fila nunca completava sozinha — ou
+     * seja, a fase de mapeamento (olhar o plano se formar com o robô parado) não existiria de fato, mesmo com
+     * `enfileirarCompativeis` já aceitando trabalhar pausado. Repor é planejar; enviar é o que vem depois.
+     *
+     * O gatilho é a CONTAGEM da fila, não "a fila está vazia": com alvo de 10 e 9 enfileiradas, `proximaNaFila`
+     * acha alguém e a fila ficaria eternamente com 9.
+     */
+    const naFila = vagas.listar().filter(v => NA_FILA.includes(v.status)).length;
+    if (naFila < ler.automacao().filaAlvo) enfileirarCompativeis('reposição da fila');
     if (ler.robo() !== 'ativo') return;
-    // Fila vazia: repõe com as compatíveis que ainda cabem no limite (é assim que o dia seguinte recomeça sozinho).
-    // A checagem é barata — só a consulta da próxima da fila; o levantamento completo só roda quando ela não acha nada.
-    if (!vagas.proximaNaFila()) enfileirarCompativeis('reposição da fila');
     await processarProxima();
   }, 20000);
 }

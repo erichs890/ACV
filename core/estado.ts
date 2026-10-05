@@ -24,6 +24,7 @@ export const AUTOMACAO_PADRAO: ConfigAutomacao = {
   ensaio: true,
   mostrarNavegador: false,
   navegador: 'edge',
+  filaAlvo: 10,
   scoreMinimo: 30,
   cargoRigido: false,
   senioridadeRigida: false,

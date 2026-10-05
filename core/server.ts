@@ -20,7 +20,20 @@ import { apagarTudo, kv, log, vagas } from './storage/db.ts';
 import { migrarCaminhosDaPastaAntiga } from './migracoes.ts';
 import { evento } from './diario.ts';
 import { ler, montarEstado, salvarParcial } from './estado.ts';
-import { buscarVagas, candidatarAgora, decidirPreview, enfileirarCompativeis, iniciarLaco, ligarRobo, limparDuplicatasDaFila, removerDaFila, repontuar, repontuarComIA, responder } from './queue.ts';
+import {
+  buscarVagas,
+  candidatarAgora,
+  decidirPreview,
+  enfileirarCompativeis,
+  iniciarLaco,
+  ligarRobo,
+  limparDuplicatasDaFila,
+  removerDaFila,
+  repontuar,
+  repontuarComIA,
+  responder,
+  devolverAFila,
+} from './queue.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
 import { markdownParaPdf } from './resume/mdToPdf.ts';
@@ -353,6 +366,11 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   },
   'POST /fila/remover': async (req, res) => {
     removerDaFila(JSON.parse((await corpo(req)).toString('utf8')).id);
+    json(res, 200, { ok: true });
+  },
+  // Desfazer o "esta não": sem isto um clique errado tiraria a vaga do jogo para sempre
+  'POST /fila/devolver': async (req, res) => {
+    devolverAFila(JSON.parse((await corpo(req)).toString('utf8')).id);
     json(res, 200, { ok: true });
   },
   'POST /responder': async (req, res) => {

@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (107 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (108 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -14,6 +14,12 @@ agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o
 varredura → score → fila → `executarCandidatura` → adapter → **preencher, anexar, enviar, só então confirmar**.
 
 - `core/queue.ts` — trabalhador serial: encadeia vagas até um portão fechar (robô, modo, janela, intervalo, limite/dia). `rodando` ≠ `ocupado`. Pendência pausa **só aquela vaga**.
+  **Formar a fila e enviar são coisas diferentes:** `enfileirarCompativeis` roda com o robô PAUSADO (é a fase de
+  mapeamento — você vê o plano antes do start) e enche até `automacao.filaAlvo`; quem autoriza envio é
+  `motivoDeEspera`, conferido em `girarFila` a cada rodada. Quantas entram agora é `min(filaAlvo − na fila,
+  limiteDiario − enviadas hoje − na fila)`: o menor vence, e é sempre o que protege você. Tirar uma da fila
+  marca `vaga.recusadaPorVoce` e repõe outra na hora — a marca é campo e não status porque `repontuar()`
+  reescreve o status de toda vaga `encontrada`/`ignorada` e apagaria a sua decisão.
 - `core/candidatura.ts` — uma candidatura ponta a ponta. `jaCandidatado()` trava duplicata por **empresa + título** (o InHire republica a mesma vaga com outro id).
 - `core/platforms/inhire/formulario.ts` — motor adaptativo usado por **todas** as plataformas: descobre campos do DOM a cada etapa, classifica fixo × pergunta extra, preenche, avança. Nunca supõe layout. Cada plataforma passa as suas `Convencoes` (textos dos botões e da confirmação); campo fixo se reconhece pelo `name=`, nunca pelo rótulo.
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera.

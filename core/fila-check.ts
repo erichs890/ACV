@@ -13,7 +13,7 @@ process.env.ACV_DIR = mkdtempSync(join(tmpdir(), 'acv-fila-'));
 
 const { kv, vagas, candidaturas, log, apagarTudo } = await import('./storage/db.ts');
 const { registrarAdapter } = await import('./platforms/adapter.ts');
-const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila } = await import('./queue.ts');
+const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila, removerDaFila, devolverAFila, repontuar } = await import('./queue.ts');
 const { AUTOMACAO_PADRAO, ler } = await import('./estado.ts');
 import type { PerguntaExtra, Vaga } from '../src/types.ts';
 import type { ResultadoCandidatura } from './platforms/adapter.ts';
@@ -66,6 +66,9 @@ function cenario(automacao: Partial<typeof AUTOMACAO_PADRAO> = {}) {
     janela: '00:00-23:59',
     intervaloSegundos: 0,
     limiteDiario: 20,
+    // Explícito de propósito: o padrão de `filaAlvo` é 10, e deixá-lo implícito faria os cenários antigos
+    // (que contam quantas vagas entram na fila) mudarem de resultado sem ninguém mexer neles
+    filaAlvo: 20,
     ...automacao,
   });
   kv.set('robo', 'ativo');
@@ -244,17 +247,29 @@ assert.equal(
 );
 console.log('✓ Enfileira só o que cabe no limite diário, da mais compatível para a menos');
 
-// ─── 7d) Modo manual e robô pausado não enfileiram nada ──────────────────────────────────────────
+// ─── 7d) Modo manual não enfileira; robô pausado ENFILEIRA e não envia ──────────────────────────
+// A segunda metade era o contrário até 05/10/2026 ("robô pausado não enfileira"), e era isso que impedia a
+// fase de mapeamento: não havia como ver o plano antes de dar o start. Formar fila é planejar; o portão de
+// envio continua em `motivoDeEspera`, dentro de `girarFila`.
 cenario({ modo: 'manual' });
 const emManual = enfileirar({ status: 'encontrada', posicao: undefined, score: 90 });
-assert.equal(enfileirarCompativeis('teste'), 0, 'modo manual não enfileira sozinho');
+assert.equal(enfileirarCompativeis('teste'), 0, 'modo manual não enfileira sozinho: ali quem escolhe é você');
 assert.equal(st(emManual), 'encontrada');
+
 cenario();
 kv.set('robo', 'pausado');
-const comRoboParado = enfileirar({ status: 'encontrada', posicao: undefined, score: 90 });
-assert.equal(enfileirarCompativeis('teste'), 0, 'robô pausado não enfileira');
-assert.equal(st(comRoboParado), 'encontrada');
-console.log('✓ Modo manual e robô pausado não enfileiram nada');
+const pausadas = [90, 85, 80].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+assert.equal(enfileirarCompativeis('teste'), 3, 'com o robô pausado a fila SE FORMA — é a fase de mapeamento');
+for (const id of pausadas) assert.equal(st(id), 'na_fila');
+await processarProxima();
+assert.equal(enviadas(), 0, 'e nada sai enquanto o robô está pausado');
+assert.equal(chamadas.size, 0, 'o adapter não pode nem ser chamado');
+// `kv.set` e não `ligarRobo`: ligarRobo dispara `processarProxima()` SEM await, e o `await` daqui entraria
+// num `girarFila` já em voo — a guarda `rodando` devolveria na hora e o teste mediria a corrida, não a regra
+kv.set('robo', 'ativo');
+await processarProxima();
+assert.ok(enviadas() > 0, 'o start é que libera o envio da fila que você já revisou');
+console.log('✓ Modo manual não enfileira; com o robô pausado a fila se forma e nada é enviado até o start');
 
 // ─── 7e) Vaga já enviada nunca volta para a fila ─────────────────────────────────────────────────
 cenario({ intervaloSegundos: 60000 });
@@ -530,6 +545,93 @@ assert.ok(
   'ligar fora da janela precisa avisar na hora',
 );
 console.log('✓ Ligar o robô fora da janela avisa na hora, em vez de ficar parado em silêncio');
+
+// ─── 12) A fila como PLANO: alvo, reposição ao excluir, e a excluída que não volta ───────────────
+// O pedido: "ele vai mapear e colocar na fila, eu vejo e posso excluir, se eu excluir ele já tem que correr
+// atrás de outra para substituir, tem que encher a fila até o número máximo de vaga".
+
+// 11a) O alvo manda no tamanho da fila — antes quem mandava era o limite diário, e não havia como dizer
+// "me mostre 3 e mantenha 3"
+cenario({ filaAlvo: 3, limiteDiario: 20 });
+kv.set('robo', 'pausado');
+const dezNoAlvo = [95, 92, 90, 88, 86, 84, 82, 80, 78, 76].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+assert.equal(enfileirarCompativeis('teste'), 3, 'entra exatamente o alvo');
+assert.deepEqual(
+  dezNoAlvo.filter(id => st(id) === 'na_fila'),
+  dezNoAlvo.slice(0, 3),
+  'e são as três mais compatíveis',
+);
+assert.equal(dezNoAlvo.filter(id => st(id) === 'encontrada').length, 7, 'o resto fica de reserva, não some');
+
+// 11b) Quando o limite diário aperta mais que o alvo, é ele que manda: é o que protege você
+cenario({ filaAlvo: 10, limiteDiario: 2 });
+kv.set('robo', 'pausado');
+const cincoDoLimite = [95, 92, 90, 88, 86].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+assert.equal(enfileirarCompativeis('teste'), 2, 'o menor dos dois limites vence');
+assert.equal(cincoDoLimite.filter(id => st(id) === 'na_fila').length, 2);
+
+// 11c) Excluir repõe na hora, e a reposta nunca é a que você tirou
+cenario({ filaAlvo: 2, limiteDiario: 20 });
+kv.set('robo', 'pausado');
+const quatroDoAlvo = [95, 92, 90, 88].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+enfileirarCompativeis('teste');
+const naFilaAgora = () => quatroDoAlvo.filter(id => st(id) === 'na_fila');
+assert.deepEqual(naFilaAgora(), quatroDoAlvo.slice(0, 2), 'a fila nasce com as duas melhores');
+removerDaFila(quatroDoAlvo[0]);
+assert.equal(naFilaAgora().length, 2, 'a fila volta ao alvo na mesma chamada: excluir não deixa buraco');
+assert.ok(!naFilaAgora().includes(quatroDoAlvo[0]), 'e a reposta NÃO é a que você acabou de tirar');
+assert.equal(vagas.get(quatroDoAlvo[0])!.recusadaPorVoce, true);
+
+// 11d) A excluída não volta nem depois de `repontuar()`.
+// Este é o teste que mata a ideia de marcar a excluída com `status: 'ignorada'`: `repontuar` reescreve o
+// status de TODA vaga `encontrada`/`ignorada` em função da nota, e apagaria a decisão dele dias depois, numa
+// troca de filtro, sem ninguém ligar uma coisa à outra.
+assert.equal(enfileirarCompativeis('de novo'), 0, 'a fila já está no alvo');
+removerDaFila(quatroDoAlvo[1]);
+assert.ok(!naFilaAgora().includes(quatroDoAlvo[1]));
+repontuar();
+assert.equal(vagas.get(quatroDoAlvo[0])!.recusadaPorVoce, true, 'a sua decisão sobrevive à repontuação');
+assert.ok(!naFilaAgora().includes(quatroDoAlvo[0]), 'e ela continua fora da fila');
+assert.equal(enfileirarCompativeis('depois de repontuar'), 0, 'nem uma repontuação a traz de volta');
+
+// 11e) Mas o seu clique passa por cima do filtro do robô
+// A asserção é sobre a DECISÃO, não sobre o envio: `ligarRobo` de um cenário anterior dispara
+// `processarProxima()` sem await, e a guarda `rodando` pode engolir este pedido — quem prova o envio em si é
+// o cenário 10. Aqui o que importa é que o clique desfaz a recusa.
+await candidatarAgora(quatroDoAlvo[0]);
+assert.equal(vagas.get(quatroDoAlvo[0])!.recusadaPorVoce, undefined, 'o seu clique apaga a marca: o filtro é do robô, não seu');
+assert.notEqual(st(quatroDoAlvo[0]), 'encontrada', 'e a vaga volta a valer — na fila ou já enviada, conforme o portão');
+
+// 11f) Desfazer devolve a vaga ao jogo — clique errado não pode ser definitivo
+cenario({ filaAlvo: 1, limiteDiario: 20 });
+kv.set('robo', 'pausado');
+const duasDoDesfazer = [95, 90].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+enfileirarCompativeis('teste');
+removerDaFila(duasDoDesfazer[0]);
+assert.equal(st(duasDoDesfazer[1]), 'na_fila', 'a segunda entrou no lugar da primeira');
+removerDaFila(duasDoDesfazer[1]);
+assert.equal(duasDoDesfazer.filter(id => st(id) === 'na_fila').length, 0, 'tirou as duas: não há o que repor, e a fila fica vazia');
+devolverAFila(duasDoDesfazer[0]);
+assert.equal(st(duasDoDesfazer[0]), 'na_fila', 'devolver traz a vaga de volta para a fila');
+assert.equal(vagas.get(duasDoDesfazer[0])!.recusadaPorVoce, undefined);
+
+// 11g) Candidatura em voo não se cancela pela fila (invariante 4: o currículo pode já estar no servidor)
+cenario();
+const emVooNaFila = enfileirar({ status: 'em_andamento' });
+assert.throws(() => removerDaFila(emVooNaFila), /sendo enviada/, 'a trava mora na rota, não só na tela que desabilita o botão');
+assert.equal(st(emVooNaFila), 'em_andamento');
+
+// 11h) Fila cheia não vira ruído: o laço chama isto a cada 20 segundos
+cenario({ filaAlvo: 1, limiteDiario: 20 });
+kv.set('robo', 'pausado');
+enfileirar({ status: 'encontrada', posicao: undefined, score: 95 });
+enfileirar({ status: 'encontrada', posicao: undefined, score: 90 });
+enfileirarCompativeis('1');
+const linhasNoAlvo = () => log.listar(200).filter(l => /j[áa] est[áa] no alvo/.test(l.msg)).length;
+assert.equal(linhasNoAlvo(), 0, 'a primeira chamada ENCHE a fila: ela loga o que entrou, não "fila cheia"');
+for (const rodada of ['2', '3', '4']) enfileirarCompativeis(rodada);
+assert.equal(linhasNoAlvo(), 1, 'e nas três chamadas seguintes a linha de fila cheia sai UMA vez, não três — o laço roda a cada 20 s');
+console.log('✓ Fila como plano: o alvo manda, excluir repõe na hora, e a excluída não volta nem após repontuar');
 
 apagarTudo();
 log.listar(0);
