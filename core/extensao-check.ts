@@ -442,7 +442,7 @@ try {
     return (caixa.module as { exports: unknown }).exports as T;
   };
 
-  type Sitio = { nivel: string; nome: string; importa?: boolean; conectada?: boolean; dois?: boolean; nota: string } | null;
+  type Sitio = { nivel: string; nome: string; importa?: boolean; conectada?: boolean; dois?: boolean; semSessaoDoNucleo?: boolean; nota: string } | null;
   const plat = puro<{
     classificar: (h: string, o: { plataformas?: unknown[]; pareceVaga?: boolean }) => Sitio;
     catalogo: (o: { plataformas?: unknown[] }) => { nome: string; nivel: string; avisos: { texto: string }[] }[];
@@ -477,6 +477,27 @@ try {
   assert.equal(ind?.nivel, 'nucleo', 'servindo pelos dois, o núcleo é o caminho melhor');
   assert.ok(ind?.dois, 'mas a tela precisa contar que há dois caminhos');
 
+  /**
+   * Sessão do núcleo ausente num site com login: o motor da extensão deixa de ser alternativa e vira o
+   * principal. Sem isto o painel oferecia "Candidatar pelo ACV" no ProgramaThor e o envio morria em sessão
+   * ausente — com a pessoa logada na própria tela, na frente dele.
+   */
+  const comLogin = [
+    { id: 'programathor', nome: 'ProgramaThor', dominios: ['programathor.com.br'], motor: 'ambos', importa: true, conectada: true, exigeLogin: true, sessaoValida: false },
+    { id: 'programathor2', nome: 'ProgramaThor ligado', dominios: ['pt2.com.br'], motor: 'ambos', importa: true, conectada: true, exigeLogin: true, sessaoValida: true },
+    { id: 'soNucleo', nome: 'Só Núcleo', dominios: ['sonucleo.com'], motor: 'nucleo', importa: false, conectada: true, exigeLogin: true, sessaoValida: false },
+  ];
+  const semSessao = plat.classificar('programathor.com.br', { plataformas: comLogin });
+  assert.equal(semSessao?.nivel, 'extensao', 'sem a sessão do robô, quem candidata é o motor da extensão, no navegador da pessoa');
+  assert.ok(semSessao?.semSessaoDoNucleo, 'e o painel sabe por quê');
+  assert.match(String(semSessao?.nota), /sess[ãa]o do navegador do rob[ôo]/, 'a nota explica o motivo em vez de só mudar o botão');
+
+  assert.equal(plat.classificar('pt2.com.br', { plataformas: comLogin })?.nivel, 'nucleo', 'com a sessão valendo, o adapter do núcleo volta a ser o caminho melhor');
+
+  const orfa = plat.classificar('sonucleo.com', { plataformas: comLogin });
+  assert.equal(orfa?.nivel, 'nucleo', 'site sem motor da extensão não tem a quem recorrer: continua no núcleo');
+  assert.match(String(orfa?.nota), /Entrar e conectar/, 'e a nota manda conectar a conta, em vez de prometer um envio que falha');
+
   const cat = plat.catalogo({ plataformas: inventadas });
   assert.equal(cat[0].nivel, 'nucleo', 'o catálogo começa pelos adapters testados');
   assert.ok(
@@ -491,7 +512,7 @@ try {
     cat.find(p => p.nome === 'Indeed')?.avisos.some(a => a.texto === 'conta não ligada'),
     'conta não ligada é a causa número um de "cliquei e não fez nada", e hoje é invisível',
   );
-  console.log('✓ Extensão: classifica o site aberto em adapter do núcleo, motor próprio ou modo genérico');
+  console.log('✓ Extensão: classifica o site aberto, e cai no motor do navegador quando o núcleo não tem a sessão');
 
   type Acao = { principal: { id: string; desabilitado: boolean; rotulo: string }; alternativa: { id: string } | null; motivo: string };
   const acao = puro<{ decidir: (s: Record<string, unknown>) => Acao }>('acao.js');

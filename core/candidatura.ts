@@ -5,6 +5,7 @@ import { adapters } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { ler } from './estado.ts';
 import { emitir } from './events.ts';
+import { evento } from './diario.ts';
 import { DIRS } from './config.ts';
 import { adaptarComIA, adaptarCurriculo, validarAdaptacao } from './resume/adapter.ts';
 import { completar, iaAtiva, lerIA } from './ia.ts';
@@ -150,6 +151,20 @@ export function jaCandidatado(vaga: { id: string; empresa: string; titulo: strin
   return candidaturas.listar().some(c => c.resultado === 'enviada' && (c.vagaId === vaga.id || chaveDaVaga(c) === chave));
 }
 
+/**
+ * O desfecho de uma tentativa, em forma de dado (ver `core/diario.ts`).
+ *
+ * Uma linha por tentativa, sempre com plataforma, id da vaga e motivo — que é exatamente o que a frase em
+ * português não tem e o que faz falta na hora de agrupar 200 falhas e achar a que se repete. `core/relato.ts`
+ * lê isto. Nada de dado pessoal aqui: título e empresa são públicos, currículo e contato não entram.
+ */
+const anotarDesfecho = (vaga: Vaga, status: string, extra: Record<string, unknown> = {}) =>
+  evento('candidatura.desfecho', {
+    plataforma: vaga.plataforma,
+    vaga: vaga.id,
+    dados: { status, titulo: vaga.titulo, empresa: vaga.empresa, score: vaga.score, ...extra },
+  });
+
 export async function executarCandidatura(id: string) {
   const vaga = vagas.get(id);
   if (!vaga) return;
@@ -166,6 +181,7 @@ export async function executarCandidatura(id: string) {
         ? `"${vaga.titulo}" já tinha sido enviada para ${vaga.empresa}; não vou candidatar de novo.`
         : `Você já se candidatou a "${vaga.titulo}" em ${vaga.empresa} (outra publicação da mesma vaga); não vou mandar o currículo duas vezes.`,
     );
+    anotarDesfecho(vaga, 'repetida', { motivo: mesmaVaga ? 'já enviada antes' : 'outra publicação da mesma vaga já foi enviada' });
     emitir({ tipo: 'estado' });
     return;
   }
@@ -177,6 +193,7 @@ export async function executarCandidatura(id: string) {
   if (!perfil || !principal?.caminho || !existsSync(principal.caminho)) {
     vagas.atualizar(id, { status: 'erro', erro: 'perfil ou currículo principal ausente' });
     registrar('erro', `"${vaga.titulo}": perfil ou currículo principal ausente.`);
+    anotarDesfecho(vaga, 'erro', { motivo: 'perfil ou currículo principal ausente', curriculo: principal?.caminho ?? null });
     return;
   }
   if (!adapter) {
@@ -256,11 +273,15 @@ export async function executarCandidatura(id: string) {
   );
 
   // 3) Só depois do resultado real: confirmação ou erro
-  if (resultado.status === 'pergunta') return pendente(vaga, { tipo: 'pergunta', pergunta: resultado.pergunta });
+  if (resultado.status === 'pergunta') {
+    anotarDesfecho(vaga, 'pergunta', { pergunta: resultado.pergunta.rotulo });
+    return pendente(vaga, { tipo: 'pergunta', pergunta: resultado.pergunta });
+  }
   if (resultado.formulario) vagas.atualizar(id, { formulario: resultado.formulario });
   if (resultado.status === 'erro') {
     vagas.atualizar(id, { status: 'erro', erro: resultado.motivo, captura: resultado.captura });
     registrar('erro', `Falha em "${vaga.titulo}" (${vaga.empresa}): ${resultado.motivo}`);
+    anotarDesfecho(vaga, 'erro', { motivo: resultado.motivo, captura: !!resultado.captura, etapas: resultado.formulario?.etapas ?? null });
     emitir({ tipo: 'aviso', nivel: 'erro', msg: `Falha ao candidatar: ${vaga.titulo}` });
     return;
   }
@@ -281,6 +302,7 @@ export async function executarCandidatura(id: string) {
     resultado: resultado.status,
   });
   vagas.atualizar(id, { status: resultado.status === 'ensaio' ? 'ensaio' : 'enviada', pendencia: undefined, captura: resultado.status === 'ensaio' ? resultado.captura : undefined });
+  anotarDesfecho(vaga, resultado.status === 'ensaio' ? 'ensaio' : 'enviada', { versao, regime: regime ?? null, prova: resultado.status === 'enviada' ? (resultado.prova ?? null) : null });
   if (resultado.status === 'ensaio') {
     if (resultado.pronto) registrar('sucesso', `Ensaio concluído para "${vaga.titulo}": formulário aceito pelo InHire, NADA foi enviado (modo ensaio ligado).`);
     else registrar('alerta', `Ensaio de "${vaga.titulo}" preenchido, mas ${resultado.observacao}. Veja a captura.`);

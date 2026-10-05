@@ -1,4 +1,5 @@
 import type { Vaga } from '../src/types.ts';
+import { evento } from './diario.ts';
 import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { filtrosDaAutomacao, ler } from './estado.ts';
@@ -638,6 +639,7 @@ async function girarFila(forcar: boolean) {
     if (desatualizada) {
       vagas.atualizar(proxima.id, { status: 'ignorada', posicao: undefined, pendencia: undefined });
       registrar('alerta', `"${proxima.titulo}" saiu da fila sem ser enviada: ${desatualizada}.`);
+      evento('fila.recusa', { plataforma: proxima.plataforma, vaga: proxima.id, dados: { motivo: desatualizada, titulo: proxima.titulo, empresa: proxima.empresa, score: proxima.score } });
       emitir({ tipo: 'estado' });
       continue;
     }

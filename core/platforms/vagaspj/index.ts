@@ -4,7 +4,7 @@
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigAutomacao, PerfilBusca, ResumoFormulario, Vaga } from '../../../src/types.ts';
-import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
+import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura, type ProvaDeEnvio } from '../adapter.ts';
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
 import { ler } from '../../estado.ts';
@@ -34,6 +34,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   // inteira, e o Laravel responde a POST com redirect. Voltar para a própria vaga é o jeito do Laravel devolver
   // erro de validação (`back()->withErrors()`); qualquer outro destino é a candidatura criada.
   let envioAceito = false;
+  let prova: ProvaDeEnvio | null = null;
   let envioTentado = false;
   let recusaDoServidor = '';
   const ehEnvio = (url: string, metodo: string) => ROTA_ENVIO.test(url) && metodo.toUpperCase() === 'POST';
@@ -50,6 +51,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
       recusaDoServidor = 'o Vagas PJ devolveu o formulário para a própria vaga: algum dado foi recusado na validação';
     else if (!envioAceito) {
       envioAceito = true;
+      prova = { metodo: res.request().method(), rota: new URL(res.url()).pathname, http: res.status() };
       log('sucesso', `O Vagas PJ aceitou a candidatura (HTTP ${res.status()} em /candidaturas).`);
     }
   });
@@ -133,18 +135,18 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     if (r.resultado.status === 'pergunta') return r.resultado;
     if (r.resultado.status === 'ensaio') return { ...r.resultado, captura: await captura('vagaspj-ensaio'), formulario: resumo };
     if (r.resultado.status === 'erro') return { ...r.resultado, motivo: motivoDoErro(r.resultado.motivo, envioTentado, recusaDoServidor), captura: await captura('vagaspj-erro'), formulario: resumo };
-    return { ...r.resultado, formulario: resumo };
+    return { ...r.resultado, formulario: resumo, prova: prova ?? undefined };
   } catch (e) {
     if (envioAceito) {
       log('alerta', `A página quebrou depois do envio (${(e as Error).message.split('\n')[0]}), mas o Vagas PJ já tinha aceitado a candidatura.`);
-      return { status: 'enviada' };
+      return { status: 'enviada', prova: prova ?? undefined };
     }
     // Rede de segurança do invariante 1: o envio pode concluir DEPOIS da exceção (upload lento). Antes de
     // dizer "erro", pergunte à tela — foi assim que uma candidatura enviada de verdade virou erro em 23/09/2026.
     const naTela = await page.evaluate(() => document.body.innerText).catch(() => '');
     if (VAGASPJ.convencoes.sucesso.test(naTela)) {
       log('alerta', `Deu erro no meio do caminho (${(e as Error).message.split('\n')[0]}), mas a tela do Vagas PJ mostra a candidatura enviada. Contando como enviada.`);
-      return { status: 'enviada' };
+      return { status: 'enviada', prova: prova ?? undefined };
     }
     return { status: 'erro', motivo: motivoDoErro((e as Error).message.split('\n')[0], envioTentado, recusaDoServidor), captura: await captura('vagaspj-erro') };
   } finally {

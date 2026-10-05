@@ -4,7 +4,7 @@
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigAutomacao, PerfilBusca, PerguntaExtra, Vaga } from '../../../src/types.ts';
-import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
+import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura, type ProvaDeEnvio } from '../adapter.ts';
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
 import { ler } from '../../estado.ts';
@@ -98,6 +98,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   };
 
   let envioAceito = false;
+  let prova: ProvaDeEnvio | null = null;
   let envioTentado = false;
   let recusa = '';
   const ehEnvio = (url: string, metodo: string) => WORKABLE.rotaEnvio.test(url) && metodo.toUpperCase() === 'POST';
@@ -111,6 +112,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     if (res.status() >= 400) recusa = `o Workable recusou o envio (HTTP ${res.status()})`;
     else if (!envioAceito) {
       envioAceito = true;
+      prova = { metodo: res.request().method(), rota: new URL(res.url()).pathname, http: res.status() };
       log('sucesso', `O Workable aceitou a candidatura (HTTP ${res.status()} em /apply).`);
     }
   });
@@ -263,7 +265,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     }
 
     if (recusa) return { status: 'erro', motivo: recusa, captura: await captura('workable-recusa') };
-    if (envioAceito) return { status: 'enviada' };
+    if (envioAceito) return { status: 'enviada', prova: prova ?? undefined };
 
     const naTela = await page.evaluate(() => document.body.innerText).catch(() => '');
     if (WORKABLE.sucesso.test(naTela)) {

@@ -52,9 +52,29 @@
     const p = daLista(h, plataformas);
     if (!p) return pareceVaga ? { nivel: 'generico', nome: h, ...NIVEIS.generico } : null;
 
-    // `motor: 'ambos'` (Indeed) vale como núcleo, que é o caminho melhor — mas a nota conta que há dois.
-    const nivel = p.motor === 'extensao' ? 'extensao' : 'nucleo';
     const dois = p.motor === 'ambos';
+
+    /**
+     * O adapter do núcleo é melhor — quando ele PODE agir.
+     *
+     * Num site com login, o adapter depende da sessão do navegador do robô, que não é o navegador da pessoa.
+     * Se essa sessão não está valendo, oferecer "Candidatar pelo ACV" é prometer o que não vai acontecer: foi
+     * o que aconteceu no ProgramaThor, com a pessoa logada na própria tela vendo o envio morrer em sessão
+     * ausente. Nesse caso o motor da extensão não é o plano B, é o único que funciona — e passa a ser o
+     * principal. Quando o site também não tem motor da extensão, não há a quem recorrer e o painel diz isso
+     * em vez de oferecer um botão que falha.
+     */
+    const semSessaoDoNucleo = p.motor !== 'extensao' && p.exigeLogin === true && p.sessaoValida !== true;
+    const nivel = p.motor === 'extensao' || (semSessaoDoNucleo && dois) ? 'extensao' : 'nucleo';
+
+    const nota = semSessaoDoNucleo
+      ? dois
+        ? `O ACV tem adapter para ${p.nome ?? h}, mas ele precisa da sessão do navegador do robô, e ela não está valendo. A candidatura vai pelo seu navegador, com a sua sessão — que é a que está aberta aqui.`
+        : `${NIVEIS.nucleo.nota} Falta conectar a conta: Plataformas › Entrar e conectar.`
+      : dois
+        ? `${NIVEIS.nucleo.nota} Aqui também dá pelo motor da extensão, se você preferir.`
+        : NIVEIS[nivel].nota;
+
     return {
       nivel,
       nome: p.nome ?? h,
@@ -62,8 +82,9 @@
       importa: !!p.importa,
       conectada: p.conectada !== false,
       dois,
+      semSessaoDoNucleo,
       ...NIVEIS[nivel],
-      nota: dois ? `${NIVEIS.nucleo.nota} Aqui também dá pelo motor da extensão, se você preferir.` : NIVEIS[nivel].nota,
+      nota,
     };
   }
 

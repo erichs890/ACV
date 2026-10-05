@@ -9,6 +9,7 @@
 // que o núcleo devolve sobre o perfil são só BOOLEANOS (tenho celular? tenho CPF?) mais os enunciados das
 // perguntas salvas — valor de dado pessoal nunca sai daqui.
 import { randomBytes } from 'node:crypto';
+import { evento } from './diario.ts';
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import type { CampoFaltando, PlataformaDetectada } from '../src/types.ts';
@@ -64,7 +65,8 @@ export function registrarPlataformaDetectada(e: {
     motivo: String(e.motivo ?? '').slice(0, 200),
     handler: e.handler === 'generico' ? 'generico' : String(e.handler).slice(0, 40),
     detectadaEm: new Date().toISOString(),
-    envio: e.envio ?? antes?.envio,
+    // `'envio' in e` e não `??`: "não achei botão nenhum" é informação, e tem de poder apagar o retrato antigo
+    envio: 'envio' in e ? e.envio : antes?.envio,
     camposFaltando: antes?.camposFaltando,
     camposEm: antes?.camposEm,
   };
@@ -77,7 +79,20 @@ export function registrarPlataformaDetectada(e: {
   // O retrato do botão de candidatura, sem clique nenhum: é com esta linha que eu descubro o formulário logado
   // de uma plataforma sem ter a conta de ninguém. Vai sempre, mesmo sem novidade de login, porque o botão muda
   // quando a sessão muda — é justamente a diferença entre deslogado e logado que interessa.
-  if (nova.envio) log.registrar('info', `[extensão · ${nova.dominio}] botão de candidatura: ${descreverEnvio(nova.envio)}`);
+  log.registrar('info', `[extensão · ${nova.dominio}] botão de candidatura: ${nova.envio ? descreverEnvio(nova.envio) : 'não achei nenhum nesta página'}`);
+  evento('extensao.pagina', {
+    plataforma: nova.dominio,
+    dados: {
+      dominio: nova.dominio,
+      handler: nova.handler,
+      precisaLogin: nova.precisaLogin,
+      logado: nova.logadoAtualmente,
+      motivo: nova.motivo,
+      envio: nova.envio ? descreverEnvio(nova.envio) : null,
+      clicarEnvia: nova.envio?.clicarEnvia ?? null,
+      url: e.url ?? null,
+    },
+  });
   return nova;
 }
 

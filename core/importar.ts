@@ -50,15 +50,28 @@ export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor
  * Inclui as de `motor: 'extensao'`, que não têm adapter: elas não podem ser filtradas por `adapters[id]`,
  * senão a extensão continuaria sem saber dos sites que ela mesma atende.
  */
-export const plataformasConhecidas = () =>
-  DOMINIOS.filter(d => d.motor !== 'nucleo' || adapters[d.id]).map(d => ({
+export const plataformasConhecidas = () => {
+  const conexoes = ler.conexoes();
+  return DOMINIOS.filter(d => d.motor !== 'nucleo' || adapters[d.id]).map(d => ({
     id: d.id,
     nome: adapters[d.id]?.nome ?? d.nome ?? d.id,
     dominios: d.dominios,
     importa: d.importa,
     motor: d.motor,
-    conectada: !!ler.conexoes()[d.id],
+    conectada: !!conexoes[d.id],
+    /**
+     * O adapter do núcleo precisa de conta nesta plataforma, e a sessão DELE está valendo?
+     *
+     * Dois campos, não um, porque a diferença manda no que a extensão oferece. O adapter do núcleo é o caminho
+     * melhor (adapta o currículo, respeita o ensaio, prova o envio pela resposta HTTP) — mas num site com
+     * login ele só funciona se o navegador DO ROBÔ tiver a sessão, e esse navegador não é o seu. Sem isto, o
+     * painel oferecia "Candidatar pelo ACV" no ProgramaThor e o envio morria em sessão ausente, com a pessoa
+     * logada na tela na frente dele. É o mesmo erro de sempre: conferir no ponto errado do ciclo de vida.
+     */
+    exigeLogin: !!adapters[d.id]?.sessao,
+    sessaoValida: conexoes[d.id]?.sessao?.valida === true,
   }));
+};
 
 const daUrl = (url: string) => {
   try {

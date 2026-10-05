@@ -6,6 +6,8 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
 Antes de commitar: `npm run check` (106 verificações) e `npm run build` (biome + tsc + vite).
+`npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
+agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
 ## Fluxo
 
@@ -16,6 +18,11 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 - `core/platforms/inhire/formulario.ts` — motor adaptativo usado por **todas** as plataformas: descobre campos do DOM a cada etapa, classifica fixo × pergunta extra, preenche, avança. Nunca supõe layout. Cada plataforma passa as suas `Convencoes` (textos dos botões e da confirmação); campo fixo se reconhece pelo `name=`, nunca pelo rótulo.
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera.
 - `core/platforms/vagaspj/` — vagas PJ: lista pelo feed RSS + JSON-LD de cada página (só HTTP), candidatura num formulário de uma etapa. Um anúncio se intromete entre o botão final e o POST (`aposBotaoFinal`).
+- `core/diario.ts` + `core/relato.ts` — duas formas do mesmo histórico. `diario/acv-DIA.log` é prosa, para ler;
+  `diario/eventos-DIA.jsonl` é um objeto por linha (`candidatura.desfecho`, `fila.recusa`, `varredura.plataforma`,
+  `extensao.pagina`, `erro.processo`), para **contar**. A prosa não diz plataforma, id da vaga nem se houve prova
+  de rede, e reconstruir dado a partir de frase já me fez errar uma resposta. Evento novo: nome em `assunto.fato`,
+  e **nada de dado pessoal** — o diário é o arquivo que se cola num chat pedindo ajuda.
 - `core/falhas.ts` — falha transitória volta à fila (2/10/30 min, 3x); captcha/vaga encerrada/recusa do servidor, não.
 - `extensao/` + `core/extensao.ts` — extensão MV3 **autossuficiente**: guarda a própria configuração em `chrome.storage.local` (`comum.js`) e funciona com o ACV fechado, sincronizando quando ele abre (`fundo.js`; o que foi feito offline fica em `pendentes` e sobe depois). `conteudo.js` tem o registro `PlatformHandler` (dedicado por domínio, `GENERICO` para o resto, LinkedIn incluído), `motor.js` preenche e envia **uma vaga por clique seu**, `painel.js` é a UI sobre a página e `rede.js` (mundo MAIN) dá a prova de envio por HTTP. Regras que não se negociam lá: só preenche o que já é seu (resposta salva ganha do campo fixo; nada sai de parecença), pergunta nova **para** a candidatura, a IA só responde pelo núcleo (onde ficam as travas de autodeclaração e dado pessoal), e nenhum disfarce de automação — ritmo sorteado, limite por dia, aquecimento de plataforma nova e parada no primeiro sinal de restrição. Fronteira de confiança: `/extensao/*` exige token; como agora ela PREENCHE, recebe valores de verdade do perfil (antes só booleanos).
 - `core/importar.ts` — ponte "candidata nesta vaga que está aberta no meu navegador". A extensão manda a URL, isto acha a vaga na lista (comparando sem www, barra final nem rastreio) ou **importa** (InHire: tenant + jobId da URL → API → `montarVaga`), e `POST /extensao/candidatar` roda o adapter do núcleo e **espera o desfecho**. Em plataforma com adapter o motor do núcleo é o caminho bom; o da extensão é para quem não tem. `DOMINIOS` é a lista que a extensão recebe para saber onde oferecer o botão.

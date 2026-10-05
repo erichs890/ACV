@@ -8,6 +8,7 @@
 // (li o feed, estou na vaga 12 de 40) sem precisar receber mais um parâmetro na assinatura.
 import type { ProgressoVarredura } from '../src/types.ts';
 import { emitir } from './events.ts';
+import { evento } from './diario.ts';
 
 const VAZIO: ProgressoVarredura = { rodando: false, plataforma: '', etapa: '', atual: 0, total: 0, feitas: [], restantes: [], novas: 0, conhecidas: 0, iniciadaEm: null };
 
@@ -51,10 +52,16 @@ export function vistas(n: number): void {
   vistasNaPlataforma = n;
 }
 
-/** Fecha a plataforma atual com o que ela trouxe. `conhecidas` são as que já estavam no banco. */
-export function terminarPlataforma(id: string, novas: number): void {
+/**
+ * Fecha a plataforma atual com o que ela trouxe. `conhecidas` são as que já estavam no banco.
+ *
+ * `erro` é opcional e existe para o relato: plataforma que varre e devolve zero por semanas é indistinguível,
+ * no log de texto, de plataforma que está quebrada — as duas simplesmente não aparecem.
+ */
+export function terminarPlataforma(id: string, novas: number, erro?: string): void {
   if (!atual.rodando) return;
   const conhecidas = Math.max(0, vistasNaPlataforma - novas);
+  evento('varredura.plataforma', { plataforma: id, dados: { vistas: vistasNaPlataforma, novas, conhecidas, erro: erro ?? null } });
   vistasNaPlataforma = 0;
   atual = {
     ...atual,

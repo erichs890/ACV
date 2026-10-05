@@ -326,12 +326,26 @@
     precisaLogin() {
       if (/\/users\/(sign_in|sign_up|password|confirmation|auth)/i.test(location.pathname)) return { precisa: true, logado: false, motivo: 'esta é a tela de entrada do ProgramaThor' };
       // O caminho de candidatura apontando para login/cadastro é o sinal mais forte, e é o que eu vi na página
-      const destino = PROGRAMATHOR.cta()?.getAttribute('href') ?? '';
+      const cta = PROGRAMATHOR.cta();
+      const destino = cta?.getAttribute('href') ?? '';
       if (/\/users\/(sign_in|sign_up)/.test(destino)) return { precisa: true, logado: false, motivo: 'o botão "Quero me candidatar" ainda leva para o cadastro' };
       // Reserva: o "ENTRAR" do topo, que só existe deslogado
       const entrar = todos('a[href="/users/sign_in"]').some(visivel);
       if (entrar) return { precisa: true, logado: false, motivo: 'o topo ainda oferece ENTRAR' };
-      return { precisa: true, logado: true, motivo: 'o caminho de candidatura não leva mais ao cadastro: a sua sessão está valendo' };
+      if (cta) return { precisa: true, logado: true, motivo: 'o botão de candidatura não leva mais ao cadastro: a sua sessão está valendo' };
+      /**
+       * Nem CTA, nem ENTRAR. A tentação é concluir "logado" — e foi o que eu fiz na primeira versão, o que é
+       * dizer que está tudo bem porque não achei nada. Sem botão de candidatura esta página não tem o que
+       * automatizar, e o motivo importa: pode ser vaga encerrada, candidatura já enviada, ou um layout que eu
+       * não conheço. Falar isso em voz alta é o que me permite consertar; "logado" esconderia.
+       */
+      const jaFoi = /voc[êe] (j[áa] )?se candidatou|candidatura (j[áa] )?enviada/i.test(document.body.innerText.slice(0, 4000));
+      const encerrada = /vaga (encerrada|preenchida|fechada)|n[ãa]o est[áa] mais (dispon[íi]vel|aceitando)/i.test(document.body.innerText.slice(0, 4000));
+      return {
+        precisa: true,
+        logado: !entrar,
+        motivo: jaFoi ? 'você já se candidatou a esta vaga' : encerrada ? 'esta vaga está encerrada' : 'não achei o botão de candidatura nesta página (layout desconhecido)',
+      };
     },
     empresaDaVaga: () => texto(document.querySelector('.company-name, [class*="company" i] a, [class*="empresa" i]')).slice(0, 120) || doJsonLd()?.empresa || '',
 

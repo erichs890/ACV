@@ -4,7 +4,7 @@
 import { statSync } from 'node:fs';
 import { join } from 'node:path';
 import type { ConfigAutomacao, PerfilBusca, Vaga } from '../../../src/types.ts';
-import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
+import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura, type ProvaDeEnvio } from '../adapter.ts';
 import type { Page } from 'playwright';
 import { melhorOpcao, pretensaoEmReais } from '../inhire/formulario.ts';
 import { navegador } from '../../browser.ts';
@@ -52,6 +52,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   };
 
   let envioAceito = false;
+  let prova: ProvaDeEnvio | null = null;
   let envioTentado = false;
   let recusa = '';
   // O corpo da resposta recusada. "HTTP 400" sozinho não dá para consertar nada: o Quickin diz ali qual campo
@@ -71,6 +72,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
       corpoDaRecusa = res.text().catch(() => '');
     } else if (!envioAceito) {
       envioAceito = true;
+      prova = { metodo: res.request().method(), rota: new URL(res.url()).pathname, http: res.status() };
       log('sucesso', `O Quickin aceitou a candidatura (HTTP ${res.status()} em /apply).`);
     }
   });
@@ -200,7 +202,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     }
 
     if (recusa) return { status: 'erro', motivo: await detalhar(recusa, corpoDaRecusa, log), captura: await captura('quickin-recusa') };
-    if (envioAceito) return { status: 'enviada' };
+    if (envioAceito) return { status: 'enviada', prova: prova ?? undefined };
 
     const naTela = await page.evaluate(() => document.body.innerText).catch(() => '');
     if (QUICKIN.sucesso.test(naTela)) {

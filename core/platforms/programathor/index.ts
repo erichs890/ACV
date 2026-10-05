@@ -9,7 +9,7 @@
 import { join } from 'node:path';
 import type { Page } from 'playwright';
 import type { ConfigAutomacao, PerfilBusca, ResumoFormulario, Vaga } from '../../../src/types.ts';
-import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
+import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura, type ProvaDeEnvio } from '../adapter.ts';
 import type { ProvaDeLogin } from '../../sessao.ts';
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
@@ -54,6 +54,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
 
   // Prova de envio (invariante 1): vale a resposta HTTP, não o texto da tela
   let envioAceito = false;
+  let prova: ProvaDeEnvio | null = null;
   let envioTentado = false;
   let recusa = '';
   let corpoDaRecusa: Promise<string> | null = null;
@@ -69,6 +70,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
       corpoDaRecusa = res.text().catch(() => '');
     } else if (!envioAceito) {
       envioAceito = true;
+      prova = { metodo: res.request().method(), rota: new URL(res.url()).pathname, http: res.status() };
       log('sucesso', `O ProgramaThor aceitou a candidatura (HTTP ${res.status()}).`);
     }
   });
@@ -111,7 +113,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
       if (detalhe) log('alerta', `Resposta do ProgramaThor à recusa: ${detalhe}`);
       return { status: 'erro', motivo: detalhe ? `${recusa}: ${detalhe}` : recusa, captura: await captura('programathor-recusa'), formulario: resumo };
     }
-    if (envioAceito) return { status: 'enviada', formulario: resumo };
+    if (envioAceito) return { status: 'enviada', formulario: resumo, prova: prova ?? undefined };
     if (r.resultado.status === 'pergunta') return r.resultado;
     if (r.resultado.status === 'ensaio') return { ...r.resultado, captura: await captura('programathor-ensaio'), formulario: resumo };
     if (r.resultado.status === 'erro') return { ...r.resultado, captura: await captura('programathor-erro'), formulario: resumo };

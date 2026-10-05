@@ -18,6 +18,7 @@ import { PORTA, DIRS } from './config.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';
 import { migrarCaminhosDaPastaAntiga } from './migracoes.ts';
+import { evento } from './diario.ts';
 import { ler, montarEstado, salvarParcial } from './estado.ts';
 import { buscarVagas, candidatarAgora, decidirPreview, enfileirarCompativeis, iniciarLaco, ligarRobo, limparDuplicatasDaFila, removerDaFila, repontuar, repontuarComIA, responder } from './queue.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
@@ -460,6 +461,28 @@ createServer(async (req, res) => {
   if (irmas) registrar('info', `${irmas} vaga(s) repetida(s) de candidaturas já enviadas saíram da lista.`);
   iniciarLaco();
 });
+
+/**
+ * Queda do processo: o diário precisa dizer o que foi, senão o servidor morre em silêncio.
+ *
+ * Isto estava no histórico como feito e NÃO estava no código — um `unhandledRejection` derrubava o núcleo sem
+ * deixar uma linha, e o sintoma que a pessoa vê é "o robô parou". Como são os erros mais difíceis de
+ * reproduzir, eles vão para o diário de texto E para os eventos, com a pilha.
+ *
+ * Não encerra o processo: o Node já decide isso. Aqui é só não perder a causa.
+ */
+for (const sinal of ['unhandledRejection', 'uncaughtException'] as const) {
+  process.on(sinal, (e: unknown) => {
+    const erro = e instanceof Error ? e : new Error(String(e));
+    const mensagem = erro.message.split('\n')[0].slice(0, 200);
+    try {
+      registrar('erro', `[${sinal}] ${mensagem}`);
+      evento('erro.processo', { dados: { sinal, mensagem, pilha: (erro.stack ?? '').slice(0, 2000) } });
+    } catch {
+      console.error(`[ACV] ${sinal}:`, erro);
+    }
+  });
+}
 
 process.on('SIGINT', async () => {
   await fecharNavegador();

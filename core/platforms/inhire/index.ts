@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import type { ConfigAutomacao, PerfilBusca, PerguntaExtra, ResumoFormulario, Vaga } from '../../../src/types.ts';
-import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura } from '../adapter.ts';
+import { registrarAdapter, type DadosCandidatura, type Log, type PlatformAdapter, type ResultadoCandidatura, type ProvaDeEnvio } from '../adapter.ts';
 import { navegador } from '../../browser.ts';
 import { DIRS } from '../../config.ts';
 import { varrer } from './discovery.ts';
@@ -48,6 +48,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
   // Sem isto, uma mudança de redação na tela de agradecimento faz o robô marcar erro numa vaga que já foi enviada
   // (e, pior, tentar de novo). Também registra recusas (4xx/5xx) com o motivo real que o InHire devolveu.
   let envioAceito = false;
+  let prova: ProvaDeEnvio | null = null;
   let recusaDoServidor = '';
   page.on('response', res => {
     const rota = ROTAS_ENVIO.find(r => r.re.test(res.url()));
@@ -55,6 +56,7 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     if (res.status() >= 200 && res.status() < 300) {
       if (rota.definitiva && !envioAceito) {
         envioAceito = true;
+        prova = { metodo: res.request().method(), rota: new URL(res.url()).pathname, http: res.status() };
         log('sucesso', `O InHire aceitou a candidatura (${res.status()} em ${new URL(res.url()).pathname}).`);
       }
     } else if (rota.definitiva) {
@@ -112,12 +114,12 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
     }
     if (r.resultado.status === 'erro') return { ...r.resultado, motivo: recusaDoServidor || r.resultado.motivo, captura: await captura('erro'), formulario: resumo };
     if (r.resultado.status === 'pergunta') return r.resultado;
-    return { ...r.resultado, formulario: resumo };
+    return { ...r.resultado, formulario: resumo, prova: prova ?? undefined };
   } catch (e) {
     // Exceção depois de um envio já aceito (a página fechou, o layout sumiu): a candidatura existe. Não é erro.
     if (envioAceito) {
       log('alerta', `A página quebrou depois do envio (${(e as Error).message.split('\n')[0]}), mas o InHire já tinha aceitado a candidatura.`);
-      return { status: 'enviada' };
+      return { status: 'enviada', prova: prova ?? undefined };
     }
     const motivo = recusaDoServidor || (e as Error).message.split('\n')[0];
     const ultima = etapas.at(-1);

@@ -7,6 +7,7 @@
     "dev": "vite",
     "core": "node --watch --disable-warning=ExperimentalWarning core/server.ts",
     "servidor": "node --disable-warning=ExperimentalWarning core/server.ts",
+    "relato": "node --disable-warning=ExperimentalWarning core/relato.ts",
     "check": "node --disable-warning=ExperimentalWarning core/self-check.ts && node --disable-warning=ExperimentalWarning core/fila-check.ts && node --disable-warning=ExperimentalWarning core/envio-check.ts && node --disable-warning=ExperimentalWarning core/adapters-envio-check.ts && node --disable-warning=ExperimentalWarning core/extensao-check.ts",
     "build": "biome check . && tsc --noEmit && tsc -p core && vite build",
     "preview": "vite preview",

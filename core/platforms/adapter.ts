@@ -23,8 +23,20 @@ export interface DadosCandidatura {
   mostrarNavegador: boolean;
 }
 
+/**
+ * A prova de que a vaga recebeu: a resposta HTTP do envio (invariante 1).
+ *
+ * Existia só como frase no log ("O InHire aceitou a candidatura (201 em /apply)") e isso já me custou uma
+ * resposta errada: perguntado se havia candidaturas duplicadas, eu não tinha como cruzar envio com resposta
+ * do servidor e disse que sim — eram pares de ensaio + real. Como dado, dá para contar.
+ *
+ * Ausente num `enviada` significa algo diferente de "falhou": significa que a confirmação veio do texto da
+ * própria plataforma, não da rede. É uma distinção que importa na hora de investigar, então ela fica visível.
+ */
+export type ProvaDeEnvio = { metodo: string; rota: string; http: number };
+
 export type ResultadoCandidatura =
-  | { status: 'enviada'; formulario?: ResumoFormulario }
+  | { status: 'enviada'; formulario?: ResumoFormulario; prova?: ProvaDeEnvio }
   | { status: 'ensaio'; captura: string; pronto: boolean; observacao?: string; formulario?: ResumoFormulario } // pronto = a plataforma liberou o botão de envio
   | { status: 'pergunta'; pergunta: PerguntaExtra }
   | { status: 'erro'; motivo: string; captura?: string; formulario?: ResumoFormulario };
