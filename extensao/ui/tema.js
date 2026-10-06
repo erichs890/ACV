@@ -27,6 +27,7 @@
       .topo { display: flex; align-items: center; gap: 8px; height: 35px; padding: 0 12px;
               background: #1a6dc4; color: #fff; }
       .corpo { display: flex; flex-direction: column; gap: 10px; padding: 12px; }
+      :host([hidden]) { display: none !important; }
       [hidden] { display: none; }
     `);
     return f;

@@ -52,10 +52,47 @@ export function respostaSalva(pergunta: PerguntaExtra): string | null {
   for (const p of ler.perguntas()) {
     if (!p.resposta.trim()) continue;
     const s = similaridade(p.pergunta, pergunta.rotulo);
-    if (s >= 0.55 && (!melhor || s > melhor.s)) melhor = { resposta: p.resposta.trim(), s };
+    if (s >= PARECENCA_MINIMA && (!melhor || s > melhor.s)) melhor = { resposta: p.resposta.trim(), s };
   }
   if (!melhor) return null;
-  return casarComOpcoes(pergunta, melhor.resposta);
+  const casada = casarComOpcoes(pergunta, melhor.resposta);
+  return casada !== null && respostaFazSentido(pergunta, casada) ? casada : null;
+}
+
+/**
+ * Quanto duas perguntas têm de se parecer para uma herdar a resposta da outra.
+ *
+ * Era 0,55 e isso é **parecença, não equivalência**. Medido contra as 173 respostas salvas reais em
+ * 06/10/2026: "Informe o seu Linkedin (Insira o Link):" casou com "Esta é uma posição de pipeline contínuo,
+ * o que significa..." a 0,58 e herdou o "Sim" dela. Num envio de verdade isso escreve **Sim** no campo do
+ * LinkedIn dele, e "Sim" no campo de última remuneração (0,63 com a mesma pergunta).
+ *
+ * 0,8 é "a mesma pergunta escrita de outro jeito" — o casamento legítimo que eu vi no mesmo teste foi 1,00
+ * (pergunta idêntica). O que cai fora daqui não para a fila: vai para a IA (no Sem Piedade) e, se ela também
+ * não souber, volta para você uma vez e fica salvo. Resposta errada num formulário real não tem desfazer.
+ */
+const PARECENCA_MINIMA = 0.8;
+
+/**
+ * A resposta serve para ESTA pergunta? Parecença de texto não garante isso — e tipo de dado, sim.
+ *
+ * O segundo portão, e o que de fato pega o caso do LinkedIn: campo que pede um LINK não aceita "Sim", campo
+ * que pede um VALOR não aceita resposta sem número nenhum. Vale só para texto livre: pergunta com opções já
+ * é resolvida por `casarComOpcoes`, que devolve null quando nada casa.
+ */
+const PEDE_LINK = /\blink\b|\burl\b|linkedin|github|portf[óo]lio|\bsite\b|perfil online/i;
+const PEDE_VALOR = /quanto|\bvalor\b|remunera|sal[áa]ri|pretens|quantos anos|\bidade\b|\bcep\b|\bcpf\b|telefone|celular/i;
+const SO_SIM_OU_NAO = /^(sim|n[ãa]o|yes|no)$/i;
+
+export function respostaFazSentido(pergunta: PerguntaExtra, resposta: string): boolean {
+  if (pergunta.tipo !== 'texto') return true;
+  const r = resposta.trim();
+  if (PEDE_LINK.test(pergunta.rotulo) && !/https?:\/\/|\w\.\w{2,}\//i.test(r)) return false;
+  if (PEDE_VALOR.test(pergunta.rotulo) && !/\d/.test(r)) return false;
+  // "Sim" num campo aberto que não é pergunta de sim-ou-não é sempre resposta herdada errado
+  if (SO_SIM_OU_NAO.test(r) && !/^(possui|tem\b|voc[êe]\s|aceita|concorda|h[áa]\s|j[áa]\s|est[áa]\s|teria|tens\b|disponib|dispon[íi]vel|is |do you|are you|have you)/i.test(pergunta.rotulo.trim()))
+    return false;
+  return true;
 }
 
 function decidirRegime(vaga: Vaga): 'CLT' | 'PJ' | null | 'perguntar' {
@@ -367,7 +404,10 @@ export async function executarCandidatura(id: string) {
   vagas.atualizar(id, { status: resultado.status === 'ensaio' ? 'ensaio' : 'enviada', pendencia: undefined, captura: resultado.status === 'ensaio' ? resultado.captura : undefined });
   anotarDesfecho(vaga, resultado.status === 'ensaio' ? 'ensaio' : 'enviada', { versao, regime: regime ?? null, prova: resultado.status === 'enviada' ? (resultado.prova ?? null) : null });
   if (resultado.status === 'ensaio') {
-    if (resultado.pronto) registrar('sucesso', `Ensaio concluído para "${vaga.titulo}": formulário aceito pelo InHire, NADA foi enviado (modo ensaio ligado).`);
+    // A plataforma da VAGA, não "InHire" fixo: esta mensagem é compartilhada por todas, e dizer "aceito pelo
+    // InHire" num ensaio do Vagas PJ faz a pessoa duvidar do resto do log (visto no ensaio de 06/10/2026).
+    if (resultado.pronto)
+      registrar('sucesso', `Ensaio concluído para "${vaga.titulo}": formulário do ${adapters[vaga.plataforma]?.nome ?? vaga.plataforma} aceito, NADA foi enviado (modo ensaio ligado).`);
     else registrar('alerta', `Ensaio de "${vaga.titulo}" preenchido, mas ${resultado.observacao}. Veja a captura.`);
     emitir({ tipo: 'aviso', nivel: resultado.pronto ? 'sucesso' : 'info', msg: `Ensaio: ${vaga.titulo} ${resultado.pronto ? 'pronta para envio' : 'com pendência no formulário'}` });
   } else {

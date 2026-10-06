@@ -291,11 +291,49 @@
     }, 1500);
   }
 
+  /**
+   * O interruptor do painel (`painelLigado`, em `comum.js`), conferido no ponto de uso.
+   *
+   * Três coisas diferentes, e cada uma no seu lugar: `recolher` encolhe para a barra de título, `✕` esconde
+   * NESTE site até você fechar o navegador, e isto desliga o painel em TODA página até você religar pelo
+   * ícone da barra. A extensão continua inteira sem ele — o popup diagnostica a página, conta o dia e
+   * candidata; o que some é o quadro flutuante.
+   */
+  async function painelLigado() {
+    try {
+      const { cfg } = (await aoFundo({ tipo: 'CONFIG' })) ?? {};
+      return cfg?.painelLigado !== false;
+    } catch {
+      return true; // sem resposta do fundo, o padrão é aparecer: some sozinho é pior que aparecer demais
+    }
+  }
+
   async function tentar() {
     if (hospedeiro?.isConnected || ++tentativas > MAX_TENTATIVAS) return;
+    if (!(await painelLigado())) return;
     if ((await aoFundo({ tipo: 'PAINEL_ESCONDIDO', origem: location.origin }))?.escondido) return;
     if (await devoAparecer()) await montar();
   }
+
+  /**
+   * Desligar tem de valer AGORA, nas abas já abertas.
+   *
+   * Sem isto, apagar o painel pelo popup só faria efeito em página nova — e quem está desligando porque o
+   * quadro está sobreposto na tela quer que ele saia DESTA tela, não da próxima. Religar também volta na
+   * hora: `tentativas` é zerado porque o laço de montagem tem teto e já pode ter se esgotado.
+   */
+  chrome.storage?.onChanged?.addListener((mudancas, area) => {
+    if (area !== 'local' || !('config' in mudancas)) return;
+    const ligado = mudancas.config.newValue?.painelLigado !== false;
+    if (!ligado) {
+      hospedeiro?.remove();
+      return;
+    }
+    if (!hospedeiro?.isConnected) {
+      tentativas = 0;
+      tentar();
+    }
+  });
 
   let agendado = null;
   const agendar = () => {

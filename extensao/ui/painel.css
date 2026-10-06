@@ -261,4 +261,15 @@ details ol {
 [hidden] {
   display: none !important;
 }
+
+/* E o HOST precisa da sua própria regra: `[hidden]` acima só alcança o que está DENTRO da árvore shadow.
+ *
+ * Era por isso que o `✕` não fazia nada. Ele marca `hospedeiro.hidden = true`, e `hidden` é só
+ * `display: none` sem importância, no estilo do navegador — perde do `display: block !important` que a
+ * armadura lá em cima declara para a página hospedeira não conseguir apagar o painel. O escudo estava
+ * barrando o dono junto com o invasor. `:host([hidden])` tem especificidade maior que `:host` e vem depois,
+ * então ganha entre as duas `!important` da mesma folha, e continua ganhando da página. */
+:host([hidden]) {
+  display: none !important;
+}
 /* biome-ignore-end lint/complexity/noImportantStyles: fim da exceção */

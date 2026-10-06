@@ -771,8 +771,23 @@ async function girarFila(forcadoPara: string | null) {
      * reinicialização do núcleo, e o `pedido` em memória não.
      */
     const pedida = pedido && pedido !== '*' ? vagas.get(pedido) : null;
-    const proxima = pedida && NA_FILA.includes(pedida.status) ? pedida : vagas.proximaNaFila();
+    // Vaga que você pediu passa por cima de tudo; as outras só entram se a plataforma delas puder enviar agora
+    const proxima = pedida && NA_FILA.includes(pedida.status) ? pedida : vagas.proximaNaFila(v => v.pedidaPorVoce === true || plataformaEnviaCurriculo(v));
     if (!proxima) {
+      /**
+       * Fila sem ninguém disponível não é a mesma coisa que fila vazia, e silêncio aqui é o pior desfecho:
+       * a tela mostra 20 vagas enfileiradas e nada acontece, sem uma linha dizendo por quê.
+       */
+      const travadas = vagas.listar().filter(v => NA_FILA.includes(v.status) && !plataformaEnviaCurriculo(v));
+      if (travadas.length) {
+        const semSessao = [...new Set(travadas.filter(v => !sessaoValida(v.plataforma)).map(v => adapters[v.plataforma]?.nome ?? v.plataforma))];
+        registrar(
+          'alerta',
+          semSessao.length
+            ? `${travadas.length} vaga(s) na fila estão paradas: entre na sua conta em Plataformas (${semSessao.join(', ')}). Elas continuam na fila esperando.`
+            : `${travadas.length} vaga(s) na fila estão paradas porque a plataforma delas saiu do foco da automação.`,
+        );
+      }
       await liberarNavegador();
       return;
     }

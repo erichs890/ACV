@@ -75,6 +75,32 @@ async function pintarAba() {
   $('abaSite').innerHTML = sitio ? `<strong>${sitio.nome}</strong> ${pilula(sitio.pilula, sitio.tom)}<br>${sitio.nota}` : `<strong>${host}</strong><br>Não reconheço este site como mural de vagas.`;
 }
 
+/**
+ * O interruptor do painel flutuante.
+ *
+ * Três botões parecidos e três coisas diferentes, então o texto de cada um tem de dizer qual é qual:
+ * "Mostrar o painel nesta página" desfaz o `✕` (que vale num site só, até fechar o navegador), e este liga e
+ * desliga o painel em TODA página, para sempre, até você religar aqui. O resto da extensão não muda: este
+ * popup continua diagnosticando a página e contando o dia.
+ */
+async function pintarInterruptor() {
+  const { cfg } = (await aoFundo({ tipo: 'CONFIG' })) ?? {};
+  const ligado = cfg?.painelLigado !== false;
+  $('alternarPainel').textContent = ligado ? 'Desativar o painel' : 'Ativar o painel';
+  $('estadoPainel').textContent = ligado
+    ? 'O painel aparece sobre as páginas de vaga. Desativar some com ele em todos os sites — a extensão continua funcionando por aqui.'
+    : 'O painel está desativado e não aparece em site nenhum.';
+  $('mostrarPainel').disabled = !ligado;
+}
+
+$('alternarPainel').addEventListener('click', async () => {
+  const { cfg } = (await aoFundo({ tipo: 'CONFIG' })) ?? {};
+  // Só o campo que mudou: `CONFIG_GRAVAR` funde com o que já está lá, e devolver a config inteira de volta
+  // faria o popup reescrever (e poder desatualizar) tudo o que a página de Configurações edita.
+  await aoFundo({ tipo: 'CONFIG_GRAVAR', cfg: { painelLigado: cfg?.painelLigado === false } });
+  await pintarInterruptor(); // as abas abertas reagem sozinhas, pelo onChanged do painel
+});
+
 $('mostrarPainel').addEventListener('click', async () => {
   const [aba] = await chrome.tabs.query({ active: true, currentWindow: true });
   await aoFundo({ tipo: 'MOSTRAR_PAINEL', abaId: aba?.id, origem: new URL(aba.url).origin });
@@ -111,3 +137,4 @@ $('config').addEventListener('click', () => aoFundo({ tipo: 'ABRIR_OPCOES' }));
 
 pintar();
 pintarAba();
+pintarInterruptor();

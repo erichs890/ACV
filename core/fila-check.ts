@@ -17,7 +17,7 @@ const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompa
   './queue.ts'
 );
 const { AUTOMACAO_PADRAO, ler } = await import('./estado.ts');
-const { executarCandidatura } = await import('./candidatura.ts');
+const { executarCandidatura, respostaSalva, respostaFazSentido } = await import('./candidatura.ts');
 import type { PerguntaExtra, Vaga } from '../src/types.ts';
 import type { DadosCandidatura, ResultadoCandidatura } from './platforms/adapter.ts';
 
@@ -941,6 +941,85 @@ const antes = chamadas.get(semTraducao) ?? 0;
 await processarProxima();
 assert.equal(chamadas.get(semTraducao) ?? 0, antes, 'nada de nova tentativa automática');
 console.log('✓ Idioma: vaga em inglês leva o currículo traduzido, e sem ele a vaga para em vez de mandar o português');
+
+// ─── 18c) Resposta salva não se herda por parecença: o caso "Sim" no campo do LinkedIn ────────────
+/**
+ * `respostaSalva` reaproveitava resposta de uma pergunta PARECIDA, com limiar 0,55 — e parecença não é
+ * equivalência. Medido contra as 173 respostas salvas reais em 06/10/2026, num ensaio de verdade no Quickin:
+ *
+ *   "Informe o seu Linkedin (Insira o Link):"        casou 0,58 com "Esta é uma posição de pipeline
+ *   "Informe sua última remuneração/atual..."        casou 0,63 com   contínuo, o que significa..." => "Sim"
+ *   "Possui disponibilidade para o regime híbrido 3x" casou 0,69 com "Disponibilidade para viagem"  => "sim"
+ *
+ * Num envio real isso escreve **Sim** no campo do LinkedIn e **Sim** no campo de remuneração. E o "sim" para
+ * híbrido 3x por semana é pior: ele só aceita presencial na cidade dele.
+ *
+ * São dois portões, e o teste cobra os dois separados: o limiar (0,8 = a mesma pergunta escrita de outro
+ * jeito) e o tipo do dado (campo que pede LINK não aceita "Sim"). Null aqui não para a fila — a pergunta vai
+ * para a IA no Sem Piedade e, no limite, volta para a pessoa UMA vez e fica salva.
+ */
+cenario();
+kv.set('perguntas', [
+  { id: 1, icone: '', pergunta: 'Esta é uma posição de pipeline contínuo, o que significa que podemos demorar a responder. Tudo bem?', resposta: 'Sim', personalizada: true },
+  { id: 2, icone: '', pergunta: 'Disponibilidade para viagem', resposta: 'sim', personalizada: true },
+  { id: 3, icone: '', pergunta: 'Possui Ensino Cursando ou Superior completo?', resposta: 'Sim', personalizada: true },
+  { id: 4, icone: '', pergunta: 'Pretensão salarial', resposta: '3500', personalizada: true },
+]);
+const perguntaDe = (rotulo: string, tipo: 'texto' | 'opcoes' = 'texto', opcoes?: string[]) => ({ rotulo, tipo, opcoes, obrigatoria: true }) as PerguntaExtra;
+
+assert.equal(respostaSalva(perguntaDe('Informe o seu Linkedin (Insira o Link):')), null, 'campo que pede LINK não herda um "Sim" de outra pergunta');
+assert.equal(respostaSalva(perguntaDe('Informe sua última remuneração/atual e benefícios')), null, 'campo que pede VALOR não herda um "Sim"');
+assert.equal(respostaSalva(perguntaDe('Possui disponibilidade para atuar no regime híbrido (3x por semana)?', 'opcoes', ['Sim', 'Não'])), null, 'viagem e híbrido 3x não são a mesma pergunta');
+// E o que é legítimo continua passando: pergunta igual escrita de outro jeito, e valor que é valor
+assert.equal(
+  respostaSalva(perguntaDe('Possui Ensino Cursando ou Superior completo? Será necessário apresentar o certificado.', 'opcoes', ['Sim', 'Não'])),
+  'Sim',
+  'a MESMA pergunta com uma frase a mais continua casando',
+);
+assert.equal(respostaSalva(perguntaDe('Pretensão salarial')), '3500', 'resposta exata não é afetada');
+
+// O portão de tipo, isolado — é ele que pega o caso do LinkedIn mesmo com texto muito parecido
+assert.equal(respostaFazSentido(perguntaDe('Informe o seu Linkedin (Insira o Link):'), 'Sim'), false);
+assert.equal(respostaFazSentido(perguntaDe('Informe o seu Linkedin (Insira o Link):'), 'https://www.linkedin.com/in/alguem/'), true);
+assert.equal(respostaFazSentido(perguntaDe('Qual sua pretensão salarial?'), 'Sim'), false);
+assert.equal(respostaFazSentido(perguntaDe('Qual sua pretensão salarial?'), 'R$ 3.500'), true);
+assert.equal(respostaFazSentido(perguntaDe('Possui CNH?'), 'Sim'), true, 'pergunta de sim-ou-não aceita "Sim"');
+assert.equal(respostaFazSentido(perguntaDe('Conte sobre você'), 'Sim'), false, '"Sim" num campo aberto é sempre herança errada');
+assert.equal(respostaFazSentido(perguntaDe('Escolha', 'opcoes', ['Sim', 'Não']), 'Sim'), true, 'pergunta de opções é resolvida por casarComOpcoes, não aqui');
+console.log('✓ Resposta salva: não se herda por parecença, e campo que pede link ou valor nunca recebe "Sim"');
+
+// ─── 18b) Plataforma travada segura a fila DELA, não a fila inteira ───────────────────────────────
+/**
+ * O CLAUDE.md prometia "sessão caída segura a fila **só daquela plataforma**" — e isso não estava
+ * implementado em lugar nenhum.
+ *
+ * `proximaNaFila()` pegava a primeira por `posicao` e só pulava quem esperava nova tentativa. Então uma vaga
+ * travada no COMEÇO da fila parava tudo atrás dela, calada. Medido no banco real em 06/10/2026: as três
+ * primeiras vagas da fila eram do ProgramaThor, que exige conta e nunca foi conectado, e nada sairia.
+ *
+ * Pular não é descartar: a vaga fica na fila, na posição dela, esperando o login.
+ */
+cenario();
+registrarAdapter({
+  id: 'travada',
+  nome: 'Plataforma Travada',
+  buscarVagas: async () => [],
+  candidatar: async () => {
+    chamadas.set('travada', (chamadas.get('travada') ?? 0) + 1);
+    return { status: 'enviada' };
+  },
+  // Declara prova de login e NÃO está em `conexoes`: é o caso "nunca entrei"
+  sessao: { urlLogin: 'http://exemplo/login', urlProva: 'http://exemplo/eu', telasDeLogin: /login/, logado: async () => true },
+});
+const naFrenteTravada = enfileirar({ status: 'na_fila', score: 95, plataforma: 'travada', titulo: 'Vaga que nao pode sair' });
+const atrasLivre = enfileirar({ status: 'na_fila', score: 60, titulo: 'Vaga que pode sair' });
+assert.ok((vagas.get(naFrenteTravada)?.posicao ?? 0) < (vagas.get(atrasLivre)?.posicao ?? 0), 'a travada está na frente na fila');
+roteiro.set(atrasLivre, { status: 'enviada' });
+await processarProxima();
+assert.equal(st(atrasLivre), 'enviada', 'a de trás sai: a travada não pode parar a fila inteira');
+assert.equal(st(naFrenteTravada), 'na_fila', 'e a travada CONTINUA na fila, na posição dela, esperando o login');
+assert.equal(chamadas.get('travada') ?? 0, 0, 'o adapter dela não foi nem chamado — nada de abrir navegador para cair na tela de login');
+console.log('✓ Fila: plataforma com login nunca feito segura só as vagas dela, e a fila continua andando');
 
 // ─── 18) A lista de empresas de ATS por mural (Lever hoje, Greenhouse em seguida) ─────────────────
 // Mora aqui e não no `self-check.ts` porque ESCREVE: só este arquivo troca `ACV_DIR` antes de alguém lê-lo

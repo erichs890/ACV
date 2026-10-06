@@ -985,6 +985,49 @@ try {
   assert.equal(r.status, 'enviada', `com o ensaio desligado o envio volta a acontecer (veio ${r.status}: ${r.motivo})`);
   assert.equal(envios, antesDeVoltar + 1, 'o corte de escrita do ensaio foi desarmado ao fim da tentativa');
   console.log('✓ Motor: ensaio preenche, clica e NENHUMA escrita sai da página — e o corte não sobra na aba');
+
+  /**
+   * O `✕` do painel tem de ESCONDER o painel — e por semanas não escondeu.
+   *
+   * `painel.css` blinda o host com `display: block !important` e `visibility: visible !important`, de
+   * propósito: `#painel { display: none !important }` é ataque real de plataforma de recrutamento contra
+   * extensão, e declaração de árvore shadow só ganha da página quando é `!important`. Só que a mesma armadura
+   * vencia o nosso próprio `hospedeiro.hidden = true` — `hidden` é `display: none` SEM importância, no estilo
+   * do navegador. O escudo barrava o dono junto com o invasor, e o painel ficava sobreposto na tela sem jeito
+   * de tirar. O `[hidden]` que já existia na folha não alcança o host: ele vale para dentro da árvore shadow.
+   *
+   * O teste mede o que o usuário vê (a altura renderizada), e não qual regra ganhou — e confere os dois lados:
+   * esconder funciona, e a página hospedeira continua sem conseguir apagar o painel.
+   */
+  await page.goto(`${base}/vaga`, { waitUntil: 'domcontentloaded' });
+  const painelCss = readFileSync(new URL('../extensao/ui/painel.css', import.meta.url), 'utf8');
+  const visibilidade = await page.evaluate(
+    ([css]) => {
+      const host = document.createElement('div');
+      const raiz = host.attachShadow({ mode: 'open' });
+      const folha = new CSSStyleSheet();
+      folha.replaceSync(css);
+      raiz.adoptedStyleSheets = [folha];
+      raiz.innerHTML = '<div class="caixa" style="height:120px">painel</div>';
+      document.documentElement.appendChild(host);
+      const alto = () => host.getBoundingClientRect().height;
+      const aberto = alto();
+      host.hidden = true;
+      const escondido = alto();
+      host.hidden = false;
+      // E a página tentando apagar o painel, que é contra quem a armadura existe
+      const ataque = document.createElement('style');
+      ataque.textContent = 'div[role], div { display: none !important; visibility: hidden !important; }';
+      document.head.appendChild(ataque);
+      const sobAtaque = alto();
+      return { aberto, escondido, sobAtaque };
+    },
+    [painelCss],
+  );
+  assert.ok(visibilidade.aberto > 0, 'o painel aberto ocupa espaço na tela');
+  assert.equal(visibilidade.escondido, 0, 'o ✕ marca `hidden` no host: o painel TEM de sumir, apesar do display !important da armadura');
+  assert.ok(visibilidade.sobAtaque > 0, 'e a página hospedeira continua sem conseguir apagar o painel — a armadura não foi enfraquecida');
+  console.log('✓ Extensão: o ✕ esconde o painel de verdade, e a página hospedeira continua sem poder apagá-lo');
 } finally {
   await page.close().catch(() => {});
   servidor.close();

@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas, Quickin, Leve
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (125 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (128 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -13,7 +13,7 @@ agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o
 
 varredura → score → fila → `executarCandidatura` → adapter → **preencher, anexar, enviar, só então confirmar**.
 
-- `core/queue.ts` — trabalhador serial: encadeia vagas até um portão fechar (robô, modo, janela, intervalo, limite/dia). `rodando` ≠ `ocupado`. Pendência pausa **só aquela vaga**.
+- `core/queue.ts` — trabalhador serial: encadeia vagas até um portão fechar (robô, modo, janela, intervalo, limite/dia). `rodando` ≠ `ocupado`. Pendência pausa **só aquela vaga**. Plataforma travada (sessão caída, ou login que **nunca foi feito**) também pausa só as vagas dela: `proximaNaFila` recebe a regra de quem pode ser pego agora e PULA as travadas, que ficam na fila esperando. Sem isso uma vaga travada na frente parava a fila inteira, calada — e `sessaoValida` dava "liberado" para plataforma ausente das conexões, porque `undefined !== false`.
   **Dois botões no painel da fila:** *Mapear agora* é a varredura de sempre (`POST /buscar`) — varre as
   plataformas conectadas, pontua e enfileira, com um caminho só e não dois. *Esvaziar a fila*
   (`POST /fila/esvaziar`) tira todas da fila **sem** marcar `recusadaPorVoce` (elas voltam a concorrer) e
@@ -63,7 +63,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 
 1. **Sucesso é a resposta HTTP**, não texto na tela: 2xx em `ROTAS_ENVIO` = enviada. Texto muda, API não. Nunca reportar erro depois de um envio comprovado; nunca clicar no botão final duas vezes.
 2. **Nunca inventar nada no currículo.** `validarAdaptacao` compara palavra a palavra; qualquer termo novo descarta a adaptação e manda o original.
-3. **Autodeclaração** (gênero, raça, PcD, religião, saúde) nunca sai de similaridade, de currículo nem de IA — só da escolha explícita do usuário (`src/sensiveis.ts`). No **Sem Piedade** a única coisa que o robô pode responder sozinho é a **recusa a declarar**, e só quando a vaga oferece a opção (`decidirSensivel`, regra 4): é a resposta que não afirma nada sobre a pessoa. Vaga que exige a declaração e não oferece recusa **para e espera por ela** — esse é o limite honesto de "delega tudo para a IA". **Dado pessoal** (`DADO_PESSOAL`: documento, endereço, contato, dinheiro, data) também não passa pela IA: errar isso vai num formulário real.
+3. **Autodeclaração** (gênero, raça, PcD, religião, saúde) nunca sai de similaridade, de currículo nem de IA — só da escolha explícita do usuário (`src/sensiveis.ts`). No **Sem Piedade** a única coisa que o robô pode responder sozinho é a **recusa a declarar**, e só quando a vaga oferece a opção (`decidirSensivel`, regra 4): é a resposta que não afirma nada sobre a pessoa. Vaga que exige a declaração e não oferece recusa **para e espera por ela** — esse é o limite honesto de "delega tudo para a IA". **Dado pessoal** (`DADO_PESSOAL`: documento, endereço, contato, dinheiro, data) também não passa pela IA: errar isso vai num formulário real. E **resposta salva não se herda por parecença**: `respostaSalva` exige 0,8 de similaridade (era 0,55) e que o tipo do dado feche — campo que pede link ou valor nunca recebe "Sim". Com 0,55, "Informe o seu Linkedin (Insira o Link)" casava a 0,58 com "Esta é uma posição de pipeline contínuo..." e escrevia **Sim** no campo do LinkedIn (visto num ensaio real em 06/10/2026). Null aqui não para a fila: no Sem Piedade a pergunta vai para a IA e, no limite, volta para a pessoa uma vez e fica salva.
 4. **Uma vaga, uma candidatura.** Só existem DOIS lugares que inserem candidatura, e cada caminho até eles tem cadeado:
 
    | caminho | cadeado |
@@ -93,7 +93,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | ritmo, limite, janela, modo, ensaio, adaptação, tamanho da fila, regime preferido (`CLT` · `PJ` · `qualquer` · `perguntar`), modo de perguntas (`manual` · `duvida` · `sem_piedade`) | `automacao` (Automação, que **grava sozinha** 600 ms depois de cada mudança) |
 | plataforma ligada **e se está no foco da automação** (`enviar`) | `conexoes` — editável **só** em Automação; Plataformas espelha |
 | respostas de autodeclaração | `sensiveis` |
-| perguntas das empresas | `perguntas` |
+| perguntas das empresas | `perguntas` — reaproveitadas só com **0,8 de parecença** e se o tipo do dado fechar (campo que pede link ou valor nunca recebe "Sim") |
 | modelos de IA (id, preço, nota, padrão) | `MODELOS_IA` em `src/dados.ts` — `core/ia.ts` deriva dela |
 
 Nunca criar um segundo lugar que edite o mesmo campo. Campo que a UI mostra e o núcleo não lê é mentira: ou implementa, ou remove.

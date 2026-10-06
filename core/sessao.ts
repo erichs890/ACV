@@ -130,5 +130,22 @@ export function marcarSessaoExpirada(id: string) {
   emitir({ tipo: 'aviso', nivel: 'erro', msg: `Sessão do ${adapters[id]?.nome ?? id} expirada — entre de novo em Plataformas.` });
 }
 
-/** A fila pode mexer com esta plataforma? Sem login (plataforma pública) ou sessão válida = sim. */
-export const sessaoValida = (id: string) => ler.conexoes()[id]?.sessao?.valida !== false;
+/**
+ * A fila pode mexer com esta plataforma? Sem login (plataforma pública) ou sessão válida = sim.
+ *
+ * **"Nunca entrei" e "minha sessão caiu" são coisas diferentes, e a versão antiga só conhecia a segunda.**
+ * Ela era `conexoes[id]?.sessao?.valida !== false`, e para uma plataforma ausente das conexões isso é
+ * `undefined !== false`, ou seja, liberado. Está certo para o InHire (não há conta nenhuma a fazer) e errado
+ * para quem DECLARA precisar de login: medido em 06/10/2026, 9 das 20 vagas da fila eram do ProgramaThor, que
+ * exige conta e nunca foi conectado. Elas passariam o portão, abririam o navegador, cairiam na tela de login
+ * e voltariam como erro — queimando vaga da fila e enchendo o log de falha que não é falha.
+ *
+ * Quem declara a necessidade é o próprio adapter, com `sessao` (a prova de login). Conectada mas sem o campo
+ * `sessao` continua passando: são as conexões criadas antes de isto existir, e tirá-las do jogo sem aviso
+ * seria pior do que tentar.
+ */
+export const sessaoValida = (id: string) => {
+  const conexao = ler.conexoes()[id];
+  if (conexao?.sessao?.valida === false) return false;
+  return !(adapters[id]?.sessao && !conexao);
+};

@@ -21,7 +21,7 @@ const { inhire } = await import('./platforms/inhire/index.ts');
 const { fecharNavegador } = await import('./browser.ts');
 const { registrarAdapter } = await import('./platforms/adapter.ts');
 const { cancelarLogin, entrarNaJanela, marcarSessaoExpirada, sessaoValida } = await import('./sessao.ts');
-const { ler } = await import('./estado.ts');
+const { ler, salvarParcial } = await import('./estado.ts');
 import type { DadosCandidatura } from './platforms/adapter.ts';
 import type { Vaga } from '../src/types.ts';
 
@@ -227,6 +227,19 @@ try {
   marcarSessaoExpirada('falsa');
   assert.equal(sessaoValida('falsa'), false, 'sessão caída segura a fila daquela plataforma');
   assert.equal(sessaoValida('inhire'), true, 'plataforma sem login nunca é barrada por sessão');
+
+  /**
+   * **"Nunca entrei" não é a mesma coisa que "minha sessão caiu", e o portão só conhecia a segunda.**
+   *
+   * `sessaoValida` era `conexoes[id]?.sessao?.valida !== false`, e para plataforma AUSENTE das conexões isso
+   * dá `undefined !== false` — liberado. Certo para o InHire (não há conta a fazer) e errado para quem
+   * declara `sessao`. Medido no banco real em 06/10/2026: 9 das 20 vagas da fila eram do ProgramaThor, que
+   * exige conta e nunca foi conectado; elas passavam o portão, abriam o navegador, caíam na tela de login e
+   * voltavam como erro — queimando vaga da fila e enchendo o log de falha que não é falha.
+   */
+  salvarParcial({ conexoes: {} });
+  assert.equal(sessaoValida('falsa'), false, 'plataforma que DECLARA prova de login e nunca foi conectada não está liberada');
+  assert.equal(sessaoValida('inhire'), true, 'e plataforma sem prova de login segue liberada mesmo sem conexão');
 } finally {
   loginSrv.close();
 }

@@ -15,6 +15,16 @@
     anosExperiencia: 0,
     empresasBloqueadas: [],
     iaAtiva: false, // só tem efeito com o ACV aberto: é lá que a IA roda, com as travas dela
+    /**
+     * O painel aparece sobre as páginas?
+     *
+     * O `✕` esconde num site só, e só até fechar o navegador — é o "agora não". Isto é o interruptor:
+     * desligado, o painel não se monta em lugar nenhum, e a extensão continua inteira pelo ícone da barra
+     * (diagnóstico da página, contador do dia, sincronizar, candidatar). Existe porque painel sobreposto que
+     * não sai do caminho é motivo para desinstalar a extensão, e desligar o que incomoda tem de ser mais
+     * fácil do que isso.
+     */
+    painelLigado: true,
     // Um por plataforma SERVIDA à extensão (as que exigem conta — ver `plataformasConhecidas`). A chave
     // precisa existir para o limite aparecer na página de opções e poder ser ajustado; domínio ausente cai
     // em LIMITE_PADRAO e fica invisível. O ProgramaThor faltava aqui desde que entrou, em 04/10.

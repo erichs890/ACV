@@ -67,12 +67,24 @@ export const vagas = {
     return nova;
   },
   /** Próxima da fila, ignorando as que estão em espera de nova tentativa (falha transitória com backoff). */
-  proximaNaFila(): Vaga | undefined {
+  /**
+   * A próxima vaga que o robô pode pegar AGORA, em ordem de fila.
+   *
+   * `podePegar` é a regra de quem está liberado, e vem de fora porque esta camada não conhece sessão nem
+   * configuração — quem conhece é `core/queue.ts`. Sem ela, uma vaga travada no começo da fila parava a fila
+   * inteira: o CLAUDE.md promete que "sessão caída segura a fila só daquela plataforma" e isso não estava
+   * implementado em lugar nenhum. Medido em 06/10/2026: as três primeiras vagas da fila eram de uma
+   * plataforma com login nunca feito, e nada atrás delas sairia.
+   *
+   * Pular não é descartar: a vaga fica na fila, na posição dela, esperando o login.
+   */
+  proximaNaFila(podePegar: (v: Vaga) => boolean = () => true): Vaga | undefined {
     const linhas = db.prepare("select dados from vagas where status = 'na_fila' order by posicao asc, score desc").all() as { dados: string }[];
     const agora = Date.now();
     for (const l of linhas) {
       const v = JSON.parse(l.dados) as Vaga;
       if (v.proximaTentativaEm && new Date(v.proximaTentativaEm).getTime() > agora) continue;
+      if (!podePegar(v)) continue;
       return v;
     }
     return undefined;
