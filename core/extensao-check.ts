@@ -80,6 +80,18 @@ const PT_DENTRO = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><titl
 const UM_CLIQUE_FORM = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
 <h1>Vaga</h1><form action="/apply" method="post"><button type="submit">Quero me candidatar</button></form></body></html>`;
 
+/**
+ * Candidatura de um clique cujo handler chama `form.submit()` por JavaScript.
+ *
+ * `HTMLFormElement.prototype.submit()` NÃO dispara o evento `submit` — então o listener de `submit` do
+ * `rede.js` não vê nada e o `preventDefault` nunca acontece. Sem o patch no protótipo, a candidatura sairia
+ * de verdade no meio de um ensaio, com o painel dizendo que nada foi enviado.
+ */
+const UM_CLIQUE_SUBMIT_JS = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
+<h1>Vaga</h1><form id="f" action="/apply" method="post"></form>
+<button type="button" id="ir">Quero me candidatar</button>
+<script>document.getElementById('ir').onclick = () => document.getElementById('f').submit();</script></body></html>`;
+
 /** O mesmo de um clique, mas por JavaScript: daqui não há como saber o que o clique faz antes de clicar. */
 const UM_CLIQUE_JS = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>Vaga</title><body>
 <script type="application/ld+json">{"@type":"JobPosting","title":"Pessoa Desenvolvedora Back-end","hiringOrganization":{"name":"Acme Tecnologia Ltda"},"description":"Java"}</script>
@@ -137,6 +149,7 @@ const paginas: Record<string, string> = {
   '/pt-dentro': PT_DENTRO,
   '/um-clique-form': UM_CLIQUE_FORM,
   '/um-clique-js': UM_CLIQUE_JS,
+  '/um-clique-submit-js': UM_CLIQUE_SUBMIT_JS,
 };
 let envios = 0;
 const servidor = createServer((req, res) => {
@@ -698,6 +711,21 @@ try {
   const antesDoForm = envios;
   r = await candidatar();
   assert.equal(envios, antesDoForm, 'o submit de um <form method="post"> também é barrado no ensaio');
+
+  /**
+   * `form.submit()` por JavaScript, que é a brecha que o evento `submit` não cobre.
+   *
+   * E, de passagem, a marca de prontidão: `rede.js` roda no mundo da PÁGINA e `motor.js` no mundo isolado do
+   * content script, então `window.__acvRede` nunca cruzava — o ensaio recusava em todo site, dizendo "falta o
+   * monitor de rede". Este teste não reproduz a separação de mundos (o `addScriptTag` põe os dois no mesmo),
+   * então o que ele fixa é o contrato: a marca mora no DOM, que é compartilhado de verdade.
+   */
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: true }, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-submit-js');
+  assert.equal(await page.getAttribute('html', 'data-acv-rede'), '1', 'a prontidão do monitor é marcada no DOM, não numa variável de window que não cruza mundos');
+  const antesDoSubmitJs = envios;
+  r = await candidatar();
+  assert.equal(envios, antesDoSubmitJs, 'form.submit() por JavaScript também é barrado no ensaio');
+  assert.equal(r.status, 'ensaio', `e o desfecho é ensaio (veio ${r.status}: ${r.motivo})`);
 
   // E o corte não pode sobrar na aba: armado e esquecido, ele quebraria a navegação normal da pessoa
   await prepararCandidatura({ cfg: CFG_FALSA, dados: { ...DADOS_FALSOS, ensaio: false }, cabem: CABEM_LIVRE, enviadas: [] }, '/um-clique-js');

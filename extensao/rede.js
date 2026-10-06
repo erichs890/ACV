@@ -24,6 +24,18 @@
 (() => {
   if (window.__acvRede) return;
   window.__acvRede = true;
+  /**
+   * A marca de "o monitor está aqui" vai no DOM, não numa variável de `window`.
+   *
+   * Este arquivo roda no mundo da PÁGINA (`"world": "MAIN"`) e o `motor.js` roda no mundo isolado do content
+   * script. `window` são dois objetos diferentes: `window.__acvRede` nunca cruza. O DOM, sim — é um só, e é
+   * por isso que o evento `acv-rede` funciona entre os dois desde sempre.
+   *
+   * Isso não era teoria: o modo ensaio da extensão conferia `window.__acvRede` do lado isolado e recusava
+   * SEMPRE, em todo site, dizendo "falta o monitor de rede". O teste não pegava porque injeta os dois
+   * arquivos com `addScriptTag`, que os põe no mesmo mundo. Achado na revisão do codex em 05/10/2026.
+   */
+  document.documentElement.dataset.acvRede = '1';
 
   let ensaio = false;
   const ESCRITA = /^(POST|PUT|PATCH|DELETE)$/;
@@ -75,6 +87,24 @@
       return; // nunca chama o send original: a requisição não existe
     }
     return enviar.apply(this, args);
+  };
+
+  /**
+   * `form.submit()` chamado por JavaScript NÃO dispara o evento `submit`.
+   *
+   * É a brecha irmã da de baixo, e a mais perigosa das duas: num site cujo botão chama `form.submit()`, o
+   * listener de `submit` nunca roda, o `preventDefault` nunca acontece, e a candidatura sairia DE VERDADE
+   * durante um ensaio — com o painel dizendo que nada foi enviado. Patch no protótipo é o único lugar que
+   * pega esse caminho. Achado na revisão do codex em 05/10/2026.
+   */
+  const submitOriginal = HTMLFormElement.prototype.submit;
+  HTMLFormElement.prototype.submit = function (...args) {
+    const metodo = String(this.getAttribute('method') ?? 'get').toUpperCase();
+    if (barrar(metodo)) {
+      avisar(metodo, this.getAttribute('action') ?? location.href, 0, true);
+      return; // nunca chama o original: o envio não existe
+    }
+    return submitOriginal.apply(this, args);
   };
 
   /**

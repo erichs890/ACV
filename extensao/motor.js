@@ -235,7 +235,10 @@
      */
     const ensaio = dados.ensaio === true;
     if (ensaio) {
-      if (!window.__acvRede)
+      // `dataset` do DOM, e NÃO `window.__acvRede`: `rede.js` roda no mundo da página e este arquivo no mundo
+      // isolado do content script — os dois `window` são objetos diferentes, e a variável nunca cruzava. O DOM
+      // é compartilhado, que é por isso que os eventos `acv-rede`/`acv-ensaio` já funcionavam entre os dois.
+      if (document.documentElement.dataset.acvRede !== '1')
         return {
           status: 'erro',
           motivo:
