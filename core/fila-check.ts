@@ -875,6 +875,73 @@ assert.equal(st(voando), 'em_andamento', 'a candidatura em voo fica onde está')
 assert.equal(st(paradinha), 'encontrada');
 console.log('✓ Esvaziar a fila: devolve as vagas ao jogo, pausa a reposição, e mapear ou o start liberam de novo');
 
+// ─── 17) Vaga em inglês leva o currículo em inglês ───────────────────────────────────────────────
+// Até 06/10/2026 o ACV mandava SEMPRE o PDF principal, em português. O traduzido já existia e só servia para
+// download manual — nenhum caminho automático o alcançava. Quatro vagas em inglês estavam na fila real dele,
+// três com pagamento em dólar: as que mais pagam são as que o currículo errado mais custa.
+// O cenário 16 chama `ligarRobo(true)`, que dispara `processarProxima()` SEM await: sem deixar assentar, a
+// guarda `rodando` engoliria os pedidos daqui e o teste mediria a corrida em vez da regra.
+await new Promise(r => setTimeout(r, 150));
+const cvEn = join(process.env.ACV_DIR, 'cv-en.pdf');
+writeFileSync(cvEn, '%PDF-1.4 teste em ingles');
+
+const VAGA_EN = {
+  titulo: 'Python AI Engineer (USD-based pay)',
+  descricao: 'We are looking for a strong engineer to join our team. You will work with Python and LLMs. Requirements: 5 years of experience with backend development and strong knowledge of SQL.',
+};
+
+// 17a) Com o currículo traduzido no lugar, é ele que vai
+cenario();
+kv.set('curriculos', [{ id: 1, nome: 'cv.pdf', tamanho: 10, enviadoEm: new Date().toISOString(), caminho: curriculo, markdown: '# Marina', inglesPdf: cvEn, inglesMarkdown: '# Marina (EN)' }]);
+const emIngles = enfileirar(VAGA_EN);
+let pdfUsado = '';
+roteiro.set(emIngles, (_t, dados) => {
+  pdfUsado = dados.curriculoPdf;
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(st(emIngles), 'enviada');
+assert.equal(pdfUsado, cvEn, 'vaga em inglês tem de levar o PDF traduzido');
+assert.ok(
+  log.listar(30).some(l => /est[áa] em ingl[êe]s: mandando o curr[íi]culo traduzido/.test(l.msg)),
+  'e o log diz que trocou, para não ser mágica silenciosa',
+);
+
+// 17b) Vaga em português continua levando o principal, com o mesmo currículo cadastrado
+cenario();
+kv.set('curriculos', [{ id: 1, nome: 'cv.pdf', tamanho: 10, enviadoEm: new Date().toISOString(), caminho: curriculo, markdown: '# Marina', inglesPdf: cvEn, inglesMarkdown: '# Marina (EN)' }]);
+const emPortugues = enfileirar({
+  titulo: 'Pessoa Desenvolvedora Back-end',
+  descricao: 'Buscamos uma pessoa para a nossa equipe. Requisitos: experiência com Java, conhecimento de SQL. Benefícios: vale refeição.',
+});
+let pdfPt = '';
+roteiro.set(emPortugues, (_t, dados) => {
+  pdfPt = dados.curriculoPdf;
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(pdfPt, curriculo, 'vaga em português leva o currículo principal');
+
+// 17c) Vaga em inglês SEM o traduzido para — e não manda o português
+cenario();
+const semTraducao = enfileirar(VAGA_EN);
+let chamou = false;
+roteiro.set(semTraducao, () => {
+  chamou = true;
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(chamou, false, 'o adapter não pode nem ser chamado: mandar o português é pior que parar');
+assert.equal(st(semTraducao), 'erro');
+assert.match(vagas.get(semTraducao)!.erro ?? '', /ingl[êe]s.*traduzido|traduzido/i, 'e o erro diz o que fazer');
+assert.equal(enviadas(), 0);
+
+// 17d) O erro NÃO fica tentando de novo em laço: é falta de insumo, não falha passageira
+const antes = chamadas.get(semTraducao) ?? 0;
+await processarProxima();
+assert.equal(chamadas.get(semTraducao) ?? 0, antes, 'nada de nova tentativa automática');
+console.log('✓ Idioma: vaga em inglês leva o currículo traduzido, e sem ele a vaga para em vez de mandar o português');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');

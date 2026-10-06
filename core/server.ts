@@ -75,6 +75,32 @@ function json(res: ServerResponse, status: number, dados: unknown) {
 }
 
 /** Upload de currículo: bytes crus no corpo, nome no query. Extrai Markdown e monta o perfil de busca. */
+/**
+ * Gera (ou reaproveita) a versão em inglês de um currículo: markdown traduzido + PDF no disco.
+ *
+ * Uma função só, usada pelo upload e pela rota `/curriculo/ingles`, porque as duas precisam fazer
+ * exatamente o mesmo — e duas cópias divergiriam no caminho do PDF ou no nome do arquivo.
+ *
+ * Nunca lança: a tradução é um bônus no caminho do upload, e um upload de currículo não pode falhar porque a
+ * API de tradução estava fora do ar. Quem precisa do resultado confere `inglesPdf`.
+ */
+async function gerarVersaoEmIngles(alvo: Arquivo): Promise<boolean> {
+  if (!alvo.markdown?.trim()) return false;
+  try {
+    const inglesMarkdown = await traduzirCurriculoParaIngles(alvo.markdown);
+    if (!inglesMarkdown.trim()) return false;
+    const caminhoPdf = join(DIRS.curriculos, `${alvo.id}-en.pdf`);
+    await markdownParaPdf(inglesMarkdown, caminhoPdf, false);
+    alvo.inglesMarkdown = inglesMarkdown;
+    alvo.inglesPdf = caminhoPdf;
+    alvo.traduzidoEm = new Date().toISOString();
+    return true;
+  } catch (e) {
+    registrar('alerta', `Não consegui traduzir ${alvo.nome} para inglês agora (${(e as Error).message.slice(0, 80)}). Dá para gerar depois em Currículo › Internacional.`);
+    return false;
+  }
+}
+
 async function receberCurriculo(nome: string, bytes: Buffer): Promise<Arquivo> {
   const id = Date.now();
   const caminho = join(DIRS.curriculos, `${id}-${nome.replace(/[^\w.-]+/g, '_')}`);
@@ -85,6 +111,14 @@ async function receberCurriculo(nome: string, bytes: Buffer): Promise<Arquivo> {
       arquivo.markdown = await pdfParaMarkdown(caminho);
       arquivo.perfilBusca = analisarCurriculo(arquivo.markdown);
       registrar('sucesso', `Currículo ${nome} analisado: ${arquivo.perfilBusca.area}, ${arquivo.perfilBusca.senioridade}, ${arquivo.perfilBusca.skills.length} competências.`);
+      /**
+       * A versão em inglês nasce junto com o currículo, sem ninguém pedir.
+       *
+       * Sem isto, ela só existia se a pessoa fosse até Currículo › Internacional e clicasse — e quem não
+       * sabia que o botão existia mandava currículo em português para vaga em inglês. Agora o padrão é ter os
+       * dois; a tradução usa o Google GTX quando não há IA configurada, então não custa chave nem cota.
+       */
+      if (await gerarVersaoEmIngles(arquivo)) registrar('sucesso', `Versão em inglês de ${nome} gerada automaticamente — vaga em inglês já sai com o currículo certo.`);
     } catch (e) {
       registrar('alerta', `Não consegui ler o texto de ${nome}: ${(e as Error).message}. A busca de vagas precisa de um PDF com texto.`);
     }
@@ -282,17 +316,11 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
     }
 
     registrar('info', `Iniciando tradução do currículo ${alvo.nome} para inglês...`);
-    const inglesMarkdown = await traduzirCurriculoParaIngles(alvo.markdown);
-    if (!inglesMarkdown.trim()) {
+    if (!(await gerarVersaoEmIngles(alvo))) {
       return json(res, 500, { erro: 'não foi possível traduzir o currículo' });
     }
-
-    const caminhoPdf = join(DIRS.curriculos, `${alvo.id}-en.pdf`);
-    await markdownParaPdf(inglesMarkdown, caminhoPdf, false);
-
-    alvo.inglesMarkdown = inglesMarkdown;
-    alvo.inglesPdf = caminhoPdf;
-    alvo.traduzidoEm = new Date().toISOString();
+    const inglesMarkdown = alvo.inglesMarkdown as string;
+    const caminhoPdf = alvo.inglesPdf as string;
 
     kv.set(
       'curriculos',
@@ -494,6 +522,25 @@ createServer(async (req, res) => {
     repontuar(); // vagas gravadas por versões anteriores do score ou de um perfil desatualizado
     kv.set('scoreVersao', SCORE_VERSAO);
   }
+  /**
+   * Currículo enviado ANTES de 06/10/2026 não tem a versão em inglês, e sem ela toda vaga em inglês para.
+   *
+   * Gera o que falta na subida, em segundo plano: é uma chamada de rede e não pode segurar a inicialização
+   * do núcleo. Só o principal — é o único que o envio usa.
+   */
+  void (async () => {
+    const principal = ler.curriculos()[0];
+    if (!principal?.markdown || (principal.inglesPdf && existsSync(principal.inglesPdf))) return;
+    if (await gerarVersaoEmIngles(principal)) {
+      kv.set(
+        'curriculos',
+        ler.curriculos().map(c => (c.id === principal.id ? principal : c)),
+      );
+      registrar('sucesso', `Versão em inglês de ${principal.nome} gerada: vagas em inglês já saem com o currículo certo.`);
+      emitir({ tipo: 'estado' });
+    }
+  })();
+
   // Higiene da fila na subida: publicação repetida da mesma vaga pode ter entrado antes desta regra existir,
   // e com o robô pausado o enfileiramento (que também limpa) nem roda.
   limparDuplicatasDaFila();

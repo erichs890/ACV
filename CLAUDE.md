@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (118 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (120 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -29,6 +29,16 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
   reescreve o status de toda vaga `encontrada`/`ignorada` e apagaria a sua decisão.
 - `core/candidatura.ts` — uma candidatura ponta a ponta. `jaCandidatado()` trava duplicata por **empresa + título** (o InHire republica a mesma vaga com outro id).
 - `core/platforms/inhire/formulario.ts` — motor adaptativo usado por **todas** as plataformas: descobre campos do DOM a cada etapa, classifica fixo × pergunta extra, preenche, avança. Nunca supõe layout. Cada plataforma passa as suas `Convencoes` (textos dos botões e da confirmação); campo fixo se reconhece pelo `name=`, nunca pelo rótulo.
+- `core/idioma.ts` — `idiomaDaVaga(vaga)`: em que idioma o ANÚNCIO está escrito, por contagem de palavras
+  funcionais (artigo, preposição, pronome) do título + começo da descrição. Nome de tecnologia não conta: é
+  igual nos dois idiomas. Decide pela DESCRIÇÃO, não pelo título — "Software Development Coordinator - INGLÊS
+  FLUENTE" pode ser vaga em inglês (e é) ou vaga em português pedindo inglês, e só o corpo diz qual. Erra para
+  o **português** de propósito: dizer "inglês" por engano manda currículo traduzido para recrutador brasileiro.
+  `executarCandidatura` escolhe o PDF por ele, e vaga em inglês **sem** `inglesPdf` PARA em vez de mandar o
+  português — desfecho silencioso (o recrutador descarta e você nunca sabe) é pior que erro na tela. A versão
+  em inglês nasce no upload do currículo e é preenchida na subida do núcleo para quem enviou antes disso;
+  a tradução usa Google GTX quando não há IA, então não custa chave nem cota. Adaptação por vaga só no
+  português: `validarAdaptacao` compara com o markdown original.
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera.
 - `core/platforms/vagaspj/` — vagas PJ: lista pelo feed RSS + JSON-LD de cada página (só HTTP), candidatura num formulário de uma etapa. Um anúncio se intromete entre o botão final e o POST (`aposBotaoFinal`).
 - `core/diario.ts` + `core/relato.ts` — duas formas do mesmo histórico. `diario/acv-DIA.log` é prosa, para ler;

@@ -5,6 +5,7 @@ import { adapters, soDescobre } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { ler } from './estado.ts';
 import { emitir } from './events.ts';
+import { idiomaDaVaga } from './idioma.ts';
 import { evento } from './diario.ts';
 import { DIRS } from './config.ts';
 import { adaptarComIA, adaptarCurriculo, validarAdaptacao } from './resume/adapter.ts';
@@ -258,11 +259,41 @@ export async function executarCandidatura(id: string) {
   vagas.atualizar(id, { status: 'em_andamento', pendencia: undefined, erro: undefined });
   emitir({ tipo: 'estado' });
 
-  // 1) Currículo: original ou adaptado (com validação anti-invenção)
-  let curriculoPdf = principal.caminho;
+  /**
+   * 0) O IDIOMA da vaga decide qual currículo vai — e isto fica antes de tudo, no ponto de uso.
+   *
+   * Até 06/10/2026 o ACV mandava sempre o PDF principal, em português, mesmo numa vaga escrita em inglês. O
+   * PDF traduzido já existia (`Arquivo.inglesPdf`) e só servia para download manual: nenhum caminho
+   * automático o alcançava. Medido no banco real: 4 vagas em inglês estavam NA FILA, três com pagamento em
+   * dólar — as que mais pagam são justamente as que o currículo errado mais custa.
+   *
+   * Vaga em inglês sem PDF traduzido PARA, em vez de mandar o português: o desfecho silencioso (o recrutador
+   * descarta e você nunca sabe por quê) é pior que um erro na tela. Desde 06/10 a tradução nasce junto com o
+   * upload do currículo, então este caminho é exceção — currículo enviado antes disso, ou tradução que falhou.
+   */
+  const idioma = idiomaDaVaga(vaga);
+  if (idioma === 'en' && !(principal.inglesPdf && existsSync(principal.inglesPdf))) {
+    const motivo = 'esta vaga está escrita em inglês e você ainda não tem o currículo traduzido. Gere em Currículo › Internacional e eu mando o certo.';
+    vagas.atualizar(id, { status: 'erro', erro: motivo });
+    registrar('aguardo', `"${vaga.titulo}": ${motivo}`);
+    anotarDesfecho(vaga, 'erro', { motivo: 'vaga em inglês sem currículo traduzido', idioma });
+    emitir({ tipo: 'estado' });
+    return;
+  }
+
+  // 1) Currículo: original, traduzido ou adaptado (com validação anti-invenção)
+  let curriculoPdf = idioma === 'en' ? (principal.inglesPdf as string) : principal.caminho;
   let versao: 'original' | 'adaptada' = 'original';
+  if (idioma === 'en') registrar('info', `"${vaga.titulo}" está em inglês: mandando o currículo traduzido.`);
   const aprovacao = vaga.pendencia?.tipo === 'aprovacao' ? vaga.pendencia : null;
-  if (cfg.adaptar && principal.markdown && vaga.decisaoPreview !== 'original') {
+  /**
+   * Adaptação só no português, de propósito.
+   *
+   * `validarAdaptacao` compara palavra a palavra com o markdown ORIGINAL (em português) para garantir que
+   * nada foi inventado — rodar isso contra um texto em inglês reprovaria tudo e, pior, poderia aprovar um
+   * currículo meio traduzido. Vaga em inglês leva o PDF traduzido inteiro, sem recorte por vaga.
+   */
+  if (idioma === 'pt' && cfg.adaptar && principal.markdown && vaga.decisaoPreview !== 'original') {
     const adaptacao = aprovacao ? { markdown: aprovacao.adaptado, diff: aprovacao.diff, viaIA: false } : await gerarAdaptacao(principal.markdown, vaga);
     // Aprovado pelo usuário ou gerado por IA: validação de entidades (sinônimos ok, dado novo não). Regras: validação palavra a palavra.
     const novas = aprovacao || adaptacao.viaIA ? [] : validarAdaptacao(principal.markdown, adaptacao.markdown);

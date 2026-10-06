@@ -1243,6 +1243,66 @@ assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs'), 'a listagem j
 assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs/123-dev'), 'e a página de uma vaga também');
 console.log('✓ ProgramaThor: lê a listagem e o JSON-LD reais, monta a vaga e sabe dizer que está deslogado');
 
+// ─── Idioma da vaga: qual currículo mandar ───────────────────────────────────────────────────────
+// Mandar currículo em português para vaga escrita em inglês desperdiça a candidatura, e o desfecho é
+// silencioso: o recrutador descarta e você nunca sabe por quê. Os casos abaixo são REAIS, tirados do banco
+// em 06/10/2026 — inclusive os dois que quase enganam a conta.
+const { idiomaDaVaga, nomeDoIdioma } = await import('./idioma.ts');
+
+// Vaga em português pura
+assert.equal(
+  idiomaDaVaga({
+    titulo: 'Pessoa Desenvolvedora Back-end Pleno',
+    descricao: 'Buscamos uma pessoa desenvolvedora para a nossa equipe. Requisitos: experiência com Java e Spring, conhecimento de SQL. Benefícios: vale refeição, plano de saúde.',
+  }),
+  'pt',
+);
+
+// Vaga em inglês pura
+assert.equal(
+  idiomaDaVaga({
+    titulo: 'Python AI Engineer (USD-based pay)',
+    descricao:
+      'We are looking for a strong engineer to join our team. You will work with Python and LLMs. Requirements: 5 years of experience with backend development, strong knowledge of SQL. Benefits include remote work.',
+  }),
+  'en',
+);
+
+/**
+ * O caso que mais engana, e que estava na fila dele: título em inglês, vaga em português.
+ * Um detector por título diria "inglês" e mandaria o currículo traduzido para um recrutador brasileiro.
+ */
+assert.equal(
+  idiomaDaVaga({
+    titulo: 'Software Development Coordinator - INGLÊS FLUENTE - Full Stack',
+    descricao:
+      'Empresa de tecnologia admite Coordenador de Desenvolvimento em São Paulo. Responsabilidades: liderar a equipe de desenvolvimento, definir a arquitetura dos sistemas. Requisitos: experiência com gestão de times, inglês fluente para reuniões. Benefícios: vale refeição e plano de saúde.',
+  }),
+  'pt',
+  'título em inglês com descrição em português é vaga em PORTUGUÊS',
+);
+
+/** O oposto: título que parece português (nome de tecnologia) com a vaga inteira em inglês. */
+assert.equal(
+  idiomaDaVaga({
+    titulo: 'Full-stack & AI Engineer (USD-based pay)',
+    descricao:
+      'About the role: you will be responsible for building and shipping features. We are a remote-first team and we work with modern tools. What we expect from you: solid experience, ability to work independently, and strong communication skills.',
+  }),
+  'en',
+);
+
+// Erra para o PORTUGUÊS quando não dá para ter certeza: dizer "inglês" por engano manda o currículo errado
+// para um recrutador brasileiro, e o comportamento antigo (sempre português) era o que já funcionava.
+assert.equal(idiomaDaVaga({ titulo: 'Dev Full Stack', descricao: '' }), 'pt', 'sem texto suficiente, fica no português');
+assert.equal(idiomaDaVaga({ titulo: 'Senior Software Engineer', descricao: '' }), 'pt', 'três palavras em inglês não decidem uma vaga');
+assert.equal(idiomaDaVaga({}), 'pt', 'vaga sem texto nenhum não vira inglês');
+// Nome de tecnologia não conta: ele é igual nos dois idiomas
+assert.equal(idiomaDaVaga({ titulo: 'Desenvolvedor React Node TypeScript Docker AWS', descricao: 'Vaga para atuar com React, Node, TypeScript, Docker e AWS na nossa equipe de produto.' }), 'pt');
+assert.equal(nomeDoIdioma('en'), 'inglês');
+assert.equal(nomeDoIdioma('pt'), 'português');
+console.log('✓ Idioma da vaga: separa título em inglês de vaga em inglês, e erra para o português na dúvida');
+
 // ─── Contrato dos adapters: ou candidata, ou declara que só descobre ─────────────────────────────
 // Um adapter sem `candidatar` por esquecimento e um adapter que de propósito só descobre são coisas
 // diferentes, e do lado de fora pareceriam iguais. Este laço obriga a diferença a estar escrita: quem não
