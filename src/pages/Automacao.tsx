@@ -836,6 +836,7 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
         {v.motivo && <p className="mt-0.5 text-[11px] text-ink">{v.motivo}</p>}
         {v.skills.length > 0 && <p className="mt-0.5 text-[11px] text-ink-soft">Pede: {v.skills.join(', ')}</p>}
         {v.erro && <p className="mt-0.5 text-[11px] font-bold text-orange-deep">{v.erro}</p>}
+        {plataforma.somenteDescoberta && <p className="mt-0.5 text-[11px] text-ink-soft">O {plataforma.nome} não permite candidatura automatizada — abra e se inscreva por lá.</p>}
         {v.formulario && (
           <p className="mt-0.5 text-[11px] text-ink-soft">
             Formulário: {v.formulario.etapas} etapa(s), {v.formulario.campos} campos, {v.formulario.perguntas} pergunta(s) extra{v.formulario.typeform ? ', com Typeform' : ''}
@@ -867,11 +868,21 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
           )}
         </p>
       </div>
-      {manual && podeCandidatar && (
-        <button type="button" className="btn btn-primary btn-sm" onClick={() => post('/candidatar', { id: v.id })}>
-          <Send size={14} aria-hidden />
-          Quero me candidatar
-        </button>
+      {/* Plataforma só-descoberta não tem envio por nenhum caminho, então o link aparece SEMPRE (não só em
+          modo manual): esconder em automático deixaria a vaga sem ação nenhuma. E nada de botão que falha. */}
+      {plataforma.somenteDescoberta ? (
+        <a href={v.url} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+          <ExternalLink size={14} aria-hidden />
+          Abrir no {plataforma.nome}
+        </a>
+      ) : (
+        manual &&
+        podeCandidatar && (
+          <button type="button" className="btn btn-primary btn-sm" onClick={() => post('/candidatar', { id: v.id })}>
+            <Send size={14} aria-hidden />
+            Quero me candidatar
+          </button>
+        )
       )}
     </li>
   );

@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { Pendencia, PerguntaExtra, Vaga } from '../src/types.ts';
-import { adapters } from './platforms/adapter.ts';
+import { adapters, soDescobre } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { ler } from './estado.ts';
 import { emitir } from './events.ts';
@@ -192,6 +192,25 @@ export async function executarCandidatura(id: string) {
     return;
   }
 
+  /**
+   * Plataforma só de descoberta nunca candidata — e esta é a trava que VALE, porque está no ponto de uso.
+   *
+   * As outras (a fila, pelo `plataformaEnviaCurriculo`; o clique manual, em `candidatarAgora`) são as portas;
+   * esta é a tranca. Este projeto já pagou TRÊS vezes por filtro conferido num ponto do ciclo de vida e não
+   * no ponto de uso — foco de plataforma, nicho a evitar e nota mínima, todos registrados no agentlog.
+   * Chegar aqui é bug, e é por isso que a mensagem diz "bug": vaga em estado antigo, caminho novo que alguém
+   * acrescentou sem lembrar disto. A vaga volta a `encontrada` porque ela continua ÚTIL (é só abrir e enviar
+   * à mão), e isso não é `erro` (não falhou nada dela) nem `encerrada` (não acabou).
+   */
+  if (soDescobre(vaga.plataforma)) {
+    const motivo = adapters[vaga.plataforma]?.motivoSomenteDescoberta ?? `o ACV só acha e ranqueia vagas do ${vaga.plataforma}; a candidatura é feita por você, no site`;
+    vagas.atualizar(id, { status: 'encontrada', posicao: undefined, pendencia: undefined });
+    registrar('alerta', `"${vaga.titulo}" chegou à candidatura, mas ${motivo}. Nada foi enviado.`);
+    anotarDesfecho(vaga, 'somente_descoberta', { motivo });
+    emitir({ tipo: 'estado' });
+    return;
+  }
+
   const perfil = ler.perfil();
   const cfg = ler.automacao();
   const adapter = adapters[vaga.plataforma];
@@ -259,7 +278,8 @@ export async function executarCandidatura(id: string) {
   }
 
   // 2) Preencher, anexar e enviar
-  const resultado = await adapter.candidatar(
+  // `candidatar!` é seguro aqui: `soDescobre` já barrou acima quem não tem o método
+  const resultado = await adapter.candidatar!(
     vaga,
     {
       nome: perfil.nome,

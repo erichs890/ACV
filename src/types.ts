@@ -15,6 +15,14 @@ export interface Plataforma {
   site?: string; // endereço oficial, para quando formos escrever o adapter
   nota?: string; // o que já se sabe da plataforma (idioma, acesso, tipo de conta) antes de integrar
   login?: boolean; // exige conta: conecta entrando numa janela do robô (core/sessao.ts)
+  /**
+   * O ACV só acha e ranqueia vagas daqui — a candidatura é feita pela pessoa, no site.
+   *
+   * Espelha `PlatformAdapter.somenteDescoberta`, e a duplicação é travada por teste no self-check (como já
+   * acontece com `MODELOS_IA` × `core/ia.ts`): a tela precisa do dado para trocar "Quero me candidatar" por
+   * "Abrir no site", e duplicação conferida por teste não vira mentira.
+   */
+  somenteDescoberta?: boolean;
 }
 
 export interface Envio {

@@ -51,7 +51,19 @@ export interface PlatformAdapter {
   id: string;
   nome: string;
   buscarVagas(perfil: PerfilBusca, cfg: ConfigAutomacao, log: Log, opcoes?: OpcoesBusca): Promise<Vaga[]>;
-  candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promise<ResultadoCandidatura>;
+  /** Ausente só em plataforma `somenteDescoberta` — ver abaixo. */
+  candidatar?(vaga: Vaga, dados: DadosCandidatura, log: Log): Promise<ResultadoCandidatura>;
+  /**
+   * Esta plataforma o ACV só ACHA e ranqueia: nunca candidata, nem com preenchimento assistido.
+   *
+   * É uma declaração, e não "o método está faltando": método ausente pode ser esquecimento de quem escreveu
+   * o adapter; declaração explícita, não. `motivoSomenteDescoberta` é o texto que a tela e o log mostram,
+   * para a pessoa nunca ficar sem saber por que não existe botão de enviar ali.
+   *
+   * Primeiro caso: o Jobbol, cujos termos de uso (5.3) proíbem candidatura automatizada ou em massa.
+   */
+  somenteDescoberta?: true;
+  motivoSomenteDescoberta?: string;
   /** Perguntas que a vaga com certeza vai fazer (schema via API), para resolver antes de abrir o navegador. */
   perguntasPrevias?(vaga: Vaga): Promise<PerguntaExtra[]>;
   /** Plataforma com login: onde entrar e como provar que a sessão do navegador do robô está ativa (core/sessao.ts). */
@@ -59,6 +71,18 @@ export interface PlatformAdapter {
 }
 
 export const adapters: Record<string, PlatformAdapter> = {};
+
+/**
+ * Esta plataforma é só de descoberta? A pergunta que todo ponto de uso faz — uma função, para não existirem
+ * duas formas de perguntar a mesma coisa e uma delas ficar desatualizada.
+ *
+ * Plataforma desconhecida devolve `false`: quem trata "não tenho adapter para isso" é quem chama, com a
+ * mensagem própria dele.
+ */
+export const soDescobre = (plataforma: string): boolean => {
+  const a = adapters[plataforma];
+  return !!a && (a.somenteDescoberta === true || !a.candidatar);
+};
 export const registrarAdapter = (a: PlatformAdapter) => {
   adapters[a.id] = a;
 };

@@ -1,6 +1,6 @@
 import type { Vaga } from '../src/types.ts';
 import { evento } from './diario.ts';
-import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF } from './platforms/adapter.ts';
+import { adapters, PERGUNTA_CIDADE, PERGUNTA_CPF, soDescobre } from './platforms/adapter.ts';
 import { candidaturas, kv, log, vagas } from './storage/db.ts';
 import { filtrosDaAutomacao, ler } from './estado.ts';
 import { emitir } from './events.ts';
@@ -197,7 +197,7 @@ const modeloAceito = (v: Vaga, cfg: ReturnType<typeof ler.automacao>) => v.model
  * Vale só para a fila automática: clicar em "Candidatar" numa vaga é um ato seu, e um filtro do robô não
  * manda em você. Conexão sem o campo = pode, para as conexões criadas antes disto continuarem funcionando.
  */
-export const plataformaEnviaCurriculo = (v: Vaga) => plataformaNoFoco(v.plataforma) && sessaoValida(v.plataforma);
+export const plataformaEnviaCurriculo = (v: Vaga) => !soDescobre(v.plataforma) && plataformaNoFoco(v.plataforma) && sessaoValida(v.plataforma);
 
 /**
  * A plataforma está no foco da automação? (Automação › quais plataformas entram na fila.)
@@ -414,6 +414,9 @@ export async function buscarEmpresas(): Promise<number> {
 export function candidatarAgora(id: string): Promise<void> {
   const v = vagas.get(id);
   if (!v) throw new Error('vaga não encontrada');
+  // Este caminho grava `na_fila` DIRETO, sem passar por `enfileirarCompativeis` — foi por aqui que o bug do
+  // foco de plataforma escapou em setembro. Plataforma só-descoberta recusa antes de gravar qualquer coisa.
+  if (soDescobre(v.plataforma)) throw new Error(adapters[v.plataforma]?.motivoSomenteDescoberta ?? `o ACV só acha vagas do ${v.plataforma}; a candidatura é feita por você, no site`);
   if (jaEnviada(id)) throw new Error('você já se candidatou a esta vaga');
   if (jaCandidatado(v)) throw new Error(`você já se candidatou a "${v.titulo}" em ${v.empresa} (outra publicação da mesma vaga)`);
   // `recusadaPorVoce: undefined` porque o filtro é do robô, não seu: se você clicou, você quer esta vaga —

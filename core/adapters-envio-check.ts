@@ -135,7 +135,7 @@ const vagaDivulga = (url: string): Vaga => ({
 {
   const s = await subirDivulga('sucesso');
   try {
-    const r = await divulgavagas.candidatar(vagaDivulga(s.url), dadosBase, silencio);
+    const r = await divulgavagas.candidatar!(vagaDivulga(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Divulga Vagas: Envio aceito e confirmado na tela → enviada (1 POST)');
@@ -148,7 +148,7 @@ const vagaDivulga = (url: string): Vaga => ({
 {
   const s = await subirDivulga('redacao-nova');
   try {
-    const r = await divulgavagas.candidatar(vagaDivulga(s.url), dadosBase, silencio);
+    const r = await divulgavagas.candidatar!(vagaDivulga(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada por prova de rede, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Divulga Vagas: Prova de rede HTTP 200 garante envio mesmo com tela diferente');
@@ -161,7 +161,7 @@ const vagaDivulga = (url: string): Vaga => ({
 {
   const s = await subirDivulga('recusa');
   try {
-    const r = await divulgavagas.candidatar(vagaDivulga(s.url), dadosBase, silencio);
+    const r = await divulgavagas.candidatar!(vagaDivulga(s.url), dadosBase, silencio);
     assert.equal(r.status, 'erro', 'esperava erro na recusa');
     assert.match(r.status === 'erro' ? r.motivo : '', /400|recusou/);
     console.log('✓ Divulga Vagas: Recusa do servidor capturada com sucesso');
@@ -174,7 +174,7 @@ const vagaDivulga = (url: string): Vaga => ({
 {
   const s = await subirDivulga('sucesso');
   try {
-    const r = await divulgavagas.candidatar(vagaDivulga(s.url), { ...dadosBase, ensaio: true }, silencio);
+    const r = await divulgavagas.candidatar!(vagaDivulga(s.url), { ...dadosBase, ensaio: true }, silencio);
     assert.equal(r.status, 'ensaio', `esperava ensaio, veio ${r.status}`);
     assert.equal(s.posts, 0, 'em modo ensaio NENHUMA requisição pode ser disparada');
     console.log('✓ Divulga Vagas: Modo ensaio não dispara POST (0 POST)');
@@ -187,7 +187,7 @@ const vagaDivulga = (url: string): Vaga => ({
 {
   const s = await subirDivulga('sucesso', true);
   try {
-    const r = await divulgavagas.candidatar(vagaDivulga(s.url), dadosBase, silencio);
+    const r = await divulgavagas.candidatar!(vagaDivulga(s.url), dadosBase, silencio);
     assert.equal(r.status, 'erro', 'esperava recusa por vaga PcD exclusiva');
     assert.match(r.status === 'erro' ? r.motivo : '', /PcD/i);
     assert.equal(s.posts, 0, 'não pode enviar currículo em vaga PcD com autodeclaração');
@@ -299,7 +299,7 @@ const vagaQuickin = (url: string): Vaga => ({
 {
   const s = await subirQuickin('sucesso');
   try {
-    const r = await quickin.candidatar(vagaQuickin(s.url), dadosBase, silencio);
+    const r = await quickin.candidatar!(vagaQuickin(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Quickin: Envio aceito e confirmado na tela → enviada (1 POST)');
@@ -312,7 +312,7 @@ const vagaQuickin = (url: string): Vaga => ({
 {
   const s = await subirQuickin('redacao-nova');
   try {
-    const r = await quickin.candidatar(vagaQuickin(s.url), dadosBase, silencio);
+    const r = await quickin.candidatar!(vagaQuickin(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Quickin: Prova de rede HTTP 201 garante envio mesmo sem texto padrão na tela');
@@ -325,7 +325,7 @@ const vagaQuickin = (url: string): Vaga => ({
 {
   const s = await subirQuickin('recusa');
   try {
-    const r = await quickin.candidatar(vagaQuickin(s.url), dadosBase, silencio);
+    const r = await quickin.candidatar!(vagaQuickin(s.url), dadosBase, silencio);
     assert.equal(r.status, 'erro', 'esperava erro');
     assert.match(r.status === 'erro' ? r.motivo : '', /422|recusou/);
     console.log('✓ Quickin: Recusa HTTP 422 tratada como erro');
@@ -338,7 +338,7 @@ const vagaQuickin = (url: string): Vaga => ({
 {
   const s = await subirQuickin('sucesso');
   try {
-    const r = await quickin.candidatar(vagaQuickin(s.url), { ...dadosBase, ensaio: true }, silencio);
+    const r = await quickin.candidatar!(vagaQuickin(s.url), { ...dadosBase, ensaio: true }, silencio);
     assert.equal(r.status, 'ensaio', `esperava ensaio, veio ${r.status}`);
     assert.equal(s.posts, 0, 'em modo ensaio 0 POSTs');
     console.log('✓ Quickin: Modo ensaio preenche formulário e não envia (0 POST)');
@@ -359,7 +359,7 @@ console.log('\n--- Testando Adapter: Workable ---');
   // `posts` é getter: desestruturar congela o valor. Guarde o objeto e leia `s.posts`, como os outros cenários.
   const s = await subirQuickin('sucesso', true);
   try {
-    const semResposta = await quickin.candidatar(vagaQuickin(s.url), { ...dadosBase, responder: () => null }, silencio);
+    const semResposta = await quickin.candidatar!(vagaQuickin(s.url), { ...dadosBase, responder: () => null }, silencio);
     assert.equal(semResposta.status, 'pergunta', 'sem resposta guardada, a vaga tem de voltar para a pessoa');
     assert.ok(semResposta.status === 'pergunta' && /Pechincha/.test(semResposta.pergunta.rotulo), 'o rótulo vem do DOM, não inventado');
     assert.deepEqual(semResposta.status === 'pergunta' ? semResposta.pergunta.opcoes : [], ['Sim', 'Não']);
@@ -367,7 +367,7 @@ console.log('\n--- Testando Adapter: Workable ---');
     assert.equal(s.posts, 0, 'pergunta obrigatória sem resposta NÃO pode virar envio');
     console.log('    ✓ Quickin: pergunta da empresa volta para a pessoa em vez de ir em branco (0 POST)');
 
-    const comResposta = await quickin.candidatar(vagaQuickin(s.url), { ...dadosBase, responder: () => 'Não' }, silencio);
+    const comResposta = await quickin.candidatar!(vagaQuickin(s.url), { ...dadosBase, responder: () => 'Não' }, silencio);
     assert.equal(comResposta.status, 'enviada', 'com a resposta guardada, a candidatura segue');
     assert.equal(s.posts, 1);
     console.log('    ✓ Quickin: resposta guardada preenche a pergunta e o envio segue (1 POST)');
@@ -470,7 +470,7 @@ const vagaWorkable = (url: string): Vaga => ({
 {
   const s = await subirWorkable('sucesso');
   try {
-    const r = await workable.candidatar(vagaWorkable(s.url), dadosBase, silencio);
+    const r = await workable.candidatar!(vagaWorkable(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Workable: Envio aceito e modal submetido com sucesso (1 POST)');
@@ -483,7 +483,7 @@ const vagaWorkable = (url: string): Vaga => ({
 {
   const s = await subirWorkable('redacao-nova');
   try {
-    const r = await workable.candidatar(vagaWorkable(s.url), dadosBase, silencio);
+    const r = await workable.candidatar!(vagaWorkable(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     assert.equal(s.posts, 1, 'esperava exatamente 1 envio');
     console.log('✓ Workable: Prova de rede /api/v1/jobs/.../apply garante envio');
@@ -496,7 +496,7 @@ const vagaWorkable = (url: string): Vaga => ({
 {
   const s = await subirWorkable('recusa');
   try {
-    const r = await workable.candidatar(vagaWorkable(s.url), dadosBase, silencio);
+    const r = await workable.candidatar!(vagaWorkable(s.url), dadosBase, silencio);
     assert.equal(r.status, 'erro', 'esperava erro');
     assert.match(r.status === 'erro' ? r.motivo : '', /400|recusou/);
     console.log('✓ Workable: Recusa HTTP 400 identificada');
@@ -509,7 +509,7 @@ const vagaWorkable = (url: string): Vaga => ({
 {
   const s = await subirWorkable('sucesso');
   try {
-    const r = await workable.candidatar(vagaWorkable(s.url), { ...dadosBase, ensaio: true }, silencio);
+    const r = await workable.candidatar!(vagaWorkable(s.url), { ...dadosBase, ensaio: true }, silencio);
     assert.equal(r.status, 'ensaio', `esperava ensaio, veio ${r.status}`);
     assert.equal(s.posts, 0, 'em modo ensaio 0 POSTs');
     console.log('✓ Workable: Modo ensaio preenche modal sem disparar POST (0 POST)');
@@ -598,7 +598,7 @@ const vagaArbeitnow = (url: string): Vaga => ({
 {
   const s = await subirArbeitnow('sucesso', 'en');
   try {
-    const r = await arbeitnow.candidatar(vagaArbeitnow(s.url), dadosBase, silencio);
+    const r = await arbeitnow.candidatar!(vagaArbeitnow(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     console.log('✓ Arbeitnow (EN): Motor adaptativo preenche e submete formulário → enviada');
   } finally {
@@ -610,7 +610,7 @@ const vagaArbeitnow = (url: string): Vaga => ({
 {
   const s = await subirArbeitnow('sucesso', 'de');
   try {
-    const r = await arbeitnow.candidatar(vagaArbeitnow(s.url), dadosBase, silencio);
+    const r = await arbeitnow.candidatar!(vagaArbeitnow(s.url), dadosBase, silencio);
     assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}`);
     console.log('✓ Arbeitnow (DE): Convenções multilíngues identificam campos e botão de envio em alemão');
   } finally {
@@ -622,7 +622,7 @@ const vagaArbeitnow = (url: string): Vaga => ({
 {
   const s = await subirArbeitnow('ensaio', 'en');
   try {
-    const r = await arbeitnow.candidatar(vagaArbeitnow(s.url), { ...dadosBase, ensaio: true }, silencio);
+    const r = await arbeitnow.candidatar!(vagaArbeitnow(s.url), { ...dadosBase, ensaio: true }, silencio);
     assert.equal(r.status, 'ensaio', `esperava ensaio, veio ${r.status}`);
     console.log('✓ Arbeitnow: Modo ensaio conclui sem submeter');
   } finally {

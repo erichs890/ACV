@@ -1243,5 +1243,33 @@ assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs'), 'a listagem j
 assert.ok(!aindaEntrando.test('https://programathor.com.br/jobs/123-dev'), 'e a página de uma vaga também');
 console.log('✓ ProgramaThor: lê a listagem e o JSON-LD reais, monta a vaga e sabe dizer que está deslogado');
 
+// ─── Contrato dos adapters: ou candidata, ou declara que só descobre ─────────────────────────────
+// Um adapter sem `candidatar` por esquecimento e um adapter que de propósito só descobre são coisas
+// diferentes, e do lado de fora pareceriam iguais. Este laço obriga a diferença a estar escrita: quem não
+// candidata tem de dizer que não candidata, e dizer por quê — porque esse "por quê" é o que a tela mostra
+// para a pessoa não ficar procurando um botão de enviar que não existe.
+// Importados aqui pelo efeito colateral, como `core/server.ts` faz: sem isto o laço rodaria sobre os poucos
+// adapters que as outras seções deste arquivo importaram, e não provaria nada do contrato.
+for (const p of ['inhire', 'indeed', 'vagaspj', 'divulgavagas', 'workable', 'quickin', 'arbeitnow', 'programathor']) await import(`./platforms/${p}/index.ts`);
+const { adapters: todosAdapters, soDescobre: soDescobreAdapter } = await import('./platforms/adapter.ts');
+assert.ok(Object.keys(todosAdapters).length >= 8, `esperava todos os adapters registrados, vieram ${Object.keys(todosAdapters).length}`);
+for (const a of Object.values(todosAdapters)) {
+  if (a.candidatar && !a.somenteDescoberta) {
+    assert.equal(soDescobreAdapter(a.id), false, `${a.id} candidata: não pode ser lido como só-descoberta`);
+    continue;
+  }
+  assert.equal(a.somenteDescoberta, true, `${a.id} não tem candidatar: tem de DECLARAR somenteDescoberta, para a ausência não passar por esquecimento`);
+  assert.ok((a.motivoSomenteDescoberta ?? '').length > 20, `${a.id}: o motivo é o texto que a tela mostra; escreva um de verdade`);
+  assert.equal(soDescobreAdapter(a.id), true);
+}
+// E o catálogo da tela não pode discordar do adapter: campo que a UI mostra e o núcleo não cumpre é mentira
+const { PLATAFORMAS: CATALOGO } = await import('../src/dados.ts');
+for (const a of Object.values(todosAdapters)) {
+  const naTela = CATALOGO.find(p => p.id === a.id);
+  if (!naTela) continue; // adapter de teste não está no catálogo
+  assert.equal(!!naTela.somenteDescoberta, !!a.somenteDescoberta, `${a.id}: o catálogo da tela e o adapter discordam sobre candidatar`);
+}
+console.log('✓ Contrato dos adapters: quem não candidata declara que só descobre, e a tela concorda com o núcleo');
+
 await fecharNavegador();
 console.log('\nTudo certo.');

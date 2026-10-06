@@ -15,6 +15,7 @@ const { kv, vagas, candidaturas, log, apagarTudo } = await import('./storage/db.
 const { registrarAdapter } = await import('./platforms/adapter.ts');
 const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila, removerDaFila, devolverAFila, repontuar } = await import('./queue.ts');
 const { AUTOMACAO_PADRAO, ler } = await import('./estado.ts');
+const { executarCandidatura } = await import('./candidatura.ts');
 import type { PerguntaExtra, Vaga } from '../src/types.ts';
 import type { DadosCandidatura, ResultadoCandidatura } from './platforms/adapter.ts';
 
@@ -688,6 +689,61 @@ assert.equal(linhasNoAlvo(), 0, 'a primeira chamada ENCHE a fila: ela loga o que
 for (const rodada of ['2', '3', '4']) enfileirarCompativeis(rodada);
 assert.equal(linhasNoAlvo(), 1, 'e nas três chamadas seguintes a linha de fila cheia sai UMA vez, não três — o laço roda a cada 20 s');
 console.log('✓ Fila como plano: o alvo manda, excluir repõe na hora, e a excluída não volta nem após repontuar');
+
+// ─── 13) Plataforma SÓ DESCOBERTA: nenhum caminho leva ao envio ──────────────────────────────────
+// O Jobbol proíbe candidatura automatizada nos termos de uso (cláusula 5.3), então o ACV só acha e ranqueia
+// lá. Este projeto já pagou três vezes por filtro conferido num ponto do ciclo de vida e não no ponto de uso
+// (foco de plataforma, nicho a evitar, nota mínima — todos no agentlog). Então cada porta tem a sua trava, e
+// este cenário tenta abrir TODAS, inclusive as que só um bug futuro abriria.
+let chamadasSoAcha = 0;
+registrarAdapter({
+  id: 'soacha',
+  nome: 'Só Acha',
+  somenteDescoberta: true,
+  motivoSomenteDescoberta: 'os termos de uso do Só Acha proíbem candidatura automatizada: a inscrição é feita por você, no site',
+  buscarVagas: async () => [],
+  // Tem `candidatar` DE PROPÓSITO: é justamente este contador que precisa ficar em zero. Se a trava
+  // dependesse de o método não existir, o teste provaria menos do que precisa provar.
+  candidatar: async () => {
+    chamadasSoAcha++;
+    return { status: 'enviada' };
+  },
+});
+
+cenario();
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString() }, soacha: { conectadaEm: new Date().toISOString() } });
+const soAcha = enfileirar({ plataforma: 'soacha', status: 'encontrada', posicao: undefined, score: 99 });
+
+// 13a) A fila automática não pega — nem sendo a vaga de maior nota da lista
+assert.equal(enfileirarCompativeis('teste'), 0, 'plataforma só-descoberta não entra na fila');
+assert.equal(st(soAcha), 'encontrada');
+
+// 13b) O clique manual é recusado ANTES de gravar qualquer coisa
+assert.throws(() => candidatarAgora(soAcha), /proíbem candidatura automatizada/, 'e o motivo que aparece é o real, não um erro genérico');
+assert.equal(st(soAcha), 'encontrada', 'a recusa acontece antes do `vagas.atualizar`');
+
+// 13c) Forçada para dentro da fila por fora (estado antigo no banco, caminho novo que alguém acrescentou):
+// a tranca do ponto de uso, em `executarCandidatura`, é a que vale
+// `executarCandidatura` direto, e não pelo trabalhador: a guarda `rodando` de um `processarProxima` solto de
+// outro cenário engoliria o pedido, e o teste mediria a corrida em vez da tranca.
+vagas.atualizar(soAcha, { status: 'na_fila', posicao: vagas.proximaPosicao() });
+await executarCandidatura(soAcha);
+assert.equal(chamadasSoAcha, 0, 'o adapter de uma plataforma só-descoberta NUNCA pode ser chamado');
+assert.equal(enviadas(), 0);
+assert.equal(st(soAcha), 'encontrada', 'e a vaga volta a ser útil: é só abrir e enviar à mão');
+
+// 13d) O pior caminho: `pedidaPorVoce` fura o `filtroAindaVale`, então a tranca precisa ser independente dele
+vagas.atualizar(soAcha, { status: 'na_fila', pedidaPorVoce: true, posicao: vagas.proximaPosicao() });
+await executarCandidatura(soAcha);
+assert.equal(chamadasSoAcha, 0, 'nem com pedidaPorVoce, que fura todos os outros filtros');
+assert.equal(enviadas(), 0);
+
+// 13e) E o motivo é dito em voz alta, para o bug gritar em vez de sumir
+assert.ok(
+  log.listar(50).some(l => /proíbem candidatura automatizada/.test(l.msg)),
+  'chegar ao ponto de uso é bug: o log tem de contar',
+);
+console.log('✓ Plataforma só-descoberta: fila, clique manual e ponto de uso — nenhum caminho envia currículo');
 
 apagarTudo();
 log.listar(0);

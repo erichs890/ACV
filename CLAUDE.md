@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (109 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (111 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -66,6 +66,20 @@ Competências (60) + título (40), multiplicado por função, área, senioridade
 - Senioridade do currículo é o nível **mais alto** (`inferirSenioridadeDoCurriculo`) — `inferirSenioridade` é para vaga e pega o mais baixo.
 - Localização não se duplica: use `vagaCompativelComLocalizacao` de `core/localizacao.ts`.
 - Mexeu no score? Suba `SCORE_VERSAO` em `core/server.ts`.
+
+## Plataforma nova: pare no primeiro sinal de restrição
+
+Antes de escrever adapter, leia **os termos de uso** e teste **um GET simples**. O Jobbol (05/10/2026) reprovou
+nos dois: a cláusula 5.3 proíbe "candidaturas automáticas ou em massa por sistemas automatizados", e o
+Cloudflare devolve **403 para o cliente HTTP do Node enquanto o curl recebe 200 no mesmo segundo, do mesmo IP,
+com os mesmos headers** (3/3 rodadas) — bloqueio por impressão digital do cliente, não por ritmo nem por
+user-agent. Trocar para Playwright ali seria usar um navegador real só para furar um controle que existe para
+barrar quem não é navegador: é o disfarce que a regra da extensão proíbe. Investigação registrada no
+`agentlog.md`; não vale refazer.
+
+`PlatformAdapter.somenteDescoberta` existe desde então (achar e ranquear sem candidatar), com as três travas
+nos pontos de uso e teste próprio — hoje **sem nenhuma plataforma usando**. É o molde pronto para o próximo
+site cujos termos proíbam envio, e ninguém deve candidatar por uma plataforma marcada assim.
 
 ## Ao mexer
 

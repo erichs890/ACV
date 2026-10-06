@@ -127,7 +127,7 @@ const silencio = () => {};
 async function rodar(desfecho: 'sucesso' | 'redacao-nova' | 'recusa') {
   const s = await subir(desfecho);
   try {
-    const r = await inhire.candidatar(vaga(s.url), dados, silencio);
+    const r = await inhire.candidatar!(vaga(s.url), dados, silencio);
     return { r, posts: s.posts };
   } finally {
     s.servidor.close();
@@ -155,7 +155,7 @@ console.log('✓ Recusa do servidor → erro com o motivo devolvido pelo InHire'
 // ─── D) Ensaio: preenche tudo e o POST nunca sai ─────────────────────────────────────────────────
 const e = await subir('sucesso');
 try {
-  const saida = await inhire.candidatar(vaga(e.url), { ...dados, ensaio: true }, silencio);
+  const saida = await inhire.candidatar!(vaga(e.url), { ...dados, ensaio: true }, silencio);
   assert.equal(saida.status, 'ensaio', `em ensaio o resultado deve ser ensaio, veio ${saida.status}`);
   assert.equal(e.posts, 0, 'em ensaio NENHUMA requisição de envio pode sair');
 } finally {
