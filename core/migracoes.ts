@@ -31,12 +31,22 @@ export function migrarCaminhosDaPastaAntiga(): number {
 
   let trocados = 0;
 
+  /**
+   * **Os DOIS PDFs do currículo**, e o segundo ficou de fora por um ano de calendário de meia hora.
+   *
+   * `inglesPdf` nasceu em 06/10/2026, depois desta migração, e por isso ela não o conhecia. O arquivo estava
+   * na pasta nova e o registro no banco apontava para a antiga: toda vaga escrita em inglês parava em "você
+   * ainda não tem o currículo traduzido" — 35 vagas no banco real, várias pagando em dólar — com o PDF
+   * existindo o tempo inteiro, a um diretório de distância. Campo novo que guarda caminho absoluto tem de
+   * entrar aqui no mesmo commit; é o que este comentário existe para lembrar.
+   */
   const curriculos = kv.get<Arquivo[]>('curriculos', []);
   const corrigidos = curriculos.map(c => {
-    const novo = trocar(c.caminho);
-    if (!novo) return c;
-    trocados++;
-    return { ...c, caminho: novo };
+    const caminho = trocar(c.caminho);
+    const inglesPdf = trocar(c.inglesPdf);
+    if (!caminho && !inglesPdf) return c;
+    trocados += (caminho ? 1 : 0) + (inglesPdf ? 1 : 0);
+    return { ...c, ...(caminho ? { caminho } : {}), ...(inglesPdf ? { inglesPdf } : {}) };
   });
   if (trocados) kv.set('curriculos', corrigidos);
 

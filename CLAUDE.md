@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas, Quickin, Leve
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (128 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (129 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -37,6 +37,8 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
   `executarCandidatura` escolhe o PDF por ele, e vaga em inglês **sem** `inglesPdf` PARA em vez de mandar o
   português — desfecho silencioso (o recrutador descarta e você nunca sabe) é pior que erro na tela. A versão
   em inglês nasce no upload do currículo e é preenchida na subida do núcleo para quem enviou antes disso;
+  o caminho dela entra em `core/migracoes.ts` como qualquer caminho absoluto guardado no banco — campo novo
+  que escapa de lá vira vaga que nunca sai, em silêncio, com o PDF existindo um diretório ao lado;
   a tradução usa Google GTX quando não há IA, então não custa chave nem cota. Adaptação por vaga só no
   português: `validarAdaptacao` compara com o markdown original.
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera. Modelo não informado passa — **mas só quando há dúvida de verdade**: com o país conhecido e estrangeiro os dois caminhos recusariam (remota fora da sua lista, presencial em outro país), e aí não há dúvida a favor de quem. `melhorLugar` decide entre VÁRIOS lugares possíveis (o Lever manda `allLocations`, o Greenhouse manda tudo separado por `;`), com lugar vago nunca ganhando de lugar específico. E `paisDoLocal` reconhece os 280 países do ICU, não só os de `src/paises.ts`: aquela lista é a dos países que você ESCOLHE para remoto, e usá-la para responder "que país é este" fazia "Vilnius, Lithuania" virar vazio — ou seja, "a vaga não diz onde é", que passa em tudo.

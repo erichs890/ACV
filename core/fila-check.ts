@@ -5,11 +5,18 @@
 // é determinístico e roda em segundos. O que é verificado aqui é exatamente o que quebrou na prática:
 // encadeamento, portões de agendamento, pedido do usuário durante uma candidatura, nova tentativa e duplicidade.
 import assert from 'node:assert/strict';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
-process.env.ACV_DIR = mkdtempSync(join(tmpdir(), 'acv-fila-'));
+/**
+ * A pasta de dados termina em `ACV` de propósito, e não é detalhe: `migrarCaminhosDaPastaAntiga` só faz algo
+ * quando existe um prefixo antigo que case (`.../AutoCV` → `.../ACV`), e com um nome qualquer ela sai na
+ * primeira linha. Sem isto a migração não teria como ser testada em lugar nenhum.
+ */
+const PASTA_BASE = mkdtempSync(join(tmpdir(), 'acv-fila-'));
+process.env.ACV_DIR = join(PASTA_BASE, 'ACV');
+mkdirSync(process.env.ACV_DIR, { recursive: true });
 
 const { kv, vagas, candidaturas, log, apagarTudo } = await import('./storage/db.ts');
 const { registrarAdapter } = await import('./platforms/adapter.ts');
@@ -941,6 +948,49 @@ const antes = chamadas.get(semTraducao) ?? 0;
 await processarProxima();
 assert.equal(chamadas.get(semTraducao) ?? 0, antes, 'nada de nova tentativa automática');
 console.log('✓ Idioma: vaga em inglês leva o currículo traduzido, e sem ele a vaga para em vez de mandar o português');
+
+// ─── 18d) A migração da pasta antiga tem de carregar OS DOIS PDFs do currículo ────────────────────
+/**
+ * Quando o produto virou ACV (03/10/2026), `%LOCALAPPDATA%\AutoCV` foi renomeado para `...\ACV` e os
+ * caminhos ABSOLUTOS guardados no banco ficaram para trás. A migração existe para isso, e **esqueceu um
+ * campo**: `inglesPdf` nasceu em 06/10, depois dela.
+ *
+ * O efeito, medido no banco real dele: o PDF traduzido estava em `...\ACV\curriculos\...-en.pdf`, o registro
+ * apontava para `...\AutoCV\curriculos\...-en.pdf`, e toda vaga escrita em inglês parava em "você ainda não
+ * tem o currículo traduzido" — 35 vagas, várias pagando em dólar — com o arquivo existindo o tempo todo, a
+ * um diretório de distância. Erro silencioso: nada falha, a vaga só nunca sai.
+ *
+ * O teste cobra as duas metades da regra: troca o prefixo quando o arquivo EXISTE no destino novo, e deixa
+ * como está quando não existe (trocar um caminho quebrado por outro quebrado só esconde o problema).
+ */
+const PASTA_ANTIGA = join(PASTA_BASE, 'AutoCV', 'curriculos');
+const PASTA_NOVA = join(PASTA_BASE, 'ACV', 'curriculos');
+mkdirSync(PASTA_ANTIGA, { recursive: true });
+mkdirSync(PASTA_NOVA, { recursive: true });
+// Os dois PDFs existem no lugar NOVO; o banco aponta para o antigo
+writeFileSync(join(PASTA_NOVA, 'cv.pdf'), 'pdf');
+writeFileSync(join(PASTA_NOVA, 'cv-en.pdf'), 'pdf');
+kv.set('curriculos', [
+  {
+    id: 1,
+    nome: 'cv.pdf',
+    tamanho: 3,
+    enviadoEm: new Date().toISOString(),
+    caminho: join(PASTA_ANTIGA, 'cv.pdf'),
+    inglesPdf: join(PASTA_ANTIGA, 'cv-en.pdf'),
+  },
+  // E um que não existe em lugar nenhum: tem de ficar intacto
+  { id: 2, nome: 'fantasma.pdf', tamanho: 3, enviadoEm: new Date().toISOString(), caminho: join(PASTA_ANTIGA, 'fantasma.pdf'), inglesPdf: join(PASTA_ANTIGA, 'fantasma-en.pdf') },
+]);
+const { migrarCaminhosDaPastaAntiga } = await import('./migracoes.ts');
+assert.equal(migrarCaminhosDaPastaAntiga(), 2, 'dois caminhos trocados: o PDF e a versão em inglês');
+const depoisDaMigracao = kv.get<{ caminho?: string; inglesPdf?: string }[]>('curriculos', []);
+assert.equal(depoisDaMigracao[0].caminho, join(PASTA_NOVA, 'cv.pdf'));
+assert.equal(depoisDaMigracao[0].inglesPdf, join(PASTA_NOVA, 'cv-en.pdf'), 'o PDF em inglês também — era este o que faltava');
+assert.equal(depoisDaMigracao[1].caminho, join(PASTA_ANTIGA, 'fantasma.pdf'), 'arquivo que não existe no destino novo fica como está');
+assert.equal(depoisDaMigracao[1].inglesPdf, join(PASTA_ANTIGA, 'fantasma-en.pdf'));
+assert.equal(migrarCaminhosDaPastaAntiga(), 0, 'rodar de novo não mexe em nada: os caminhos já estão no lugar');
+console.log('✓ Migração da pasta antiga: leva o PDF E a versão em inglês, e não troca caminho que não existe');
 
 // ─── 18c) Resposta salva não se herda por parecença: o caso "Sim" no campo do LinkedIn ────────────
 /**
