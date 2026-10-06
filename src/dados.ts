@@ -217,6 +217,27 @@ export const PLATAFORMAS: Plataforma[] = [
 ];
 
 /** Grupos da tela de Plataformas: separa o que é do Brasil, o que é global e o que é vaga gringa. */
+/**
+ * Os dois grupos da página de Plataformas — e o eixo é LOGIN, não região.
+ *
+ * Região é geografia; login é a única coisa que muda o que você tem de fazer. Sem conta, o robô faz tudo
+ * sozinho e você não toca em nada; com conta, ele depende de você entrar uma vez (ou, quando há captcha, de
+ * você dar o clique final pela extensão). Agrupar por isso põe lado a lado as que exigem a mesma coisa de
+ * você — e a região continua visível, como etiqueta em cada cartão.
+ */
+export const GRUPOS_DE_ACESSO: { id: 'sem-login' | 'com-login'; titulo: string; texto: string }[] = [
+  {
+    id: 'sem-login',
+    titulo: 'Não precisam de login',
+    texto: 'O robô dá conta sozinho: encontra, pontua contra o seu currículo, preenche e envia — e prova o envio pela resposta do site. Você não toca em nada.',
+  },
+  {
+    id: 'com-login',
+    titulo: 'Precisam de login',
+    texto: 'Dependem de você uma vez: entrar numa janela do robô, e a sessão fica guardada neste computador. Onde há captcha no envio, quem dá o clique final é você, pela extensão.',
+  },
+];
+
 export const REGIOES: { id: Plataforma['regiao']; titulo: string; texto: string }[] = [
   { id: 'brasil', titulo: 'Brasil', texto: 'Vagas publicadas por empresas brasileiras, em português.' },
   { id: 'global', titulo: 'Globais', texto: 'Operam no Brasil e no exterior; a mesma conta serve para os dois.' },

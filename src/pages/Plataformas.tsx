@@ -5,7 +5,7 @@ import Modal from '../components/Modal';
 import Panel from '../components/Panel';
 import { useEstado } from '../estado';
 import { api, post } from '../api';
-import { PLATAFORMAS, REGIOES, tempoAtras } from '../dados';
+import { GRUPOS_DE_ACESSO, PLATAFORMAS, REGIOES, tempoAtras } from '../dados';
 import type { Plataforma } from '../types';
 import Orbe from '../components/Orbe';
 
@@ -86,27 +86,26 @@ export default function Plataformas() {
         </p>
       </div>
 
-      {REGIOES.map(r => {
-        const doGrupo = PLATAFORMAS.filter(p => p.regiao === r.id);
+      {/* Agrupado por LOGIN, e não por região: região é geografia, login é o que muda o que VOCÊ tem de fazer.
+          A região continua visível como etiqueta em cada cartão. Dentro de cada grupo, as prontas primeiro —
+          cartão indisponível no topo é uma lista que começa pelo que não dá para usar. */}
+      {GRUPOS_DE_ACESSO.map(g => {
+        const doGrupo = PLATAFORMAS.filter(p => (g.id === 'com-login') === !!p.login).sort((a, b) => Number(b.disponivel) - Number(a.disponivel) || a.nome.localeCompare(b.nome, 'pt-BR'));
         const quantasVagas = (id: string) => contarVagas(estado.vagas, id);
         if (!doGrupo.length) return null;
         const ligadas = doGrupo.filter(p => estado.conexoes[p.id]).length;
+        const prontas = doGrupo.filter(p => p.disponivel).length;
         return (
-          <section key={r.id} aria-labelledby={`regiao-${r.id}`} className="flex flex-col gap-2.5">
+          <section key={g.id} aria-labelledby={`grupo-${g.id}`} className="flex flex-col gap-2.5">
             <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1 border-b border-panel-border pb-1.5">
-              <h2 id={`regiao-${r.id}`} className="text-[13px] font-bold">
-                {r.titulo}
+              <h2 id={`grupo-${g.id}`} className="inline-flex items-center gap-1.5 text-[13px] font-bold">
+                {g.id === 'com-login' ? <KeyRound size={13} aria-hidden className="text-amber-ink" /> : <Plug size={13} aria-hidden className="text-green-deep" />}
+                {g.titulo}
               </h2>
               <span className="rounded-[9px] border border-panel-border bg-page-bg px-2 py-0.5 text-[10px] font-bold text-ink-soft tabular-nums">
-                {ligadas ? `${ligadas} de ${doGrupo.length} conectada(s)` : `${doGrupo.length} plataforma(s)`}
+                {ligadas ? `${ligadas} de ${prontas} conectada(s)` : `${prontas} pronta(s) de ${doGrupo.length}`}
               </span>
-              {doGrupo.some(p => p.login) && (
-                <span className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink">
-                  <KeyRound size={10} aria-hidden />
-                  {doGrupo.filter(p => p.login).length} exige(m) login
-                </span>
-              )}
-              <p className="min-w-[200px] flex-1 text-[11px] text-ink-soft">{r.texto}</p>
+              <p className="min-w-[200px] flex-1 text-[11px] text-ink-soft">{g.texto}</p>
             </div>
             <ul className="grid grid-cols-4 gap-3.5 max-lg:grid-cols-2 max-md:grid-cols-1">
               {doGrupo.map(p => {
@@ -125,19 +124,28 @@ export default function Plataformas() {
                           <span aria-hidden className="size-1.5 rounded-full bg-current" />
                           {conexao ? (conexao.sessao?.valida === false ? 'Sessão expirada' : 'Conectado') : p.disponivel ? 'Não conectado' : 'Indisponível'}
                         </span>
-                        {/* Dito na cara: o que separa estas das outras não é a integração, é você precisar de conta */}
-                        {p.login && (
+                        {/* A região saiu do cabeçalho quando o agrupamento virou login; continua aqui, por cartão */}
+                        <span className="rounded-[9px] border border-panel-border bg-page-bg px-2 py-0.5 text-[10px] font-bold text-ink-soft">
+                          {REGIOES.find(r => r.id === p.regiao)?.titulo ?? p.regiao}
+                        </span>
+                        {/* Só-descoberta é a outra coisa que muda o que você faz: o robô acha, o envio é seu */}
+                        {p.somenteDescoberta && (
                           <span
                             className="inline-flex items-center gap-[5px] rounded-[9px] border border-amber bg-amber/20 px-2 py-0.5 text-[10px] font-bold text-amber-ink"
-                            title="Esta plataforma só deixa candidatar quem está logado: você entra uma vez numa janela do robô e a sessão fica salva."
+                            title={p.motivoSomenteDescoberta}
                           >
-                            <KeyRound size={10} aria-hidden />
-                            Exige login
+                            <Search size={10} aria-hidden />
+                            Só encontra vagas
                           </span>
                         )}
                       </div>
                     </div>
-                    <p className="text-xs text-ink-soft">{descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}</p>
+                    {/* Preso em 5 linhas: a nota do Jobbol é um parágrafo inteiro (os quatro motivos de ele estar fora) e,
+                        solta, esticava a linha inteira da grade — os cartões ao lado ficavam com meio palmo de vazio.
+                        O texto completo continua acessível no `title`, para quem quiser ler. */}
+                    <p className="line-clamp-5 text-xs text-ink-soft" title={descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}>
+                      {descricaoDoCard(p, !!conexao, quantasVagas(p.id), ativas.length)}
+                    </p>
                     {conexao?.sessao?.valida === false && (
                       <p role="alert" className="text-[11px] font-bold text-orange-deep">
                         A sessão caiu: as vagas de {p.nome} ficam paradas até você entrar de novo.

@@ -271,23 +271,24 @@ export default function Automacao() {
     );
   }
 
+  /**
+   * Mapear. **Um comportamento só, dois lugares de onde chamar.**
+   *
+   * Até 06/10/2026 havia dois botões com a mesma ordem e desfechos diferentes: "Buscar vagas agora" (no topo)
+   * disparava a varredura em silêncio, e "Mapear agora" (no painel da fila) abria a tela com o andamento. Quem
+   * clicava no primeiro ficava sem saber se algo estava acontecendo — e o de cima é justamente o mais à mão.
+   * O comentário antigo já dizia que dois caminhos para o mesmo objetivo é a segunda fonte que o CLAUDE.md
+   * proíbe; só que a duplicação não estava na lógica, estava no que a tela mostrava. Agora a tela abre
+   * sempre, venha o clique de onde vier.
+   */
   async function buscar() {
+    setMapeando(true);
     setBuscando(true);
     try {
       await post('/buscar');
     } finally {
       setBuscando(false);
     }
-  }
-
-  /**
-   * Mesmo trabalho de "Buscar vagas agora" — um caminho só, porque dois botões disparando lógicas diferentes
-   * para o mesmo objetivo é a segunda fonte que o CLAUDE.md proíbe. O que muda é a tela: abre a janela de
-   * mapeamento, onde dá para ver cada portal sendo varrido.
-   */
-  async function mapear() {
-    setMapeando(true);
-    await buscar();
   }
 
   return (
@@ -822,7 +823,7 @@ export default function Automacao() {
             {/* Mapear = a varredura de sempre (`POST /buscar`), e não um caminho novo: ela varre as plataformas
                 conectadas, pontua contra o seu currículo e enfileira as que passam nos seus filtros. Fica aqui
                 porque é daqui que se olha a fila — era noutro painel, longe do efeito que causa. */}
-            <button type="button" disabled={buscando || estado.descoberta.varrendo} onClick={mapear} className="btn btn-primary btn-sm">
+            <button type="button" disabled={buscando || estado.descoberta.varrendo} onClick={buscar} className="btn btn-primary btn-sm">
               <Search size={13} aria-hidden />
               {buscando || estado.descoberta.varrendo ? 'Mapeando...' : 'Mapear agora'}
             </button>

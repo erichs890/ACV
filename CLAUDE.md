@@ -14,8 +14,11 @@ agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o
 varredura → score → fila → `executarCandidatura` → adapter → **preencher, anexar, enviar, só então confirmar**.
 
 - `core/queue.ts` — trabalhador serial: encadeia vagas até um portão fechar (robô, modo, janela, intervalo, limite/dia). `rodando` ≠ `ocupado`. Pendência pausa **só aquela vaga**. Plataforma travada (sessão caída, ou login que **nunca foi feito**) também pausa só as vagas dela: `proximaNaFila` recebe a regra de quem pode ser pego agora e PULA as travadas, que ficam na fila esperando. Sem isso uma vaga travada na frente parava a fila inteira, calada — e `sessaoValida` dava "liberado" para plataforma ausente das conexões, porque `undefined !== false`.
-  **Dois botões no painel da fila:** *Mapear agora* é a varredura de sempre (`POST /buscar`) — varre as
-  plataformas conectadas, pontua e enfileira, com um caminho só e não dois. *Esvaziar a fila*
+  **Mapear é um comportamento só, chamado de dois lugares.** *Mapear agora* (painel da fila) e *Buscar vagas
+  agora* (topo) disparam a MESMA função, e ela abre a tela de mapeamento — venha o clique de onde vier. Até
+  06/10/2026 só o primeiro abria a tela: quem clicava no de cima, que é o mais à mão, via a varredura
+  acontecer em silêncio e achava que nada tinha funcionado. A duplicação não estava na lógica (as duas já
+  chamavam `POST /buscar`), estava no que a tela mostrava. *Esvaziar a fila*
   (`POST /fila/esvaziar`) tira todas da fila **sem** marcar `recusadaPorVoce` (elas voltam a concorrer) e
   pausa a reposição em `kv['fila:pausada']` — senão o laço de 20 s reencheria e o botão pareceria quebrado.
   Mapear ou dar start liberam. **Não confundir com `POST /limpar`** (zona de perigo das Configurações), que
@@ -44,6 +47,13 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera. Modelo não informado passa — **mas só quando há dúvida de verdade**: com o país conhecido e estrangeiro os dois caminhos recusariam (remota fora da sua lista, presencial em outro país), e aí não há dúvida a favor de quem. `melhorLugar` decide entre VÁRIOS lugares possíveis (o Lever manda `allLocations`, o Greenhouse manda tudo separado por `;`), com lugar vago nunca ganhando de lugar específico. E `paisDoLocal` reconhece os 280 países do ICU, não só os de `src/paises.ts`: aquela lista é a dos países que você ESCOLHE para remoto, e usá-la para responder "que país é este" fazia "Vilnius, Lithuania" virar vazio — ou seja, "a vaga não diz onde é", que passa em tudo.
 - `core/platforms/vagaspj/` — vagas PJ: **duas fontes** — o feed RSS (50 itens, o que acabou de sair) e o `sitemap-vagas.xml` (**1.259 vagas**, o acervo), com a peneira de `core/peneira.ts` cortando pelo slug antes de baixar; JSON-LD de cada página (só HTTP), candidatura num formulário de uma etapa. Um anúncio se intromete entre o botão final e o POST (`aposBotaoFinal`).
 - `core/platforms/lever/` — **o molde do ATS por mural de empresa**, e o primeiro `somenteDescoberta` em uso. Uma requisição por empresa (`api.lever.co/v0/postings/<board>`) traz o anúncio inteiro de todas as vagas dela: nada de abrir página para descobrir o que a vaga é, e por isso nenhuma peneira. **Mas o corpo do anúncio nem sempre vem na API** — `lists: []` quer dizer que requisitos e responsabilidades estão só no HTML (CI&T, Swile, Zippi), e sem abrir a página o score mediria o "Sobre nós". **E o Lever não envia pelo núcleo: o `/apply` tem hCaptcha** (mesmo `sitekey` nos três boards brasileiros, então é do Lever e não configuração da empresa). Nada nos termos dele nem da Employ proíbe candidato de ler ou candidatar — o impedimento é só o captcha, e captcha não se contorna. O envio é pela extensão, no seu navegador, com o seu clique. Descoberta de empresas: não existe índice público (sem sitemap, e o Common Crawl devolveu 504 em todas as coleções), então é semente curada + confirmação na API — e **confirmar na API não basta**: o board `aircall` devolve 77 vagas cujas páginas são 404, dado velho servido por uma API que não checa se o mural está publicado.
+- `src/components/TelaDeMapeamento.tsx` — a janela da varredura. **A barra geral inclui a fração da
+  plataforma ATUAL**, e não só as que terminaram: com sete portais, contar só as prontas dá uma barra parada
+  por minutos que salta de uma em uma — e numa plataforma lenta (o InHire abre uma página por empresa, 113
+  delas) ela pareceria travada. Plataforma que não sabe o próprio tamanho (`total: 0`) entra com meia unidade,
+  nunca com zero, porque zero pararia a barra justo onde há trabalho acontecendo. A contagem de plataformas
+  mora só no topo: o rodapé a repetia com outra conta (terminadas × em andamento) e a mesma tela mostrava
+  "0 de 6" embaixo e "Varrendo 1 de 6" em cima.
 - `core/platforms/boards.ts` — a lista de empresas monitoradas de um ATS por mural, uma por plataforma em `kv['boards:<id>']`. Genérica desde o primeiro uso porque Lever, Greenhouse, Ashby e Teamtailor têm a mesma forma, e a alternativa seria copiar o arquivo trocando o nome. `aVisitar(n)` gira a lista **do mais esquecido para o mais recente**, e o desempate é a ordem da semente, não `listar()` (que ordena por nome, para a tela): na primeira varredura todos empatam em `null`, e ordem alfabética fez a rodada inteira ir para boards americanos enquanto Neon, Swile e Zippi esperavam.
 - `core/platforms/greenhouse/` — a varredura mais barata do projeto: `?content=true` traz as vagas **e o anúncio inteiro de cada uma** numa requisição por empresa, então nenhuma página é aberta nunca. Três coisas que só o dado real mostra: o `content` vem com HTML **duas vezes escapado** (`&lt;p&gt;`) e sem desfazer isso o score pontuaria marcação; **não existe campo de modelo de trabalho** — ele está escrito no texto do local ("Brazil (Remote)", "Brazil (São Paulo - Hybrid)"); e não existe campo de contrato, então o regime fica `indefinido` em todas. Envio pela extensão, como no Lever: aqui o captcha é reCAPTCHA Enterprise invisível. Board confirmado na API ainda pode estar fora do ar — `coinbase` e `sofi` respondem 200 na API e **403 na página**, o mesmo bloqueio por impressão digital que reprovou o Jobbol, e ficam de fora.
 - `core/diario.ts` + `core/relato.ts` — duas formas do mesmo histórico. `diario/acv-DIA.log` é prosa, para ler;
@@ -116,6 +126,10 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | respostas de autodeclaração | `sensiveis` |
 | perguntas das empresas | `perguntas` — reaproveitadas só com **0,8 de parecença** e se o tipo do dado fechar (campo que pede link ou valor nunca recebe "Sim") |
 | modelos de IA (id, preço, nota, padrão) | `MODELOS_IA` em `src/dados.ts` — `core/ia.ts` deriva dela |
+
+A página de **Plataformas** agrupa por LOGIN (precisa × não precisa), e não por região: região é geografia,
+login é o que muda o que VOCÊ tem de fazer — sem conta o robô faz tudo sozinho, com conta ele depende de você
+entrar uma vez (ou do seu clique final, onde há captcha). A região continua visível como etiqueta no cartão.
 
 Nunca criar um segundo lugar que edite o mesmo campo. Campo que a UI mostra e o núcleo não lê é mentira: ou implementa, ou remove.
 

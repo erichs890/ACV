@@ -63,6 +63,21 @@ export default function TelaDeMapeamento({ aberto, onFechar, varredura, fila, fi
   const decorrido = iniciadaEm ? Math.max(0, Math.round((agora - new Date(iniciadaEm).getTime()) / 1000)) : 0;
   const filaCheia = fila.length >= filaAlvo;
 
+  /**
+   * O quanto já andou, de 0 a 1 — a resposta para "quanto falta".
+   *
+   * Não é só `prontas / total`: com sete portais isso dá uma barra que fica parada minutos e salta de 14% em
+   * 14%, e numa plataforma lenta (o InHire abre uma página por empresa) ela pareceria travada. A fração da
+   * plataforma ATUAL entra junto, então a barra anda continuamente enquanto há trabalho acontecendo.
+   *
+   * A plataforma que não sabe o próprio tamanho (`total: 0`) contribui com meia unidade, e não com zero: ela
+   * está trabalhando, e marcar zero faria a barra parar justamente onde ela está andando.
+   */
+  const emCurso = linhas.find(l => l.estado === 'varrendo');
+  const fracaoDaAtual = emCurso ? (emCurso.total > 0 ? Math.min(1, emCurso.atual / emCurso.total) : 0.5) : 0;
+  const progresso = linhas.length ? Math.min(1, (prontas + fracaoDaAtual) / linhas.length) : 0;
+  const novasNaVarredura = novas;
+
   // Rola para a plataforma que está varrendo: com sete portais a lista passa da altura da tela
   const emFoco = useRef<HTMLLIElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: depende SO da plataforma atual de proposito — rolar a cada mudanca de etapa daria um solavanco por pagina aberta
@@ -81,8 +96,11 @@ export default function TelaDeMapeamento({ aberto, onFechar, varredura, fila, fi
         <>
           <p role="status" className="flex-1 text-xs text-ink-soft tabular-nums">
             {rodando ? (
+              // A contagem de plataformas mora no topo, junto da barra. Repetir aqui com OUTRA conta — as que
+              // TERMINARAM, contra a que está em andamento — punha "0 de 6" embaixo e "Varrendo 1 de 6" em
+              // cima, na mesma tela. Aqui fica o que o topo não diz: quanto já entrou na fila.
               <>
-                {prontas} de {linhas.length} plataformas · {textoIntervalo(decorrido)} de varredura
+                {fila.length} na fila · {textoIntervalo(decorrido)} de varredura
               </>
             ) : (
               <>
@@ -104,6 +122,49 @@ export default function TelaDeMapeamento({ aberto, onFechar, varredura, fila, fi
       }
     >
       <div className="flex flex-col gap-3">
+        {/* A barra geral, antes de tudo: "quanto falta" é a primeira pergunta de quem abre esta tela.
+            Ela anda continuamente porque inclui a fração da plataforma atual — contar só as que terminaram
+            daria uma barra parada por minutos, saltando de uma plataforma em uma plataforma. */}
+        <div className="rounded-lg border border-panel-border bg-page-bg px-3.5 py-3">
+          <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
+            <p className="text-sm font-bold">
+              {rodando ? (
+                <>
+                  Varrendo {prontas + 1 > linhas.length ? linhas.length : prontas + 1} de {linhas.length} plataformas
+                </>
+              ) : (
+                <>Varredura concluída — {linhas.length} plataformas</>
+              )}
+            </p>
+            <span className="text-xs text-ink-soft tabular-nums">
+              {Math.round(progresso * 100)}% · {textoIntervalo(decorrido)}
+            </span>
+            {rodando && emCurso && (
+              <span className="truncate text-xs text-blue-dark">
+                {emCurso.nome}: {emCurso.etapa || 'começando'}
+              </span>
+            )}
+            {/* Só aparece quando há o que contar: "+0" enquanto a primeira plataforma ainda varre parece erro,
+                e o número só sobe quando cada uma TERMINA (é ela que reporta o que trouxe). */}
+            {novasNaVarredura > 0 && <span className="ml-auto text-xs font-bold text-green-deep tabular-nums">+{novasNaVarredura} nesta varredura</span>}
+          </div>
+          <div
+            className="mt-2 h-2.5 overflow-hidden rounded-full bg-panel-border"
+            role="progressbar"
+            aria-valuenow={Math.round(progresso * 100)}
+            aria-valuemin={0}
+            aria-valuemax={100}
+            aria-label="Andamento da varredura"
+          >
+            <div className={`h-full rounded-full transition-[width] duration-500 ${rodando ? 'bg-blue-dark' : 'bg-green-deep'}`} style={{ width: `${Math.max(2, progresso * 100)}%` }} />
+          </div>
+          <p className="mt-1.5 text-[11px] text-ink-soft">
+            {rodando
+              ? 'São as plataformas que você conectou em Plataformas. Cada uma é varrida inteira antes da próxima; as que terminam ficam na lista com o que trouxeram.'
+              : `${conhecidas} vaga(s) já estavam no banco e não entraram de novo. As compatíveis já foram para a fila automaticamente.`}
+          </p>
+        </div>
+
         {/* O estado da fila, que é o objetivo de tudo isto: o mapeamento existe para a fila ficar no ponto */}
         <div className={`flex items-center gap-3 rounded-lg border px-3.5 py-3 ${filaCheia ? 'border-green-deep bg-green-deep/10' : 'border-panel-border bg-page-bg'}`}>
           <Orbe estado={rodando ? 'procurando' : filaCheia ? 'pensando' : 'esperando'} tamanho={64} rotulo={rodando ? 'Varrendo as plataformas' : 'Mapeamento concluído'} />
