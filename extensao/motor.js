@@ -188,6 +188,15 @@
     const empresa = handler.empresaDaVaga?.() ?? '';
     const titulo = handler.tituloDaVaga?.() ?? document.title;
 
+    /**
+     * Termos de uso que proíbem automação: recusa no ponto de uso, antes de ler a página.
+     *
+     * A tela já não oferece botão (`acao.js`), mas trava que só existe na tela não é trava — o motor é
+     * alcançável por outros caminhos, e é aqui que a decisão tem de ser irrecusável.
+     */
+    const proibido = globalThis.ACVComum.proibeAutomacao(location.hostname);
+    if (proibido) return { status: 'proibido', motivo: proibido.motivo };
+
     if (RESTRICAO.test(document.body.innerText.slice(0, 2000)))
       return { status: 'erro', motivo: 'a plataforma está pedindo verificação (anti-robô). O ACV não contorna isso: resolva na tela e tente mais tarde.' };
 

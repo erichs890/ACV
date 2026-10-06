@@ -27,6 +27,14 @@
     const b = (id, rotulo, extra = {}) => ({ id, rotulo, variante: 'primary', desabilitado: false, orbe: null, ...extra });
 
     // A ordem importa: o primeiro caso que bate é o que manda. Tudo o que IMPEDE vem antes do que oferece.
+    // E o primeiro de todos é o site que proíbe automação nos termos: ali não há escolha a oferecer.
+    if (nivel === 'proibido')
+      return {
+        principal: b('proibido', 'Este site não permite candidatura automática', { variante: 'secondary', desabilitado: true }),
+        alternativa: null,
+        motivo: sitio?.nota ?? '',
+      };
+
     if (restrita)
       return {
         principal: b('restrita', 'A plataforma pediu verificação', { variante: 'secondary', desabilitado: true }),

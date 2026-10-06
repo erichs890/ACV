@@ -468,6 +468,7 @@ try {
     runInContext(readFileSync(new URL('../extensao/comum.js', import.meta.url), 'utf8'), ctx);
     return (caixa.module as { exports: unknown }).exports as {
       empresaBloqueada: (e: string, l: string[]) => string | null;
+      proibeAutomacao: (h: string) => { dominio: string; motivo: string } | null;
       normalizarEmpresa: (e: string) => string;
       montarUrlBuscaLinkedIn: (f: Record<string, unknown>) => string;
       quantasCabemHoje: (d: string, c: unknown, k: unknown) => { cabem: number; limite: number; aquecendo: boolean };
@@ -548,7 +549,7 @@ try {
 
   type Sitio = { nivel: string; nome: string; importa?: boolean; conectada?: boolean; dois?: boolean; semSessaoDoNucleo?: boolean; nota: string } | null;
   const plat = puro<{
-    classificar: (h: string, o: { plataformas?: unknown[]; pareceVaga?: boolean }) => Sitio;
+    classificar: (h: string, o: { plataformas?: unknown[]; pareceVaga?: boolean; proibido?: { motivo: string } | null }) => Sitio;
     catalogo: (o: { plataformas?: unknown[] }) => { nome: string; nivel: string; avisos: { texto: string }[] }[];
   }>('plataformas.js');
 
@@ -616,6 +617,26 @@ try {
     cat.find(p => p.nome === 'Indeed')?.avisos.some(a => a.texto === 'conta não ligada'),
     'conta não ligada é a causa número um de "cliquei e não fez nada", e hoje é invisível',
   );
+  /**
+   * Site cujos termos proíbem automação: recusa antes de tudo, inclusive antes do modo genérico.
+   *
+   * O genérico é o ramo de "site que o ACV não conhece", então tirar uma plataforma do cadastro NÃO a
+   * protege — ela cai no genérico e é tratada como qualquer outra. Era o que acontecia com o Jobbol depois de
+   * eu removê-lo em 05/10/2026: o genérico preencheria nome, sobrenome, celular, e-mail e anexaria o
+   * currículo num site cuja cláusula 5.3 proíbe exatamente isso.
+   */
+  const proibido = comum.proibeAutomacao('www.jobbol.com.br');
+  assert.ok(proibido, 'o Jobbol está na lista de sites que proíbem automação');
+  assert.match(proibido.motivo, /5\.3|termos de uso/, 'e o motivo cita a cláusula, para a tela poder explicar');
+  assert.ok(comum.proibeAutomacao('jobbol.com.br'), 'sem www também');
+  assert.equal(comum.proibeAutomacao('jobbol.com.br.exemplo.net'), null, 'domínio que só CONTÉM o nome não conta');
+  assert.equal(comum.proibeAutomacao('linkedin.com'), null, 'site que não proíbe não é afetado');
+
+  const classificadoProibido = plat.classificar('www.jobbol.com.br', { plataformas: servidas, pareceVaga: true, proibido });
+  assert.equal(classificadoProibido?.nivel, 'proibido', 'o nível próprio vem ANTES do genérico, mesmo a página parecendo uma vaga');
+  assert.match(String(classificadoProibido?.nota), /5\.3|termos de uso/);
+  console.log('✓ Extensão: site que proíbe automação nos termos é recusado antes do genérico, com o motivo na tela');
+
   console.log('✓ Extensão: classifica o site aberto, e cai no motor do navegador quando o núcleo não tem a sessão');
 
   type Acao = { principal: { id: string; desabilitado: boolean; rotulo: string }; alternativa: { id: string } | null; motivo: string };
@@ -623,6 +644,13 @@ try {
   const cabe = { cabem: 3, feitasHoje: 2, limite: 5, aquecendo: false };
   const nucleo: Sitio = { nivel: 'nucleo', nome: 'InHire', nota: '' };
   const situacaoBase = { temVaga: true, sincronizado: true, cota: cabe, sitio: nucleo };
+
+  // Site que proíbe automação: sem botão e sem alternativa, com o motivo no lugar — e isto vem ANTES de
+  // qualquer outro caso na ordem de prioridade de `decidir`, porque ali não há escolha a oferecer.
+  const semBotao = acao.decidir({ sincronizado: true, temVaga: true, cota: { cabem: 5, limite: 5, feitasHoje: 0 }, sitio: classificadoProibido });
+  assert.equal(semBotao.principal.desabilitado, true, 'não existe botão de candidatar num site que proíbe');
+  assert.equal(semBotao.alternativa, null, 'nem alternativa: não há escolha a oferecer');
+  assert.match(semBotao.motivo, /termos de uso/, 'e a pessoa lê o motivo em vez de procurar um botão');
 
   assert.equal(acao.decidir(situacaoBase).principal.id, 'nucleo');
   assert.equal(acao.decidir({ ...situacaoBase, sitio: { nivel: 'extensao', nome: 'LinkedIn', nota: '' } }).principal.id, 'extensao');

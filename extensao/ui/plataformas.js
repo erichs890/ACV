@@ -47,8 +47,16 @@
    * `pareceVaga` entra porque em site desconhecido só faz sentido oferecer o modo genérico se a página for
    * mesmo uma vaga — caso contrário não há o que automatizar e o certo é não aparecer.
    */
-  function classificar(host, { plataformas = [], pareceVaga = false } = {}) {
+  function classificar(host, { plataformas = [], pareceVaga = false, proibido = null } = {}) {
     const h = semWww(host);
+    /**
+     * Site cujos termos proíbem automação vem PRIMEIRO, antes mesmo do modo genérico.
+     *
+     * A ordem é o ponto: o genérico é o ramo que atende "site que o ACV não conhece", então um site proibido
+     * que não esteja no cadastro cairia justamente nele e seria tratado como qualquer outro. Aqui ele ganha um
+     * nível próprio, com o motivo escrito — a pessoa vê por que não há botão, em vez de procurar um.
+     */
+    if (proibido) return { nivel: 'proibido', nome: proibido.nome ?? h, pilula: 'sem automação', tom: 'atencao', nota: proibido.motivo };
     const p = daLista(h, plataformas);
     if (!p) return pareceVaga ? { nivel: 'generico', nome: h, ...NIVEIS.generico } : null;
 

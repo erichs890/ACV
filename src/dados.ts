@@ -29,6 +29,23 @@ export const PLATAFORMAS: Plataforma[] = [
     nota: 'Só vagas de contratação PJ. Sem login: a lista vem do feed público e a candidatura é um formulário curto no próprio site.',
   },
   {
+    id: 'jobbol',
+    regiao: 'brasil',
+    nome: 'Jobbol',
+    sigla: 'jb',
+    cor: 'bg-green-dark',
+    /**
+     * Investigado a fundo em 05/10/2026 e deixado de fora de propósito. Fica no catálogo porque catálogo que
+     * esconde o que foi investigado faz a próxima pessoa refazer o trabalho — e porque a extensão precisa
+     * recusar candidatura aqui, e a recusa tem de ter um motivo visível.
+     */
+    disponivel: false,
+    login: false,
+    somenteDescoberta: true,
+    site: 'https://www.jobbol.com.br',
+    nota: 'Cerca de 44 mil vagas e os melhores dados estruturados de todas as plataformas daqui — e fora do ACV por quatro motivos, nenhum deles técnico de fácil contorno: os termos de uso (cláusula 5.3) proíbem "candidaturas automáticas ou em massa por sistemas automatizados"; o formulário tem campo-armadilha invisível e atestado de JavaScript; o robots.txt bloqueia a busca dizendo que é caro servir; e a proteção do site devolve 403 para qualquer cliente que não seja navegador (medido: 403 no Node e 200 no curl no mesmo segundo, do mesmo IP). Passar por isso exigiria disfarçar automação, que é o que este projeto não faz. A extensão recusa candidatar aqui por qualquer caminho, inclusive o modo genérico.',
+  },
+  {
     id: 'linkedin',
     regiao: 'global',
     nome: 'LinkedIn',

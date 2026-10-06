@@ -42,7 +42,7 @@
    */
   async function devoAparecer() {
     if (!plataformas.length) plataformas = (await aoFundo({ tipo: 'PLATAFORMAS' }))?.plataformas ?? [];
-    sitio = classificar(location.hostname, { plataformas, pareceVaga: pareceVaga() });
+    sitio = classificar(location.hostname, { plataformas, pareceVaga: pareceVaga(), proibido: globalThis.ACVComum.proibeAutomacao(location.hostname) });
     return !!sitio;
   }
 
@@ -145,6 +145,8 @@
       if (r.status === 'enviada') {
         registrar('Candidatura enviada.', 'ok');
         if (r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
+      } else if (r.status === 'proibido') {
+        registrar(r.motivo, 'atencao');
       } else if (r.status === 'repetida') {
         // Não é falha: é a trava funcionando. Vermelho aqui faria a pessoa achar que deu erro e tentar de novo.
         registrar(r.motivo, 'atencao');

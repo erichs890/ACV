@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import {
   CheckCircle2,
@@ -176,6 +176,43 @@ export default function Automacao() {
     e.preventDefault();
     void guardar(false);
   };
+
+  /**
+   * Grava sozinho a cada mudança — você mexe, está salvo.
+   *
+   * Quatro cuidados que não são opcionais aqui, e três deles vêm de erro já cometido neste projeto:
+   *
+   * 1. **Espera de 600 ms.** Campo de número dispara `onChange` a cada tecla: digitar "70" no limite diário
+   *    gravaria 7 e depois 70, e o 7 chegaria ao núcleo como limite de verdade por um instante.
+   * 2. **`checkValidity`, não `reportValidity`.** O segundo abre o balão de erro do navegador; num salvamento
+   *    que a pessoa não pediu, isso é um pop-up do nada. Campo inválido simplesmente não grava, e a barra de
+   *    status embaixo continua dizendo que há alteração pendente.
+   * 3. **Não grava o que não mudou.** `sujo` compara com o que veio do núcleo; sem isso, o efeito gravaria na
+   *    montagem da tela e a cada atualização de estado vinda do servidor, em laço.
+   * 4. **O `registrar` fica de fora.** `guardar` escreve uma linha no log a cada salvamento, e um log por
+   *    tecla afogaria as linhas das candidaturas — que é o que importa ali. Salvamento automático é silencioso;
+   *    quem avisa é a barra de status.
+   */
+  const ultimoSalvo = useRef('');
+  useEffect(() => {
+    if (!sujo) return;
+    const form = document.getElementById('form-automacao') as HTMLFormElement | null;
+    if (form && !form.checkValidity()) return; // inválido: espera a pessoa corrigir, sem abrir balão
+    const t = setTimeout(() => {
+      const nova = { ...cfg, configurada: true };
+      const corpo = JSON.stringify(nova);
+      // Trava de laço: se o núcleo devolvesse o objeto com qualquer diferença (ordem de chave, valor
+      // normalizado), `sujo` voltaria a ser verdadeiro e o efeito gravaria de novo, para sempre. Nunca grava
+      // duas vezes a mesma coisa.
+      if (corpo === ultimoSalvo.current) return;
+      ultimoSalvo.current = corpo;
+      void salvar({ automacao: nova }).then(() => {
+        setBase(nova);
+        setSalvoEm(Date.now());
+      });
+    }, 600);
+    return () => clearTimeout(t);
+  }, [cfg, sujo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reavaliar() {
     setReavaliando(true);
@@ -570,8 +607,16 @@ export default function Automacao() {
                   <select value={cfg.regimePreferido} onChange={e => set({ regimePreferido: e.target.value as ConfigAutomacao['regimePreferido'] })} className="field">
                     <option value="CLT">Prefiro CLT</option>
                     <option value="PJ">Prefiro PJ</option>
+                    <option value="qualquer">Qualquer modalidade (tanto faz)</option>
                     <option value="perguntar">Perguntar sempre</option>
                   </select>
+                  <span className="block text-[10px] text-ink-soft">
+                    {cfg.regimePreferido === 'qualquer'
+                      ? 'O robô marca o que o formulário oferecer primeiro e segue, sem parar para perguntar.'
+                      : cfg.regimePreferido === 'perguntar'
+                        ? 'A vaga pausa esperando a sua escolha; a fila continua com as outras.'
+                        : `Tenta marcar ${cfg.regimePreferido}; se a vaga não oferecer, usa o que houver.`}
+                  </span>
                 </label>
               </div>
             </Passo>
@@ -685,8 +730,10 @@ export default function Automacao() {
             </Passo>
             <div className="sticky bottom-0 flex items-center gap-2.5 rounded-lg border border-panel-border bg-panel px-3.5 py-3">
               <p role="status" className={`flex-1 text-xs ${sujo ? 'font-bold text-amber-ink' : 'text-ink-soft'}`}>
-                {sujo ? 'Você tem alterações não salvas.' : 'Configuração salva. As mudanças valem para as próximas candidaturas.'}
+                {sujo ? 'Salvando...' : 'Salvo. Tudo o que você muda aqui vale para as próximas candidaturas.'}
               </p>
+              {/* "Descartar" volta ao que o NÚCLEO tem, e com o salvamento automático isso é quase sempre o que
+                  você acabou de gravar. Fica para o caso do campo inválido, que não grava e deixa o rascunho. */}
               <button type="button" className="btn btn-secondary" disabled={!sujo} onClick={() => setCfg(base)}>
                 Descartar
               </button>

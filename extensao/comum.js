@@ -107,11 +107,39 @@
     return Math.round((min + Math.random() * (max - min)) * 1000);
   };
 
+  /**
+   * Sites cujos TERMOS DE USO proíbem candidatura automatizada. A extensão não candidata neles, por caminho
+   * nenhum — nem o motor dedicado, nem o modo genérico.
+   *
+   * Por que isto precisa existir como lista explícita: o modo genérico serve justamente para site que o ACV
+   * não conhece, então tirar uma plataforma do cadastro NÃO a protege — ela cai no genérico e passa a ser
+   * tratada como qualquer outra. Era exatamente o que acontecia com o Jobbol depois de eu removê-lo: o
+   * genérico preencheria nome, sobrenome, celular, e-mail e anexaria o currículo.
+   *
+   * Mora aqui, e não no núcleo, porque tem de valer com o ACV FECHADO — é uma recusa, e recusa que depende
+   * de servidor no ar não é recusa. O catálogo da tela (`src/dados.ts`) repete o motivo para a pessoa ler, e
+   * um teste cruza os dois.
+   */
+  const SEM_AUTOMACAO = [
+    {
+      dominio: 'jobbol.com.br',
+      motivo: 'os termos de uso do Jobbol (cláusula 5.3) proíbem candidaturas automáticas ou em massa por sistemas automatizados. O ACV não preenche nem envia aqui: a inscrição é sua, no site.',
+    },
+  ];
+
+  /** O site aberto proíbe automação nos termos? Devolve o motivo (para a tela mostrar) ou null. */
+  const proibeAutomacao = host => {
+    const h = String(host ?? '')
+      .replace(/^www\./, '')
+      .toLowerCase();
+    return SEM_AUTOMACAO.find(s => h === s.dominio || h.endsWith(`.${s.dominio}`)) ?? null;
+  };
+
   /** Sinais de que a plataforma percebeu automação. Vendo isto, o robô PARA — não tenta disfarçar nada. */
   const RESTRICAO =
     /unusual activity|atividade incomum|verifique que voc[êe] [ée] humano|verify you are human|security check|verifica[çc][ãa]o adicional|captcha|tempor?ariamente restrit|conta restrita|too many requests/i;
 
-  const api = { PADRAO, JANELAS, normalizarEmpresa, empresaBloqueada, montarUrlBuscaLinkedIn, quantasCabemHoje, proximaEspera, RESTRICAO, hoje };
+  const api = { PADRAO, JANELAS, SEM_AUTOMACAO, proibeAutomacao, normalizarEmpresa, empresaBloqueada, montarUrlBuscaLinkedIn, quantasCabemHoje, proximaEspera, RESTRICAO, hoje };
   globalThis.ACVComum = api;
   if (typeof module !== 'undefined' && module.exports) module.exports = api; // core/extensao-check.ts roda isto em Node
 })();

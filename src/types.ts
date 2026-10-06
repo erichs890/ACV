@@ -132,7 +132,13 @@ export interface ConfigAutomacao {
   modo: 'automatico' | 'manual';
   adaptar: boolean; // adaptar o currículo por vaga
   preview: 'mostrar' | 'direto';
-  regimePreferido: 'CLT' | 'PJ' | 'perguntar'; // quando a vaga aceita os dois
+  /**
+   * Quando a vaga aceita CLT e PJ: o que marcar.
+   *
+   * `qualquer` = tanto faz, marque o que o formulário oferecer primeiro e siga. É diferente de `perguntar`
+   * (que pausa a vaga esperando você) e diferente de escolher um dos dois (que tenta casar a opção).
+   */
+  regimePreferido: 'CLT' | 'PJ' | 'qualquer' | 'perguntar';
   ensaio: boolean; // preenche tudo, não envia
   mostrarNavegador: boolean;
   navegador: 'edge' | 'firefox'; // firefox = build do Playwright (não o Firefox instalado); o PDF é sempre via Chromium oculto

@@ -60,7 +60,11 @@ export function respostaSalva(pergunta: PerguntaExtra): string | null {
 function decidirRegime(vaga: Vaga): 'CLT' | 'PJ' | null | 'perguntar' {
   if (vaga.regime === 'CLT' || vaga.regime === 'PJ') return vaga.regime;
   const pref = ler.automacao().regimePreferido;
-  return pref === 'perguntar' ? 'perguntar' : pref;
+  if (pref === 'perguntar') return 'perguntar';
+  // `qualquer` devolve null, que é o que o motor de formulário já entende como "não tenho preferência":
+  // ele marca a primeira opção que a vaga oferece (`formulario.ts`, papel `regime`) e segue sem parar.
+  if (pref === 'qualquer') return null;
+  return pref;
 }
 
 function pendente(vaga: Vaga, pendencia: Pendencia) {

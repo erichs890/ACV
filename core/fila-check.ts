@@ -784,6 +784,57 @@ await new Promise(r => setTimeout(r, 120));
 assert.equal(st(presencialQuePedi), 'enviada', 'se VOCÊ pede uma presencial, vai');
 console.log('✓ Auditoria: o seu pedido libera a SUA vaga (não a da frente), e o regime é reconferido no envio');
 
+// ─── 15) Regime "qualquer modalidade": não escolhe e não pausa ───────────────────────────────────
+// A vaga que aceita CLT e PJ tinha três saídas: prefiro CLT, prefiro PJ, ou pausar para perguntar. Faltava a
+// quarta, que é a mais comum na prática — tanto faz, marque o que o formulário oferecer e siga.
+// `decidirRegime` devolve `null` nesse caso, e `null` é o que o motor de formulário já entende como "sem
+// preferência": ele marca a primeira opção da vaga (papel `regime` em `formulario.ts`).
+
+// 15a) "perguntar" pausa a vaga, e a fila continua com as outras
+cenario({ regimePreferido: 'perguntar' });
+const pausaNoRegime = enfileirar({ regime: 'ambos' });
+const seguinte = enfileirar({ regime: 'CLT' });
+await processarProxima();
+assert.equal(st(pausaNoRegime), 'aguardando_pergunta', 'com "perguntar", a vaga que aceita os dois espera por você');
+assert.equal(st(seguinte), 'enviada', 'e a fila não para por causa dela');
+
+// 15b) "qualquer" não pausa: o regime vai como null e o formulário resolve
+cenario({ regimePreferido: 'qualquer' });
+const tantoFaz = enfileirar({ regime: 'ambos' });
+let regimeRecebido: string | null | undefined = 'não chamou';
+roteiro.set(tantoFaz, (_t, dados) => {
+  regimeRecebido = dados.regime;
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(st(tantoFaz), 'enviada', '"qualquer modalidade" não pode parar a fila');
+assert.equal(regimeRecebido, null, 'e o adapter recebe null, que é "sem preferência" para o motor de formulário');
+
+// 15c) Preferir um dos dois continua mandando a escolha para o adapter
+cenario({ regimePreferido: 'PJ' });
+const comPreferencia = enfileirar({ regime: 'ambos' });
+let regimeDaPreferencia: string | null | undefined = 'não chamou';
+roteiro.set(comPreferencia, (_t, dados) => {
+  regimeDaPreferencia = dados.regime;
+  return { status: 'enviada' };
+});
+await processarProxima();
+assert.equal(regimeDaPreferencia, 'PJ', 'quem escolheu PJ continua mandando PJ');
+
+// 15d) E o regime declarado NA VAGA ganha da preferência, em qualquer modo: a vaga é que manda
+for (const pref of ['qualquer', 'perguntar', 'PJ'] as const) {
+  cenario({ regimePreferido: pref });
+  const declarada = enfileirar({ regime: 'CLT' });
+  let recebido: string | null | undefined = 'não chamou';
+  roteiro.set(declarada, (_t, dados) => {
+    recebido = dados.regime;
+    return { status: 'enviada' };
+  });
+  await processarProxima();
+  assert.equal(recebido, 'CLT', `vaga que declara CLT manda CLT, mesmo com a preferência em "${pref}"`);
+}
+console.log('✓ Regime: "qualquer modalidade" não pausa e deixa o formulário escolher; a vaga declarada sempre ganha');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');
