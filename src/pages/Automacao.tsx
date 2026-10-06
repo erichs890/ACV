@@ -215,7 +215,7 @@ export default function Automacao() {
       });
     }, 600);
     return () => clearTimeout(t);
-  }, [cfg, sujo]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cfg, sujo, salvar]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function reavaliar() {
     setReavaliando(true);

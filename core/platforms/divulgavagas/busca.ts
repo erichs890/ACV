@@ -10,7 +10,7 @@ import { passo, vistas } from '../../varredura.ts';
 import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
-import { extrairSkills, normalizar } from '../../resume/texto.ts';
+import { extrairSkills } from '../../resume/texto.ts';
 import { paisDoLocal, vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
 import { DIVULGA, EMPRESA_OCULTA, MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS } from './seletores.ts';
@@ -38,13 +38,11 @@ export function lerSitemap(xml: string): ItemSitemap[] {
  * Palavras que fazem uma vaga valer o download, tiradas do perfil de busca do currículo.
  * Só termos de 4+ letras: "ia" ou "qa" dentro de um slug casariam com qualquer coisa ("qualidade", "social").
  */
-export function termosDoPerfil(perfil: PerfilBusca, cargoDesejado: string): string[] {
-  const cru = [cargoDesejado, ...perfil.cargos, ...perfil.skills].join(' ');
-  return [...new Set(normalizar(cru).split(/[^a-z0-9+#.]+/))].filter(t => t.length >= 4);
-}
-
-/** O slug da vaga fala de alguma coisa que a pessoa faz? (peneira grosseira; o score decide de verdade) */
-export const slugInteressa = (slug: string, termos: string[]) => termos.some(t => slug.includes(t));
+// A peneira subiu para `core/peneira.ts` quando o Vagas PJ passou a usar sitemap: dois adapters usando a
+// mesma regra não podem importar um do outro, nem ter duas cópias. Reexportado aqui porque o self-check e os
+// cenários apontam para este caminho desde 28/09.
+export { slugInteressa, termosDoPerfil } from '../../peneira.ts';
+import { slugInteressa, termosDoPerfil } from '../../peneira.ts';
 
 export interface JobPosting {
   title?: string;

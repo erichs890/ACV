@@ -32,6 +32,17 @@
 export const VAGASPJ = {
   base: 'https://www.vagaspj.com.br',
   feed: 'https://www.vagaspj.com.br/feed-vagas.xml',
+  /**
+   * O sitemap, achado em 06/10/2026: **1.259 vagas** contra as 50 do feed RSS.
+   *
+   * O `robots.txt` o publica (`Sitemap: /sitemap.xml` → `/sitemap-vagas.xml`) e libera `/vagas/`. A URL traz
+   * o título no slug (`/vagas/<empresa>/<id>/<slug>`), o que permite a mesma peneira barata do Divulga Vagas:
+   * das 1.259, **449 casam com o perfil dele** — e as outras 810 são descartadas sem baixar nada.
+   *
+   * O feed continua sendo lido primeiro: ele é a lista do que acabou de sair, e vem com `pubDate`. O sitemap
+   * é a cobertura do acervo. Fontes com papéis diferentes, como no Jobbol.
+   */
+  sitemap: 'https://www.vagaspj.com.br/sitemap-vagas.xml',
 
   // /vagas/<empresa>/<id>/<slug>
   urlVaga: /^https:\/\/www\.vagaspj\.com\.br\/vagas\/([^/]+)\/(\d+)\//,
@@ -67,4 +78,12 @@ export const ESPERA_ENVIO_MS = 90_000;
 export const MAX_PDF_BYTES = 5 * 1024 * 1024; // limite que cv-upload.js aplica no navegador
 
 export const PAUSA_ENTRE_PAGINAS_MS = 400; // cortesia com o site ao abrir as vagas novas do feed
-export const MAX_VAGAS_POR_VARREDURA = 50; // o tamanho do feed
+/**
+ * Teto por rodada. Era 50 porque o feed tinha 50 — agora o limite é de ritmo, não de fonte.
+ *
+ * 120 × 400 ms ≈ 48 s de rodada, e a varredura agendada roda a cada 6 h: o acervo inteiro que interessa
+ * (449 vagas) é coberto em ~4 rodadas, e dali em diante só o que é novo.
+ */
+export const MAX_VAGAS_POR_VARREDURA = 120;
+/** `lastmod` mais velho que isto não é baixado: vaga de 2024 no sitemap já venceu. */
+export const DIAS_DE_VALIDADE = 120;

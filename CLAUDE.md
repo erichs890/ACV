@@ -40,7 +40,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
   a tradução usa Google GTX quando não há IA, então não custa chave nem cota. Adaptação por vaga só no
   português: `validarAdaptacao` compara com o markdown original.
 - `core/localizacao.ts` — cidade/UF/país e a regra de compatibilidade de lugar. **Uma só, para todas as plataformas**: presencial/híbrida fora do estado ou do país zera; outra cidade do estado perde 40%; remota restrita a país não escolhido zera.
-- `core/platforms/vagaspj/` — vagas PJ: lista pelo feed RSS + JSON-LD de cada página (só HTTP), candidatura num formulário de uma etapa. Um anúncio se intromete entre o botão final e o POST (`aposBotaoFinal`).
+- `core/platforms/vagaspj/` — vagas PJ: **duas fontes** — o feed RSS (50 itens, o que acabou de sair) e o `sitemap-vagas.xml` (**1.259 vagas**, o acervo), com a peneira de `core/peneira.ts` cortando pelo slug antes de baixar; JSON-LD de cada página (só HTTP), candidatura num formulário de uma etapa. Um anúncio se intromete entre o botão final e o POST (`aposBotaoFinal`).
 - `core/diario.ts` + `core/relato.ts` — duas formas do mesmo histórico. `diario/acv-DIA.log` é prosa, para ler;
   `diario/eventos-DIA.jsonl` é um objeto por linha (`candidatura.desfecho`, `fila.recusa`, `varredura.plataforma`,
   `extensao.pagina`, `erro.processo`), para **contar**. A prosa não diz plataforma, id da vaga nem se houve prova
@@ -94,6 +94,10 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | modelos de IA (id, preço, nota, padrão) | `MODELOS_IA` em `src/dados.ts` — `core/ia.ts` deriva dela |
 
 Nunca criar um segundo lugar que edite o mesmo campo. Campo que a UI mostra e o núcleo não lê é mentira: ou implementa, ou remove.
+
+`core/peneira.ts` é a peneira que vem ANTES de qualquer download: `slugInteressa(slug, termosDoPerfil(...))`.
+É o que torna varredura funda viável (41 mil vagas no Divulga Vagas, 1.259 no Vagas PJ) e é grosseira de
+propósito — só precisa não jogar fora vaga boa; quem decide é o score, depois de ler a página.
 
 ## Score (`core/resume/score.ts`)
 

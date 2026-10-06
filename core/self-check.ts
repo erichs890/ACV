@@ -760,7 +760,7 @@ assert.ok(similaridade('Possui CNH?', 'Pretensão salarial') < 0.4);
 console.log('✓ Similaridade de perguntas');
 
 // 7) Vagas PJ: feed, JSON-LD da página e as convenções do formulário (levantados em 21/09/2026 no site real)
-const { lerFeed, lerJobPosting, localDe, modeloDe: modeloPJ, montarVaga } = await import('./platforms/vagaspj/busca.ts');
+const { lerFeed, lerSitemapPJ, lerJobPosting, localDe, modeloDe: modeloPJ, montarVaga } = await import('./platforms/vagaspj/busca.ts');
 const { motivoDoErro } = await import('./platforms/vagaspj/index.ts');
 const { VAGASPJ } = await import('./platforms/vagaspj/seletores.ts');
 
@@ -807,6 +807,30 @@ const presencialSP = montarVaga(itemPJ, paginaPJ({ ...BASE_JP, jobLocation: { ad
 assert.equal(presencialSP.status, 'ignorada', 'presencial fora do estado é cortada, como em qualquer plataforma');
 
 // Botões: o texto exato importa — "Candidatar agora" só abre o formulário, "Candidatar" envia
+/**
+ * O sitemap do Vagas PJ, achado em 06/10/2026: 1.259 vagas contra as 50 do feed RSS, e com o título no slug —
+ * o que permite a mesma peneira barata do Divulga Vagas antes de baixar qualquer página.
+ */
+const SITEMAP_PJ = [
+  '<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
+  '<url><loc>https://www.vagaspj.com.br/vagas/innolevels/404040559/desenvolvedor-front-end-vuejs</loc>',
+  '  <lastmod>2024-09-19T14:40:11-03:00</lastmod></url>',
+  '<url><loc>https://www.vagaspj.com.br/vagas/acme/404042009/pessoa-desenvolvedora-back-end</loc><lastmod>2026-10-01T09:00:00-03:00</lastmod></url>',
+  '<url><loc>https://www.vagaspj.com.br/artigos/como-ser-pj</loc></url>',
+  '</urlset>',
+].join('\n');
+const doSitemapPJ = lerSitemapPJ(SITEMAP_PJ);
+assert.equal(doSitemapPJ.length, 2, 'artigo no meio do sitemap nao e vaga');
+assert.deepEqual({ id: doSitemapPJ[0].id, empresaSlug: doSitemapPJ[0].empresaSlug, lastmod: doSitemapPJ[0].lastmod }, { id: '404040559', empresaSlug: 'innolevels', lastmod: '2024-09-19' });
+assert.equal(doSitemapPJ[1].lastmod, '2026-10-01', 'o lastmod de cada item fica com o item certo, nao deslocado');
+assert.ok(doSitemapPJ[0].titulo.includes('desenvolvedor'), 'o titulo sai do slug, para a peneira funcionar antes do download');
+// E a peneira, que é o que torna 1.259 páginas viável: só o que casa com o perfil é baixado.
+// Importada de `core/peneira.ts`, que é onde ela mora desde que dois adapters passaram a usá-la.
+const { termosDoPerfil: termosPeneira, slugInteressa: peneiraSlug } = await import('./peneira.ts');
+const termosPJ = termosPeneira(perfil, 'Desenvolvedor Full Stack');
+assert.ok(peneiraSlug('desenvolvedor-back-end-nodejs', termosPJ));
+assert.ok(!peneiraSlug('motorista-de-caminhao-truck', termosPJ), 'vaga fora da área é descartada sem baixar');
+
 assert.ok(VAGASPJ.convencoes.final.test('Candidatar'));
 assert.ok(!VAGASPJ.convencoes.final.test('Candidatar agora'), 'o botão que só revela o formulário não pode ser lido como envio');
 assert.ok(VAGASPJ.convencoes.proximo.test('Continuar') && !VAGASPJ.convencoes.proximo.test('Voltar'));

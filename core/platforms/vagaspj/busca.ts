@@ -6,13 +6,17 @@ import type { Log } from '../adapter.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
 import { passo, vistas } from '../../varredura.ts';
-import { filtrosDaAutomacao } from '../../estado.ts';
+import { filtrosDaAutomacao, ler } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
 import { extrairSkills } from '../../resume/texto.ts';
 import { paisDoLocal, vagaCompativelComLocalizacao } from '../../localizacao.ts';
 import { htmlParaTexto } from '../inhire/api.ts';
-import { MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, VAGASPJ } from './seletores.ts';
+import { DIAS_DE_VALIDADE, MAX_VAGAS_POR_VARREDURA, PAUSA_ENTRE_PAGINAS_MS, VAGASPJ } from './seletores.ts';
+import { slugInteressa, termosDoPerfil } from '../../peneira.ts';
+
+/** O último pedaço da URL, que é onde o título mora: `/vagas/acme/404040559/dev-back-end` → `dev-back-end`. */
+const slugDaUrl = (url: string) => url.split('/').filter(Boolean).pop() ?? '';
 
 const dormir = (ms: number) => new Promise(r => setTimeout(r, ms));
 
@@ -127,6 +131,23 @@ const baixar = async (url: string) => {
   return r.text();
 };
 
+/**
+ * As vagas do sitemap: `/vagas/<empresa>/<id>/<slug>` + `lastmod`.
+ *
+ * O `<url>` inteiro de cada bloco é capturado junto para `loc` e `lastmod` não se desalinharem — dois
+ * `matchAll` separados devolveriam duas listas que só por sorte casam.
+ */
+export function lerSitemapPJ(xml: string): (ItemFeed & { lastmod: string })[] {
+  const fora: (ItemFeed & { lastmod: string })[] = [];
+  for (const bloco of xml.matchAll(/<url>([\s\S]*?)<\/url>/gi)) {
+    const url = /<loc>\s*([^<\s]+)\s*<\/loc>/i.exec(bloco[1])?.[1] ?? '';
+    const m = /\/vagas\/([^/]+)\/(\d+)\/([^/?#]+)/i.exec(url);
+    if (!m) continue;
+    fora.push({ id: m[2], empresaSlug: m[1], url, titulo: m[3].replace(/-/g, ' '), lastmod: (/<lastmod>\s*([^<\s]+)/i.exec(bloco[1])?.[1] ?? '').slice(0, 10) });
+  }
+  return fora;
+}
+
 let buscando = false;
 
 export async function buscarNoVagasPJ(perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao, log: Log): Promise<Vaga[]> {
@@ -140,9 +161,43 @@ export async function buscarNoVagasPJ(perfil: PerfilBusca, cfg: ConfigAutomacao,
       log('alerta', 'Vagas PJ: o feed não devolveu nenhuma vaga (o formato pode ter mudado).');
       return [];
     }
-    const ineditas = itens.filter(i => !vagas.get(`vagaspj:${i.id}`)).slice(0, MAX_VAGAS_POR_VARREDURA);
-    vistas(itens.length);
-    log('info', `Vagas PJ: ${itens.length} vaga(s) no feed, ${ineditas.length} ainda não conhecida(s).`);
+    const conhecida = (id: string) => !!vagas.get(`vagaspj:${id}`);
+    const candidatas = new Map<string, ItemFeed>();
+    for (const i of itens) if (!conhecida(i.id)) candidatas.set(i.id, i);
+    const doFeed = candidatas.size;
+
+    /**
+     * Segunda fonte: o sitemap, com 1.259 vagas contra as 50 do feed (medido em 06/10/2026).
+     *
+     * O feed é o que acabou de sair; o sitemap é o acervo. A peneira pelo slug vem ANTES do download e é o
+     * que torna isso viável — das 1.259, 449 casam com o perfil dele e as outras 810 são descartadas de
+     * graça. `lastmod` velho também cai fora sem baixar: há vaga de 2024 ali.
+     */
+    let examinadas = itens.length;
+    if (candidatas.size < MAX_VAGAS_POR_VARREDURA) {
+      passo('lendo o sitemap de vagas');
+      try {
+        const doSitemap = lerSitemapPJ(await baixar(VAGASPJ.sitemap));
+        examinadas += doSitemap.length;
+        const termos = termosDoPerfil(perfil, ler.perfil()?.cargo ?? '');
+        const limite = new Date(Date.now() - DIAS_DE_VALIDADE * 86_400_000).toISOString().slice(0, 10);
+        const interessam = doSitemap
+          .filter(i => !conhecida(i.id) && !candidatas.has(i.id) && (!i.lastmod || i.lastmod >= limite) && slugInteressa(slugDaUrl(i.url), termos))
+          .sort((a, b) => (b.lastmod > a.lastmod ? 1 : b.lastmod < a.lastmod ? -1 : 0));
+        for (const i of interessam) {
+          if (candidatas.size >= MAX_VAGAS_POR_VARREDURA) break;
+          candidatas.set(i.id, i);
+        }
+        log('info', `Vagas PJ: ${doSitemap.length} vaga(s) no sitemap, ${interessam.length} do seu perfil e dentro do prazo.`);
+      } catch (e) {
+        // Sitemap fora do ar não derruba a varredura: o feed já trouxe o que é novo
+        log('alerta', `Vagas PJ: não consegui ler o sitemap (${(e as Error).message}). Fica só o feed nesta rodada.`);
+      }
+    }
+
+    const ineditas = [...candidatas.values()];
+    vistas(examinadas);
+    log('info', `Vagas PJ: ${doFeed} inédita(s) pelo feed e ${ineditas.length - doFeed} pelo sitemap; vou abrir ${ineditas.length}.`);
 
     let descartadas = 0;
     for (const [k, item] of ineditas.entries()) {
