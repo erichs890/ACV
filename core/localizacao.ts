@@ -80,9 +80,53 @@ export function paisDoLocal(texto: string): string {
   }
   const ultima = partes.at(-1)?.toUpperCase() ?? '';
   if (ultima.length === 2 && ISO.has(ultima) && (!UFS.has(ultima) || partes.length >= 3)) return ISO.get(ultima)!;
+  for (const p of partes) {
+    const outro = OUTROS_PAISES.get(normalizar(p));
+    if (outro) return outro;
+  }
   const l = lerLocal(texto);
   return l.uf ? 'Brasil' : '';
 }
+
+/**
+ * Os outros 260 países do mundo, reconhecidos pelo nome — os que NÃO estão em `src/paises.ts`.
+ *
+ * `PAISES` é a lista de países que a pessoa pode ESCOLHER para trabalho remoto: ela é curta de propósito,
+ * porque é um seletor na tela. Mas usá-la também para responder "que país é este lugar?" criava um buraco
+ * grande: "Vilnius, Lithuania" não casava com nada, `paisDoLocal` devolvia vazio, e vazio quer dizer "a vaga
+ * não diz onde é" — que é tratado como COMPATÍVEL em todos os ramos da regra ("remota, sem restrição de
+ * país"). Resultado medido na primeira varredura do Greenhouse (06/10/2026), o primeiro quadro global aqui:
+ * vagas em Vilnius e Sofia entraram na lista dele a 78%, e as de Berlim não — só porque a Alemanha por acaso
+ * está em `PAISES` e a Lituânia não.
+ *
+ * Duas listas com papéis diferentes, então, e não duas cópias da mesma coisa: uma diz onde você aceita
+ * trabalhar, a outra diz o que é nome de país. A segunda vem do ICU do próprio Node (`Intl.DisplayNames`),
+ * em português e em inglês, sem lista escrita à mão para alguém manter.
+ */
+const OUTROS_PAISES: Map<string, string> = (() => {
+  const mapa = new Map<string, string>();
+  try {
+    const emPt = new Intl.DisplayNames(['pt-BR'], { type: 'region' });
+    const emEn = new Intl.DisplayNames(['en'], { type: 'region' });
+    for (let a = 65; a <= 90; a++) {
+      for (let b = 65; b <= 90; b++) {
+        const iso = String.fromCharCode(a, b);
+        if (ISO.has(iso)) continue; // país suportado: quem responde é `PAISES`, com o nome que a tela usa
+        const pt = emPt.of(iso);
+        const en = emEn.of(iso);
+        if (!pt || pt === iso) continue;
+        for (const nome of [pt, en]) {
+          const chave = normalizar(nome ?? '');
+          // Nome de uma letra ou que colida com algo já conhecido não entra: o risco é virar falso positivo
+          if (chave.length > 3 && !NOME_DE_PAIS.has(chave) && !mapa.has(chave)) mapa.set(chave, pt);
+        }
+      }
+    }
+  } catch {
+    /* ambiente sem ICU completo: fica só com `PAISES`, que é o comportamento antigo */
+  }
+  return mapa;
+})();
 
 /**
  * O nome do país a partir da sigla ISO, quando a plataforma informa a sigla em campo próprio ("BR", "PT").
@@ -93,6 +137,43 @@ export function paisDoLocal(texto: string): string {
  * adivinha — e a tabela de siglas mora aqui, não numa segunda cópia dentro de cada adapter.
  */
 export const paisDoIso = (iso: string): string => ISO.get(iso.trim().toUpperCase()) ?? '';
+
+/**
+ * **A vaga pode ser em mais de um lugar** — qual deles vale, e ela serve?
+ *
+ * Mora aqui, e não dentro de um adapter, porque dois já precisam dela e pela mesma razão: o Lever manda
+ * `categories.allLocations` (`["Brazil", "Campinas, SP", "São Paulo, SP"]`) e o Greenhouse manda tudo numa
+ * string separada por `;` (`"Brasil; São Paulo, São Paulo, Brazil"`). Duas cópias desta regra divergiriam, e
+ * é regra de localização — a família de bug que neste projeto já mandou sete currículos para presenciais em
+ * outro estado (28/09/2026).
+ *
+ * Cada lugar passa por `vagaCompativelComLocalizacao`, a regra única, e **vence o melhor**: se existe UM
+ * lugar onde dá para trabalhar, a vaga vale, e é esse lugar que fica gravado — para a tela mostrar o motivo
+ * certo. Vaga aberta em Campinas e em Fortaleza não é descartada por causa de Campinas.
+ *
+ * E **lugar vago não compete com lugar específico.** "Brazil" vem na mesma lista que "Campinas, SP" e não tem
+ * cidade nem UF: a regra não acha o que reprovar e devolve compatível sem desconto, que é a nota máxima. O
+ * rótulo largo venceria as cidades verdadeiras e o conserto não consertaria nada — foi o que o teste pegou na
+ * primeira versão disto. Havendo alguma entrada com cidade ou estado, só essas valem; a larga é o país
+ * repetido. Sem nenhuma específica, a larga é tudo o que existe e aí ela decide.
+ */
+export function melhorLugar(locais: string[], vaga: { modelo: Vaga['modelo']; pais: string }, pref: PreferenciasLocalizacao): { local: string; lugar: Compatibilidade } {
+  const todos = [...new Set(locais.map(l => l.trim()).filter(Boolean))];
+  const especificos = todos.filter(l => {
+    const { cidade, uf } = lerLocal(l);
+    return !!(cidade || uf);
+  });
+  const candidatos = especificos.length ? especificos : todos;
+  if (!candidatos.length) return { local: '', lugar: vagaCompativelComLocalizacao({ ...vaga, local: '' }, pref) };
+
+  let melhor = { local: candidatos[0], lugar: vagaCompativelComLocalizacao({ ...vaga, local: candidatos[0] }, pref) };
+  for (const local of candidatos.slice(1)) {
+    if (melhor.lugar.fator >= 1) break; // não há melhor que "sem desconto"
+    const lugar = vagaCompativelComLocalizacao({ ...vaga, local }, pref);
+    if (lugar.fator > melhor.lugar.fator) melhor = { local, lugar };
+  }
+  return melhor;
+}
 
 export interface Compatibilidade {
   compativel: boolean;
@@ -140,5 +221,22 @@ export function vagaCompativelComLocalizacao(vaga: Partial<Pick<Vaga, 'modelo' |
     if (v.cidade && m.cidade && v.cidade !== m.cidade) return { compativel: true, fator: 0.6, motivo: `${tipo} em ${local}, outra cidade` };
     return OK;
   }
+
+  /**
+   * Modelo não informado: compatível **porque na dúvida se mostra a vaga** — mas só quando há dúvida de verdade.
+   *
+   * Achado no Greenhouse (06/10/2026), que é o primeiro quadro global aqui: vagas em Vilnius, Sofia e Berlim
+   * entravam na lista a 78% porque o Greenhouse não publica modelo de trabalho em campo nenhum, e `indefinido`
+   * caía direto neste `OK`. O país, porém, não estava em dúvida: estava escrito.
+   *
+   * E quando o país é conhecido e estrangeiro, **os dois caminhos possíveis recusam**: se a vaga for remota,
+   * ela é remota restrita a um país que você não escolheu; se for presencial ou híbrida, é em outro país.
+   * Não há leitura em que ela sirva, então "na dúvida mostra" não se aplica — não sobrou dúvida sobre o que
+   * importa. A recusa é escrita assim de propósito: só quando AMBOS os ramos recusariam. Vaga em Portugal com
+   * modelo indefinido continua passando (remota serviria, presencial não), que é dúvida legítima.
+   */
+  const paisEstrangeiro = pais && pais !== (paisDoLocal(pref.localizacaoPresencial) || 'Brasil');
+  const foraDoRemoto = pref.paisesRemoto.length > 0 && !pref.paisesRemoto.includes(pais);
+  if (paisEstrangeiro && foraDoRemoto) return { compativel: false, fator: 0, motivo: `em ${local || pais}: não dá nem como presencial (outro país) nem como remota (país fora da sua lista)` };
   return OK;
 }

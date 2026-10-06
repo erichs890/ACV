@@ -1,0 +1,29 @@
+{
+  "_comentario": "Boards do Greenhouse confirmados um a um em 06/10/2026: API publica respondendo 200, pagina job-boards.greenhouse.io/<slug> no ar e a primeira vaga abrindo em 200. Somam cerca de 276 vagas no Brasil. A ORDEM IMPORTA: na primeira varredura todos os boards empatam em 'nunca visitado' e o desempate e esta ordem (ver core/platforms/boards.ts), entao as brasileiras vem primeiro. REPROVADOS de proposito: coinbase e sofi, cuja API responde 200 mas cuja pagina devolve 403 para cliente que nao e navegador -- sinal de restricao, e a regra do projeto e parar no primeiro. Para adicionar: POST /greenhouse/boards com o slug ou a URL do board.",
+  "boards": [
+    { "slug": "quintoandar", "nome": "Grupo QuintoAndar" },
+    { "slug": "sumup", "nome": "SumUp" },
+    { "slug": "gympass", "nome": "Wellhub" },
+    { "slug": "btgpactual", "nome": "BTG Pactual" },
+    { "slug": "vtex", "nome": "VTEX" },
+    { "slug": "xpinc", "nome": "XP Inc." },
+    { "slug": "agilize", "nome": "Agilize" },
+    { "slug": "wildlifestudios", "nome": "Wildlife Studios" },
+    { "slug": "jusbrasil", "nome": "Jusbrasil" },
+    { "slug": "arcoeducacao", "nome": "Arco Educação" },
+    { "slug": "zupinnovation", "nome": "Zup Innovation" },
+    { "slug": "ebanx", "nome": "EBANX" },
+    { "slug": "datadog", "nome": "Datadog" },
+    { "slug": "brex", "nome": "Brex" },
+    { "slug": "airbnb", "nome": "Airbnb" },
+    { "slug": "elastic", "nome": "Elastic" },
+    { "slug": "turing", "nome": "Turing" },
+    { "slug": "gitlab", "nome": "GitLab" },
+    { "slug": "thoughtworks", "nome": "Thoughtworks" },
+    { "slug": "stripe", "nome": "Stripe" },
+    { "slug": "mongodb", "nome": "MongoDB" },
+    { "slug": "canonical", "nome": "Canonical" },
+    { "slug": "grafanalabs", "nome": "Grafana Labs" },
+    { "slug": "cortex", "nome": "Cortex" }
+  ]
+}

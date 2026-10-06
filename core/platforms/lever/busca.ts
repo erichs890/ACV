@@ -21,7 +21,7 @@ import { extrairSkills } from '../../resume/texto.ts';
 import { filtrosDaAutomacao } from '../../estado.ts';
 import { calcularScore } from '../../resume/score.ts';
 import { inferirSenioridade } from '../../resume/analyzer.ts';
-import { lerLocal, paisDoIso, paisDoLocal, vagaCompativelComLocalizacao, type Compatibilidade } from '../../localizacao.ts';
+import { melhorLugar, paisDoIso, paisDoLocal } from '../../localizacao.ts';
 import { kv, vagas } from '../../storage/db.ts';
 import { emitir } from '../../events.ts';
 import { boardsLever, descobrirBoardsLever, importarSeedLever, vagasDoBoard, type VagaLever } from './boards.ts';
@@ -116,48 +116,17 @@ export function requisitosDe(v: VagaLever): string {
 }
 
 /**
- * Onde a vaga é — e **a vaga pode ser em mais de um lugar**.
+ * Os lugares possíveis desta vaga, para `melhorLugar` decidir qual vale.
  *
- * `categories.location` é o rótulo que a empresa escolheu mostrar, e ele pode ser mais largo que a verdade: na
- * CI&T diz "Brazil" enquanto `allLocations` diz `["Brazil", "Campinas, SP", "São Paulo, SP"]`. Usar só o
- * rótulo faria uma vaga HÍBRIDA em Campinas passar como compatível para quem mora em Fortaleza — sem cidade e
- * sem UF no texto, a regra de localização não tem o que reprovar e devolve "compatível". É exatamente o
- * caminho pelo qual sete candidaturas presenciais erradas saíram em 28/09/2026.
- *
- * Então cada lugar possível passa pela regra única (`vagaCompativelComLocalizacao`, nunca uma segunda cópia
- * dela) e vence o melhor: se existe UM lugar onde dá para trabalhar, a vaga vale, e é esse lugar que fica
- * gravado — assim a tela mostra o motivo certo. Vaga aberta em Campinas e em Fortaleza não é descartada por
- * causa de Campinas, e vaga aberta só em Campinas não passa por causa do rótulo "Brazil".
+ * `categories.location` é o rótulo que a empresa escolheu mostrar e pode ser mais largo que a verdade: na
+ * CI&T diz "Brazil" enquanto `allLocations` diz `["Brazil", "Campinas, SP", "São Paulo, SP"]`. Quem escolhe
+ * entre eles é a regra de `core/localizacao.ts`, compartilhada com o Greenhouse — aqui só se diz onde o
+ * Lever guarda a informação.
  */
-export function melhorLocal(v: VagaLever, pais: string, modelo: Vaga['modelo'], pref: PreferenciasLocalizacao): { local: string; lugar: Compatibilidade } {
-  const rotulo = (v.categories?.location ?? '').trim();
-  const todos = [...new Set([...(v.categories?.allLocations ?? []).map(l => l.trim()), rotulo].filter(Boolean))];
+export const locaisDe = (v: VagaLever): string[] => [...(v.categories?.allLocations ?? []), v.categories?.location ?? ''];
 
-  /**
-   * E **lugar vago não compete com lugar específico.**
-   *
-   * "Brazil" aparece na mesma `allLocations` que "Campinas, SP" e "São Paulo, SP", e é o primeiro da lista.
-   * Pegar o melhor entre os três faria "Brazil" ganhar sempre — ele não tem cidade nem UF, então a regra não
-   * tem o que reprovar e devolve compatível sem desconto, que é a nota máxima. O rótulo largo venceria as
-   * cidades verdadeiras e o conserto não teria consertado nada (o teste do self-check pegou exatamente isto).
-   *
-   * Quando alguma entrada diz cidade ou estado, só essas valem: elas são o que a vaga é de fato, e a entrada
-   * larga é só o país repetido. Sem nenhuma específica, a larga é tudo o que existe e aí ela decide.
-   */
-  const especificos = todos.filter(l => {
-    const { cidade, uf } = lerLocal(l);
-    return !!(cidade || uf);
-  });
-  const candidatos = especificos.length ? especificos : todos;
-  if (!candidatos.length) return { local: '', lugar: vagaCompativelComLocalizacao({ modelo, local: '', pais }, pref) };
-
-  let melhor = { local: candidatos[0], lugar: vagaCompativelComLocalizacao({ modelo, local: candidatos[0], pais }, pref) };
-  for (const local of candidatos.slice(1)) {
-    if (melhor.lugar.fator >= 1) break; // não há melhor que "sem desconto"
-    const lugar = vagaCompativelComLocalizacao({ modelo, local, pais }, pref);
-    if (lugar.fator > melhor.lugar.fator) melhor = { local, lugar };
-  }
-  return melhor;
+export function melhorLocal(v: VagaLever, pais: string, modelo: Vaga['modelo'], pref: PreferenciasLocalizacao) {
+  return melhorLugar(locaisDe(v), { modelo, pais }, pref);
 }
 
 export function montarVaga(board: string, nomeDaEmpresa: string, v: VagaLever, perfil: PerfilBusca, cfg: ConfigAutomacao, pref: PreferenciasLocalizacao, corpo = ''): Vaga | null {

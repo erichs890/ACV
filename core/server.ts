@@ -25,7 +25,9 @@ import './platforms/quickin/index.ts';
 import './platforms/arbeitnow/index.ts';
 import './platforms/programathor/index.ts';
 import './platforms/lever/index.ts';
+import './platforms/greenhouse/index.ts';
 import { adicionarBoard, boardsLever, descobrirBoardsLever } from './platforms/lever/boards.ts';
+import { adicionarBoard as adicionarBoardGreenhouse, boardsGreenhouse } from './platforms/greenhouse/boards.ts';
 import { PORTA, DIRS } from './config.ts';
 import { eventos, emitir, type Evento } from './events.ts';
 import { apagarTudo, kv, log, vagas } from './storage/db.ts';
@@ -407,6 +409,19 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   'POST /lever/descobrir': (_r, res) => {
     // Confere dezenas de candidatos a 1 req/s; roda em segundo plano e o front acompanha pelo log
     void descobrirBoardsLever(registrar).catch(e => registrar('alerta', `Descoberta de empresas no Lever falhou: ${(e as Error).message}`));
+    json(res, 200, { ok: true });
+  },
+  'POST /greenhouse/boards': async (req, res) => {
+    const { entrada } = JSON.parse((await corpo(req)).toString('utf8'));
+    try {
+      json(res, 200, await adicionarBoardGreenhouse(String(entrada ?? ''), 'manual', registrar));
+    } catch (e) {
+      json(res, 400, { erro: (e as Error).message }); // validacao esperada: nao vai para o log de atividade
+    }
+  },
+  'DELETE /greenhouse/boards': (_r, res, url) => {
+    boardsGreenhouse.remover(url.searchParams.get('slug') ?? '');
+    emitir({ tipo: 'estado' });
     json(res, 200, { ok: true });
   },
   'POST /descoberta': async (req, res) => {

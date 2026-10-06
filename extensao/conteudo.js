@@ -402,7 +402,37 @@
     descricaoDaVaga: () => texto(document.querySelector('[data-qa="job-description"]')).slice(0, 4000) || doJsonLd()?.descricao || '',
   };
 
-  const REGISTRO = [INDEED, LINKEDIN, PROGRAMATHOR, LEVER];
+  /**
+   * Greenhouse (job-boards.greenhouse.io) — o segundo caso de "o núcleo não termina por causa de captcha".
+   *
+   * Aqui é reCAPTCHA Enterprise invisível no formulário (`core/platforms/greenhouse/seletores.ts` tem o
+   * levantamento). Mesma conclusão do Lever: o robô pararia ali, contornar captcha é o que não se faz, e o
+   * caminho honesto é este — o seu navegador, o seu clique, você respondendo o desafio se ele aparecer.
+   *
+   * **O que o genérico já acerta aqui, e não está repetido:** o título vem no `h1` (ao contrário do Lever,
+   * que não tem `h1` nenhum), os campos do formulário são montados por JavaScript mas o motor lê o DOM vivo,
+   * e "Enviar inscrição" / "Submit application" casam com `botaoFinal`.
+   *
+   * **O que ele erra:** a empresa. Não há JSON-LD nesta página e nenhuma classe com "company", então o
+   * seletor de reserva do genérico não acha nada e a empresa sai vazia — e é dela, com o título, que depende
+   * `jaEnviei({url, titulo, empresa})`, a trava de currículo repetido (invariante 4). O `<title>` é
+   * `"Job Application for <vaga> at <Empresa>"`, e o nome está depois do ÚLTIMO " at " (o título da vaga pode
+   * ter " at " dentro, "Engineer at Scale" por exemplo — daí o último, e não o primeiro).
+   */
+  const GREENHOUSE = {
+    dominios: ['greenhouse.io'],
+    detectaTelaLogin: () => false,
+    precisaLogin: () => ({ precisa: false, logado: true, motivo: 'o Greenhouse não pede conta para se candidatar' }),
+    descobrirCamposFormulario,
+    empresaDaVaga: () => {
+      const t = document.title.replace(/^Job Application for\s+/i, '');
+      const i = t.toLowerCase().lastIndexOf(' at ');
+      return (i > 0 ? t.slice(i + 4) : '').trim().slice(0, 120) || doJsonLd()?.empresa || '';
+    },
+    descricaoDaVaga: () => texto(document.querySelector('.job__description, #content')).slice(0, 4000) || doJsonLd()?.descricao || '',
+  };
+
+  const REGISTRO = [INDEED, LINKEDIN, PROGRAMATHOR, LEVER, GREENHOUSE];
 
   /**
    * O handler desta página: o dedicado do domínio POR CIMA do genérico, nunca no lugar dele.

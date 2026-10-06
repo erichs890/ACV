@@ -113,6 +113,20 @@ export const PLATAFORMAS: Plataforma[] = [
     nota: 'ATS global com muita empresa de tecnologia brasileira: uma requisicao por empresa traz o anuncio inteiro de todas as vagas dela, com pais e modelo de trabalho em campo proprio. Na lista inicial vem CI&T, Neon, Swile, Zippi, dLocal e mais 10 — cerca de 195 vagas no Brasil em 06/10/2026. O envio NAO e feito pelo robo: o formulario tem captcha (hCaptcha) e este app nao contorna captcha. Com a extensao instalada, abra a vaga que o ACV achou e o preenchimento e automatico — o clique final (e o desafio, se aparecer) e seu.',
   },
   {
+    id: 'greenhouse',
+    regiao: 'global',
+    nome: 'Greenhouse',
+    sigla: 'gh',
+    cor: 'bg-green-deep',
+    disponivel: true,
+    login: false,
+    somenteDescoberta: true,
+    motivoSomenteDescoberta:
+      'o formulário do Greenhouse é protegido por captcha (reCAPTCHA), e o ACV não contorna captcha. Abra a vaga no seu navegador: com a extensão instalada, ela preenche tudo e você dá o clique final.',
+    site: 'https://job-boards.greenhouse.io',
+    nota: 'A varredura mais barata daqui: uma requisição por empresa traz as vagas E o anúncio inteiro de cada uma, sem abrir página nenhuma. Na lista inicial vêm 24 empresas confirmadas — QuintoAndar, SumUp, Wellhub, BTG Pactual, VTEX, XP, Wildlife, Jusbrasil e mais —, cerca de 276 vagas no Brasil e alguns milhares no resto do mundo (06/10/2026). O envio NÃO é feito pelo robô: o formulário tem captcha. Com a extensão instalada, abra a vaga que o ACV achou e o preenchimento é automático; o clique final é seu.',
+  },
+  {
     id: 'programathor',
     regiao: 'brasil',
     nome: 'ProgramaThor',

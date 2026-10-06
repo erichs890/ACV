@@ -984,6 +984,109 @@ assert.ok(!LEVER.convencoes.final.test('Apply for this job'), 'o botão que só 
 
 console.log('✓ Lever: API por empresa, corpo lido da página quando falta, e vaga em vários lugares decidida pelo melhor');
 
+// ─── 7c) Greenhouse: anúncio escapado duas vezes, modelo escrito no local, e o buraco do país ────
+// Dados reais de 06/10/2026 (QuintoAndar, SumUp, BTG, VTEX), 667 vagas medidas em 6 boards.
+const { montarVaga: montarGh, modeloDe: modeloGh, anuncioEmTexto, locaisDe: locaisGh, requisitosDe: requisitosGh } = await import('./platforms/greenhouse/busca.ts');
+const { extrairSlug: slugGh } = await import('./platforms/greenhouse/boards.ts');
+const { ROTA_ENVIO: ROTA_GH, GREENHOUSE } = await import('./platforms/greenhouse/seletores.ts');
+
+/**
+ * O `content` vem com o HTML DUAS vezes escapado.
+ *
+ * Sem desfazer isso antes, `htmlParaTexto` não enxerga tag nenhuma (para ele o texto não tem `<`), devolve a
+ * string com `&lt;p&gt;` dentro, e as competências sairiam de um texto cheio de marcação.
+ */
+const CONTENT_GH = '&lt;p&gt;&lt;strong&gt;Sobre a vaga&lt;/strong&gt;&lt;/p&gt;&lt;p&gt;Requisitos: Java, Spring Boot &amp;amp; SQL&lt;/p&gt;';
+const anuncioGh = anuncioEmTexto(CONTENT_GH);
+assert.ok(!anuncioGh.includes('&lt;') && !anuncioGh.includes('<p>'), `o HTML duplamente escapado tem de virar texto limpo: ${anuncioGh}`);
+assert.ok(anuncioGh.includes('Java') && anuncioGh.includes('Spring Boot'), 'e o conteúdo tem de sobreviver');
+assert.ok(anuncioGh.includes('&') && !anuncioGh.includes('&amp;'), 'o & escapado duas vezes volta a ser um & só');
+assert.equal(anuncioEmTexto(), '');
+
+// O modelo de trabalho não é campo no Greenhouse: está escrito no texto do local (valores reais medidos)
+assert.equal(modeloGh('Brazil (Remote)'), 'remoto');
+assert.equal(modeloGh('Brazil (São Paulo - Hybrid)'), 'hibrido');
+assert.equal(modeloGh('Remoto'), 'remoto');
+assert.equal(modeloGh('São Paulo, São Paulo, Brazil'), 'indefinido', 'local sem marca não vira presencial por suposição');
+assert.equal(modeloGh('Brasil', 'A vaga é 100% remota, de qualquer lugar do país.'), 'remoto', 'o anúncio é a segunda chance');
+assert.equal(modeloGh('Brazil (São Paulo - Hybrid)'), 'hibrido', 'híbrido ganha de remoto quando os dois aparecem');
+
+/**
+ * Os lugares possíveis: `location.name` pode trazer vários separados por `;`, e quando ele diz só "Brasil" é
+ * em `offices[]` que está a cidade de verdade (medido no QuintoAndar).
+ */
+assert.deepEqual(locaisGh({ id: 1, title: 'x', absolute_url: 'x', location: { name: 'Brasil; São Paulo, São Paulo, Brazil' }, offices: [{ name: 'São Paulo' }] }), [
+  'Brasil',
+  ' São Paulo, São Paulo, Brazil',
+  'São Paulo',
+]);
+
+const QUINTOANDAR_SP = {
+  id: 4411502009,
+  title: 'Grupo QuintoAndar | Security Engineer',
+  company_name: 'Grupo QuintoAndar',
+  absolute_url: 'https://job-boards.greenhouse.io/quintoandar/jobs/4411502009',
+  updated_at: new Date(Date.now() - 86400000).toISOString(),
+  location: { name: 'Brasil' },
+  offices: [{ name: 'São Paulo' }],
+  content: CONTENT_GH,
+};
+const cfgGh = { area: '', senioridade: '', scoreMinimo: 30, regimes: ['remoto', 'hibrido', 'presencial'] } as unknown as Parameters<typeof montarGh>[4];
+const vagaGh = montarGh('quintoandar', 'Grupo QuintoAndar', QUINTOANDAR_SP, perfil, cfgGh, moraEmFortaleza)!;
+assert.equal(vagaGh.id, 'greenhouse:quintoandar:4411502009');
+assert.equal(vagaGh.empresa, 'Grupo QuintoAndar', 'a empresa vem pronta da API, sem precisar ler o <title>');
+assert.equal(vagaGh.pais, 'Brasil');
+assert.equal(vagaGh.regime, 'indefinido', 'o Greenhouse não publica tipo de contrato em campo nenhum: não se adivinha');
+assert.ok(vagaGh.skills.includes('java'), `as competências saem do anúncio desescapado: ${vagaGh.skills.join(',')}`);
+assert.equal(
+  montarGh('quintoandar', 'x', { ...QUINTOANDAR_SP, updated_at: new Date(Date.now() - 400 * 86400000).toISOString() }, perfil, cfgGh, moraEmFortaleza),
+  null,
+  'vaga parada há mais de meio ano no board já foi preenchida',
+);
+assert.equal(montarGh('quintoandar', 'x', { id: 0, title: '', absolute_url: '' }, perfil, cfgGh, moraEmFortaleza), null);
+assert.ok(requisitosGh('Sobre nós\nSomos uma empresa.\nRequisitos\nJava e SQL').startsWith('Requisitos'), 'a seção de requisitos é achada pelo título dela');
+
+assert.equal(slugGh('quintoandar'), 'quintoandar');
+assert.equal(slugGh('https://job-boards.greenhouse.io/quintoandar/jobs/4411502009'), 'quintoandar');
+assert.equal(slugGh('https://boards.greenhouse.io/sumup'), 'sumup');
+assert.ok(ROTA_GH.test('https://job-boards.greenhouse.io/quintoandar/jobs/4411502009'));
+assert.ok(GREENHOUSE.convencoes.final.test('Enviar inscrição'), 'o texto real do botão de envio, em pt-BR');
+assert.ok(GREENHOUSE.convencoes.final.test('Submit application'));
+assert.ok(!GREENHOUSE.convencoes.final.test('Apply for this job'), 'o botão que só abre o formulário não é envio');
+
+/**
+ * **O buraco do país, que o Greenhouse abriu e vale para todas as plataformas.**
+ *
+ * `PAISES` (`src/paises.ts`) é a lista de países que a pessoa ESCOLHE para trabalho remoto — curta de
+ * propósito, porque é um seletor de tela. Usá-la também para responder "que país é este lugar?" fazia
+ * "Vilnius, Lithuania" virar vazio, e vazio quer dizer "a vaga não diz onde é", que a regra trata como
+ * compatível. Medido na primeira varredura do Greenhouse: vagas em Vilnius e Sofia entraram na lista a 78%,
+ * e as de Berlim não — só porque a Alemanha por acaso está em `PAISES` e a Lituânia não.
+ */
+assert.equal(paisDoLocalTexto('Vilnius, Lithuania'), 'Lituânia', 'país fora de PAISES tem de ser reconhecido mesmo assim');
+assert.equal(paisDoLocalTexto('Sofia, Bulgaria'), 'Bulgária');
+assert.equal(paisDoLocalTexto('Tokyo, Japan'), 'Japão');
+assert.equal(paisDoLocalTexto('São Paulo, SP'), 'Brasil', 'e nada disso pode atrapalhar o que já funcionava');
+assert.equal(paisDoLocalTexto('Belém, PA'), 'Brasil', 'sigla que é UF continua sendo UF');
+assert.equal(paisDoLocalTexto('Remoto'), '', 'remoto sem país continua sem país');
+assert.equal(paisDoLocalTexto('Barueri, Alphaville'), '', 'nome que não é país não vira país');
+
+/**
+ * E o ramo `indefinido` da regra de localização: compatível porque na dúvida se mostra a vaga — **mas só
+ * quando há dúvida.** Com o país conhecido e estrangeiro, os DOIS caminhos recusam (remota restrita a país
+ * fora da lista; presencial em outro país), então não sobrou dúvida sobre o que importa.
+ */
+const soBrPtAr = { localizacaoPresencial: 'Fortaleza - CE', paisesRemoto: ['Brasil', 'Portugal', 'Argentina'] };
+const porLugar = (modelo: 'indefinido' | 'remoto' | 'presencial', local: string) => vagaCompativelComLocalizacao({ modelo, local }, soBrPtAr).compativel;
+assert.equal(porLugar('indefinido', 'Vilnius, Lithuania'), false, 'nem como remota nem como presencial ela serve');
+assert.equal(porLugar('indefinido', 'Sofia, Bulgaria'), false);
+assert.equal(porLugar('indefinido', 'Lisboa, Portugal'), true, 'Portugal está na lista de remotas: aqui a dúvida é legítima e a vaga aparece');
+assert.equal(porLugar('indefinido', 'São Paulo, SP'), true, 'no seu país, a dúvida continua valendo a favor de mostrar');
+assert.equal(porLugar('indefinido', 'Remoto'), true, 'sem lugar declarado nada mudou');
+assert.equal(porLugar('indefinido', ''), true);
+assert.equal(porLugar('remoto', 'Vilnius, Lithuania'), false, 'e a remota restrita a país fora da lista agora é reconhecida como tal');
+console.log('✓ Greenhouse: anúncio desescapado, modelo lido do local, e país estrangeiro deixa de passar por "na dúvida mostra"');
+
 // 8) Campos com nome em português e o LinkedIn em campo type=url
 const { urlDoLinkedin } = await import('./platforms/inhire/formulario.ts');
 assert.equal(papelDe({ nome: 'telefone', rotulo: 'Seu whatsapp (DDD+número)', tipo: 'texto' }), 'celular');
@@ -1470,7 +1573,7 @@ console.log('✓ Idioma da vaga: separa título em inglês de vaga em inglês, e
 // para a pessoa não ficar procurando um botão de enviar que não existe.
 // Importados aqui pelo efeito colateral, como `core/server.ts` faz: sem isto o laço rodaria sobre os poucos
 // adapters que as outras seções deste arquivo importaram, e não provaria nada do contrato.
-for (const p of ['inhire', 'indeed', 'vagaspj', 'divulgavagas', 'workable', 'quickin', 'arbeitnow', 'programathor', 'lever']) await import(`./platforms/${p}/index.ts`);
+for (const p of ['inhire', 'indeed', 'vagaspj', 'divulgavagas', 'workable', 'quickin', 'arbeitnow', 'programathor', 'lever', 'greenhouse']) await import(`./platforms/${p}/index.ts`);
 const { adapters: todosAdapters, soDescobre: soDescobreAdapter } = await import('./platforms/adapter.ts');
 assert.ok(Object.keys(todosAdapters).length >= 8, `esperava todos os adapters registrados, vieram ${Object.keys(todosAdapters).length}`);
 for (const a of Object.values(todosAdapters)) {
@@ -1527,6 +1630,10 @@ for (const id of ['linkedin', 'gupy', 'indeed', 'programathor'])
 assert.ok(
   servidasNaExtensao.some(p => p.id === 'lever' && !p.exigeLogin && p.motor === 'extensao'),
   'o Lever não pede login, mas o núcleo não envia nele (captcha): a extensão tem de receber a plataforma',
+);
+assert.ok(
+  servidasNaExtensao.some(p => p.id === 'greenhouse' && !p.exigeLogin && p.motor === 'extensao'),
+  'o Greenhouse idem, com reCAPTCHA no lugar do hCaptcha',
 );
 for (const id of ['vagaspj', 'divulgavagas', 'quickin', 'workable', 'arbeitnow', 'inhire'])
   assert.ok(!servidasNaExtensao.some(p => p.id === id), `${id} não exige conta e o robô envia: o painel não deve aparecer ali`);

@@ -164,6 +164,21 @@ const LEVER_APPLY = `<!doctype html><html lang="en"><meta charset="utf-8">
 <button id="btn-submit" type="button" data-qa="btn-submit">Submit application</button>
 </body></html>`;
 
+/**
+ * Greenhouse: a pagina da vaga, recortada do HTML real de 06/10/2026.
+ *
+ * Reproduz o que importa: HA `<h1>` com o titulo (ao contrario do Lever), NAO ha JSON-LD nem classe com
+ * "company", e o `<title>` e `"Job Application for <vaga> at <Empresa>"` -- com um " at " DENTRO do
+ * titulo da vaga, que e o caso que obriga a cortar no ultimo e nao no primeiro.
+ */
+const GREENHOUSE_VAGA = `<!doctype html><html lang="en"><meta charset="utf-8">
+<title>Job Application for Engineer at Scale | Security Engineer at Grupo QuintoAndar</title><body>
+<div class="job__title"><h1>Engineer at Scale | Security Engineer</h1><div class="job__location">Brasil</div></div>
+<div class="job__description">Requisitos: Java, Spring Boot e SQL.</div>
+<h2>Apply for this job</h2>
+<form id="application-form"><input type="text" name="first_name"><input type="file" name="resume"></form>
+<button type="submit">Enviar inscricao</button>
+</body></html>`;
 const paginas: Record<string, string> = {
   '/candidatura': CANDIDATURA,
   '/vaga': VAGA_PUBLICA,
@@ -177,6 +192,7 @@ const paginas: Record<string, string> = {
   '/um-clique-js': UM_CLIQUE_JS,
   '/um-clique-submit-js': UM_CLIQUE_SUBMIT_JS,
   '/lever-apply': LEVER_APPLY,
+  '/greenhouse-vaga': GREENHOUSE_VAGA,
 };
 let envios = 0;
 const servidor = createServer((req, res) => {
@@ -339,6 +355,28 @@ try {
     );
   }
   console.log('✓ Extensão: no Lever o título e a empresa saem certos — é deles que depende a trava de currículo repetido');
+
+  /**
+   * Greenhouse: o título o genérico já acerta (há `h1`, ao contrário do Lever) — a empresa, não.
+   *
+   * Não há JSON-LD nesta página nem classe com "company", então a empresa sairia vazia e a trava de currículo
+   * repetido ficaria só com a URL. O `<title>` é `"Job Application for <vaga> at <Empresa>"`, e o nome está
+   * depois do ÚLTIMO " at ": o título da vaga pode ter " at " dentro, e é o caso do fixture.
+   */
+  await page.goto(`${base}/greenhouse-vaga`, { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: CONTEUDO });
+  const gh = await page.evaluate(() => {
+    const api = (globalThis as unknown as { ACVExtensao: Record<string, (h?: unknown) => Record<string, unknown>> & { GENERICO: Record<string, unknown> } }).ACVExtensao;
+    const h = api.handlerDe('job-boards.greenhouse.io') as unknown as { tituloDaVaga: () => string; empresaDaVaga: () => string; precisaLogin: () => { precisa: boolean | null }; botaoFinal: RegExp };
+    const g = api.GENERICO as unknown as { empresaDaVaga: () => string };
+    return { titulo: h.tituloDaVaga(), empresa: h.empresaDaVaga(), login: h.precisaLogin(), final: h.botaoFinal.test('Enviar inscrição'), empresaGenerica: g.empresaDaVaga.call(g) };
+  });
+  assert.equal(gh.titulo, 'Engineer at Scale | Security Engineer', 'o título vem do h1');
+  assert.equal(gh.empresa, 'Grupo QuintoAndar', 'a empresa vem depois do ÚLTIMO " at " — o título da vaga tem um " at " dentro');
+  assert.equal(gh.empresaGenerica, '', 'sem o dedicado a empresa viria vazia, e a trava de duplicidade ficaria só com a URL');
+  assert.equal(gh.login.precisa, false, 'o Greenhouse não pede conta: o painel aparece ali por causa do captcha');
+  assert.ok(gh.final, '"Enviar inscrição" é o texto real do botão de envio em pt-BR');
+  console.log('✓ Extensão: no Greenhouse a empresa sai do <title>, depois do último " at " (o título da vaga pode ter um)');
 
   /**
    * O conserto que vale para qualquer site, achado no ProgramaThor: em quadro de vagas com candidatura de um

@@ -44,6 +44,7 @@ export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor
   // `motor: 'extensao'` porque o nucleo NAO envia aqui: o formulario do Lever tem hCaptcha, e quem clica
   // (e resolve o desafio, se aparecer) e a pessoa, no navegador dela. O adapter do nucleo so acha e ranqueia.
   { id: 'lever', dominios: ['jobs.lever.co'], importa: false, motor: 'extensao', login: false, nome: 'Lever' },
+  { id: 'greenhouse', dominios: ['job-boards.greenhouse.io', 'boards.greenhouse.io'], importa: false, motor: 'extensao', login: false, nome: 'Greenhouse' },
   { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos', login: true },
   { id: 'programathor', dominios: ['programathor.com.br'], importa: true, motor: 'ambos', login: true },
   // Sem adapter no núcleo: quem candidata é o motor da extensão, no navegador da pessoa. Entram aqui para
