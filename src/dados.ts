@@ -29,6 +29,21 @@ export const PLATAFORMAS: Plataforma[] = [
     nota: 'Só vagas de contratação PJ. Sem login: a lista vem do feed público e a candidatura é um formulário curto no próprio site.',
   },
   {
+    id: 'linkedin',
+    regiao: 'global',
+    nome: 'LinkedIn',
+    sigla: 'li',
+    cor: 'bg-blue-deep',
+    // Não tem adapter no núcleo, e não vai ter: quem candidata aqui é o motor da extensão, no SEU navegador,
+    // com a SUA sessão — uma vaga por clique seu. Estava em `DOMINIOS` e faltava neste catálogo, e por isso
+    // `getPlataforma('linkedin')` caía na primeira plataforma da lista (o InHire): vaga do LinkedIn aparecia
+    // com o nome e a cor errados. Achado em 05/10/2026 ao cruzar as duas listas.
+    disponivel: false,
+    login: true,
+    site: 'https://www.linkedin.com/jobs',
+    nota: 'Candidatura simplificada (Easy Apply) pelo motor da extensão, no seu navegador, uma vaga por clique seu. O contrato de uso do LinkedIn proíbe automação e a conta é suspensa quando ele detecta — por isso aqui não há disfarce nenhum: ritmo humano, limite por dia e parada no primeiro sinal de restrição.',
+  },
+  {
     id: 'gupy',
     regiao: 'brasil',
     nome: 'Gupy',

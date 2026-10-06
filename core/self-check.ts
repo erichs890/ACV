@@ -1264,6 +1264,41 @@ for (const a of Object.values(todosAdapters)) {
 }
 // E o catálogo da tela não pode discordar do adapter: campo que a UI mostra e o núcleo não cumpre é mentira
 const { PLATAFORMAS: CATALOGO } = await import('../src/dados.ts');
+
+/**
+ * `DOMINIOS` (a lista que a extensão recebe) × `PLATAFORMAS` (o catálogo que a tela lê).
+ *
+ * As duas dizem "esta plataforma exige conta", e discordaram de verdade: o LinkedIn estava em `DOMINIOS` e
+ * faltava no catálogo, então `getPlataforma('linkedin')` caía na PRIMEIRA plataforma da lista — o InHire — e
+ * uma vaga do LinkedIn apareceria com o nome e a cor errados. É a família de bugs de lista paralela que este
+ * projeto já consertou três vezes; agora o teste não deixa voltar.
+ */
+const { DOMINIOS: TODOS_DOMINIOS } = await import('./importar.ts');
+for (const d of TODOS_DOMINIOS) {
+  const naTela = CATALOGO.find(p => p.id === d.id);
+  assert.ok(naTela, `${d.id} está em DOMINIOS e não está em PLATAFORMAS: getPlataforma cairia na primeira da lista`);
+  assert.equal(!!naTela.login, d.login, `${d.id}: DOMINIOS e PLATAFORMAS discordam sobre exigir conta`);
+  if (todosAdapters[d.id]?.sessao) assert.equal(d.login, true, `${d.id} tem prova de login no adapter, então DOMINIOS tem de dizer login: true`);
+}
+// A regra de 05/10/2026: a extensão só é servida onde há conta para entrar
+const { plataformasConhecidas: servirParaExtensao } = await import('./importar.ts');
+const servidasNaExtensao = servirParaExtensao();
+assert.ok(servidasNaExtensao.length > 0);
+assert.ok(
+  servidasNaExtensao.every(p => p.exigeLogin),
+  `a extensão só recebe plataforma com login; veio ${servidasNaExtensao
+    .filter(p => !p.exigeLogin)
+    .map(p => p.id)
+    .join(', ')}`,
+);
+for (const id of ['linkedin', 'gupy', 'indeed', 'programathor'])
+  assert.ok(
+    servidasNaExtensao.some(p => p.id === id),
+    `${id} exige conta e tem de ser servida à extensão`,
+  );
+for (const id of ['vagaspj', 'divulgavagas', 'quickin', 'workable', 'arbeitnow', 'inhire'])
+  assert.ok(!servidasNaExtensao.some(p => p.id === id), `${id} não exige conta: o robô dá conta sozinho e o painel não deve aparecer ali`);
+console.log('✓ Extensão: servida só onde há conta para entrar, e DOMINIOS × PLATAFORMAS não divergem');
 for (const a of Object.values(todosAdapters)) {
   const naTela = CATALOGO.find(p => p.id === a.id);
   if (!naTela) continue; // adapter de teste não está no catálogo

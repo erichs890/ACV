@@ -26,33 +26,47 @@ import { log, vagas } from './storage/db.ts';
  *  - `nucleo`   — o adapter testado do robô (adapta currículo, respeita ensaio, prova o envio pela resposta)
  *  - `extensao` — só o motor da extensão, no navegador da pessoa (plataforma sem adapter, como LinkedIn)
  *  - `ambos`    — os dois caminhos servem, e a extensão oferece a escolha
+ *
+ * `login` diz se a plataforma exige conta, e é **o que decide se a extensão aparece ali** (ver
+ * `plataformasConhecidas`). Fica aqui e não só em `src/dados.ts` porque o LinkedIn nem está naquele catálogo
+ * — e era justamente o buraco: `getPlataforma('linkedin')` caía na primeira plataforma da lista, o InHire.
+ * O self-check cruza os dois.
  */
 export type MotorDaPlataforma = 'nucleo' | 'extensao' | 'ambos';
 
-export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor: MotorDaPlataforma; nome?: string }[] = [
-  { id: 'inhire', dominios: ['inhire.app'], importa: true, motor: 'nucleo' },
-  { id: 'vagaspj', dominios: ['vagaspj.com.br'], importa: false, motor: 'nucleo' },
-  { id: 'divulgavagas', dominios: ['divulgavagas.com.br'], importa: false, motor: 'nucleo' },
-  { id: 'quickin', dominios: ['quickin.io'], importa: false, motor: 'nucleo' },
-  { id: 'workable', dominios: ['workable.com'], importa: false, motor: 'nucleo' },
-  { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false, motor: 'nucleo' },
-  { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos' },
-  { id: 'programathor', dominios: ['programathor.com.br'], importa: true, motor: 'ambos' },
+export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor: MotorDaPlataforma; login: boolean; nome?: string }[] = [
+  { id: 'inhire', dominios: ['inhire.app'], importa: true, motor: 'nucleo', login: false },
+  { id: 'vagaspj', dominios: ['vagaspj.com.br'], importa: false, motor: 'nucleo', login: false },
+  { id: 'divulgavagas', dominios: ['divulgavagas.com.br'], importa: false, motor: 'nucleo', login: false },
+  { id: 'quickin', dominios: ['quickin.io'], importa: false, motor: 'nucleo', login: false },
+  { id: 'workable', dominios: ['workable.com'], importa: false, motor: 'nucleo', login: false },
+  { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false, motor: 'nucleo', login: false },
+  { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos', login: true },
+  { id: 'programathor', dominios: ['programathor.com.br'], importa: true, motor: 'ambos', login: true },
   // Sem adapter no núcleo: quem candidata é o motor da extensão, no navegador da pessoa. Entram aqui para
   // a extensão parar de guardar a própria lista — `nome` é obrigatório porque não há adapter de onde tirá-lo.
-  { id: 'linkedin', dominios: ['linkedin.com'], importa: false, motor: 'extensao', nome: 'LinkedIn' },
-  { id: 'gupy', dominios: ['gupy.io'], importa: false, motor: 'extensao', nome: 'Gupy' },
+  { id: 'linkedin', dominios: ['linkedin.com'], importa: false, motor: 'extensao', login: true, nome: 'LinkedIn' },
+  { id: 'gupy', dominios: ['gupy.io'], importa: false, motor: 'extensao', login: true, nome: 'Gupy' },
 ];
 
 /**
- * O que a extensão recebe em `GET /extensao/plataformas`.
+ * O que a extensão recebe em `GET /extensao/plataformas` — **só as plataformas que exigem conta.**
  *
- * Inclui as de `motor: 'extensao'`, que não têm adapter: elas não podem ser filtradas por `adapters[id]`,
- * senão a extensão continuaria sem saber dos sites que ela mesma atende.
+ * A regra, decidida em 05/10/2026: a extensão existe para fazer o que o ACV sozinho NÃO faz, e o que ele não
+ * faz é entrar na sua conta. Num site sem login o robô já dá conta inteiro, e com vantagem — ele adapta o
+ * currículo, respeita o modo ensaio, prova o envio pela resposta HTTP e tem a trava de duplicidade. Painel
+ * aparecendo ali é ruído sobre uma página onde não há nada a decidir.
+ *
+ * As de `motor: 'extensao'` (LinkedIn, Gupy) não têm adapter e por isso não podem ser filtradas por
+ * `adapters[id]` — senão a extensão ficaria sem saber dos sites que ela mesma atende, que foi o conserto de
+ * 03/10. Site desconhecido continua ganhando o modo genérico, que não depende desta lista.
+ *
+ * O que se perde de propósito: a ponte do InHire (abrir a página de carreiras de uma empresa e importar uma
+ * vaga que a varredura não trouxe). Para candidatar numa vaga do InHire ela precisa ter sido varrida.
  */
 export const plataformasConhecidas = () => {
   const conexoes = ler.conexoes();
-  return DOMINIOS.filter(d => d.motor !== 'nucleo' || adapters[d.id]).map(d => ({
+  return DOMINIOS.filter(d => d.login && (d.motor !== 'nucleo' || adapters[d.id])).map(d => ({
     id: d.id,
     nome: adapters[d.id]?.nome ?? d.nome ?? d.id,
     dominios: d.dominios,
@@ -68,7 +82,7 @@ export const plataformasConhecidas = () => {
      * painel oferecia "Candidatar pelo ACV" no ProgramaThor e o envio morria em sessão ausente, com a pessoa
      * logada na tela na frente dele. É o mesmo erro de sempre: conferir no ponto errado do ciclo de vida.
      */
-    exigeLogin: !!adapters[d.id]?.sessao,
+    exigeLogin: d.login,
     sessaoValida: conexoes[d.id]?.sessao?.valida === true,
   }));
 };

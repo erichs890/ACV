@@ -15,7 +15,10 @@
     anosExperiencia: 0,
     empresasBloqueadas: [],
     iaAtiva: false, // só tem efeito com o ACV aberto: é lá que a IA roda, com as travas dela
-    limiteDiarioPorPlataforma: { 'linkedin.com': 10, 'indeed.com': 10, 'gupy.io': 10 },
+    // Um por plataforma SERVIDA à extensão (as que exigem conta — ver `plataformasConhecidas`). A chave
+    // precisa existir para o limite aparecer na página de opções e poder ser ajustado; domínio ausente cai
+    // em LIMITE_PADRAO e fica invisível. O ProgramaThor faltava aqui desde que entrou, em 04/10.
+    limiteDiarioPorPlataforma: { 'linkedin.com': 10, 'indeed.com': 10, 'gupy.io': 10, 'programathor.com.br': 10 },
     urlApp: 'http://localhost:5173', // tela do ACV (o start.bat sobe nela); o núcleo em si fica na 4780
     intervaloMinSegundos: 45,
     intervaloMaxSegundos: 120,

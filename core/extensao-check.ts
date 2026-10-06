@@ -361,10 +361,36 @@ try {
     'e a extensão recebe o LinkedIn na lista, mesmo sem adapter no núcleo — era essa a lista paralela que ela guardava sozinha',
   );
   assert.equal(plataformaDaUrl('não é url'), null);
+  /**
+   * O Vagas PJ é CONHECIDO pela ponte (`plataformaDaUrl` o acha) e NÃO é servido à extensão.
+   *
+   * São perguntas diferentes, e a mudança de 05/10/2026 as separou: `DOMINIOS` continua sendo a lista única
+   * de "que plataforma atende esta URL" (o núcleo precisa disso para importar e para recusar com motivo), mas
+   * `plataformasConhecidas` — a lista que vira painel no navegador — passou a servir só quem exige conta. Num
+   * site sem login o robô já faz tudo e melhor (adapta currículo, respeita o ensaio, prova o envio), então
+   * painel ali é ruído sobre uma página onde não há nada a decidir.
+   */
+  assert.equal(plataformaDaUrl('https://www.vagaspj.com.br/vaga/1')?.id, 'vagaspj', 'a ponte continua conhecendo quem não exige login');
+  assert.ok(!plataformasConhecidas().some(p => p.id === 'vagaspj'), 'mas a extensão não recebe plataforma sem login: lá o robô dá conta sozinho');
   assert.ok(
-    plataformasConhecidas().some(p => p.id === 'vagaspj' && p.dominios.includes('vagaspj.com.br')),
-    'a extensão precisa receber os domínios de quem está carregado no núcleo',
+    plataformasConhecidas().every(p => p.exigeLogin),
+    'nenhuma plataforma sem conta pode chegar à extensão',
   );
+
+  /**
+   * As três listas da extensão têm de concordar com a servida pelo núcleo.
+   *
+   * Eram cinco listas paralelas em 03/10, e `DOMINIOS` virou a fonte única — mas duas delas continuam
+   * estáticas por natureza (o manifesto não lê HTTP) e por isso precisam de teste, não de confiança. O
+   * ProgramaThor entrou em 04/10 e ficou fora dos limites diários: o limite dele não aparecia na página de
+   * opções para ser ajustado, caía no padrão e ninguém veria.
+   */
+  const dominiosServidos = plataformasConhecidas().flatMap(p => p.dominios);
+  const manifesto = JSON.parse(readFileSync(new URL('../extensao/manifest.json', import.meta.url), 'utf8')) as {
+    content_scripts: { js: string[]; matches: string[] }[];
+  };
+  const matchesDaRede = manifesto.content_scripts.find(c => c.js.includes('rede.js'))!.matches.join(' ');
+  for (const d of dominiosServidos) assert.ok(matchesDaRede.includes(d), `${d} exige conta e precisa estar nos matches do rede.js: sem o monitor não há prova de envio nem corte do ensaio`);
 
   vagas.salvar({
     id: 'vagaspj:123',
@@ -444,6 +470,12 @@ try {
   const esperas = Array.from({ length: 40 }, () => comum.proximaEspera({ intervaloMinSegundos: 30, intervaloMaxSegundos: 60 }));
   assert.ok(Math.min(...esperas) >= 30000 && Math.max(...esperas) <= 60000, 'a espera fica na faixa configurada');
   assert.ok(new Set(esperas).size > 20, 'a espera é sorteada, não um relógio certinho');
+  // A terceira lista: um limite diário por plataforma servida. Chave ausente cai em LIMITE_PADRAO e o limite
+  // fica invisível na página de opções — foi o que aconteceu com o ProgramaThor entre 04 e 05/10.
+  const servidosAgora = plataformasConhecidas().flatMap(p => p.dominios);
+  const limitesPadrao = (comum.PADRAO as { limiteDiarioPorPlataforma: Record<string, number> }).limiteDiarioPorPlataforma;
+  for (const d of servidosAgora) assert.ok(d in limitesPadrao, `${d} é servido à extensão e precisa de limite diário próprio, senão ele não aparece nas opções`);
+  for (const d of Object.keys(limitesPadrao)) assert.ok(servidosAgora.includes(d), `${d} tem limite diário e não é servido à extensão: lista parada no tempo`);
   console.log('✓ Extensão: limite por dia, aquecimento de plataforma nova e espera sorteada entre candidaturas');
 
   // ─── D2) Classificação dos sites e decisão do botão (lógica pura, mesmo sandbox) ───────────────
@@ -461,23 +493,23 @@ try {
     catalogo: (o: { plataformas?: unknown[] }) => { nome: string; nivel: string; avisos: { texto: string }[] }[];
   }>('plataformas.js');
 
-  // A lista que o núcleo serve de verdade. Aqui só o adapter do Vagas PJ está carregado (linha 22), e é
-  // isso mesmo que `plataformasConhecidas` reflete: adapter ausente não aparece como `nucleo`. O LinkedIn
+  // A lista que o núcleo serve de verdade: desde 05/10/2026, só plataforma que exige conta. O LinkedIn
   // aparece mesmo sem adapter — é o conserto de 03/10, a extensão precisa saber dos sites que ELA atende.
   const servidas = plataformasConhecidas();
   assert.ok(
-    servidas.some(p => p.id === 'vagaspj' && p.motor === 'nucleo'),
-    'o adapter carregado tem de ser servido como do núcleo',
-  );
-  assert.ok(
     servidas.some(p => p.id === 'linkedin' && p.motor === 'extensao'),
-    'e o site sem adapter também, com o motor da extensão',
+    'o site sem adapter é servido com o motor da extensão',
   );
+  assert.ok(!servidas.some(p => p.id === 'vagaspj'), 'e plataforma sem login não é servida: ali o robô dá conta sozinho');
 
-  assert.equal(plat.classificar('www.vagaspj.com.br', { plataformas: servidas })?.nivel, 'nucleo', 'www. não atrapalha o reconhecimento');
   assert.equal(plat.classificar('www.linkedin.com', { plataformas: servidas })?.nivel, 'extensao', 'LinkedIn não tem adapter: é o motor da extensão');
+  assert.equal(plat.classificar('www.vagaspj.com.br', { plataformas: servidas }), null, 'num site sem login o painel não aparece — nem como núcleo');
   assert.equal(plat.classificar('exemplo.com', { plataformas: servidas }), null, 'site desconhecido que não é vaga: o painel não aparece');
   assert.equal(plat.classificar('exemplo.com', { plataformas: servidas, pareceVaga: true })?.nivel, 'generico', 'site desconhecido COM vaga: oferece o genérico');
+  // E a página de vaga de um site sem login também cai no genérico, porque ele não está mais na lista —
+  // consequência direta da regra, e é o comportamento certo: ou o robô candidata sozinho pelo ACV, ou você
+  // usa o genérico como em qualquer outro site que o ACV não conhece.
+  assert.equal(plat.classificar('www.vagaspj.com.br', { plataformas: servidas, pareceVaga: true })?.nivel, 'generico');
 
   // Os ramos que dependem de campos que a lista carregada aqui não exercita (a função é pura, então a lista
   // sintética é legítima): subdomínio, "ambos" e o par importa/conectada.
