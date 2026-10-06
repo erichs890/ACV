@@ -56,7 +56,18 @@ export function respostaSalva(pergunta: PerguntaExtra): string | null {
   }
   if (!melhor) return null;
   const casada = casarComOpcoes(pergunta, melhor.resposta);
-  return casada !== null && respostaFazSentido(pergunta, casada) ? casada : null;
+  if (casada === null) return null;
+  /**
+   * **Resposta dada para ESTA pergunta, literalmente, não passa pela trava de tipo.**
+   *
+   * A trava existe para impedir que uma resposta seja HERDADA de outra pergunta parecida — foi ela que parou
+   * o "Sim" de ir para o campo do LinkedIn. Mas quando a similaridade é 1,00 não houve herança nenhuma: você
+   * salvou aquela resposta para aquela pergunta, e isso é decisão sua, não dedução minha. Sem esta linha, a
+   * pergunta "Photo" (que você respondeu "yes") era recusada porque "yes" num campo de texto cujo rótulo não
+   * começa com "você/possui/do you" parecia herança errada — e a vaga parava à toa (visto em 06/10/2026).
+   */
+  if (melhor.s >= 1) return casada;
+  return respostaFazSentido(pergunta, casada) ? casada : null;
 }
 
 /**

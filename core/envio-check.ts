@@ -245,5 +245,75 @@ try {
 }
 console.log('✓ Login assistido: cancelar não grava; sair do login + prova = conectado; sessão expirada segura só aquela plataforma');
 
+/**
+ * O questionário que ainda está CARREGANDO não é um questionário pronto.
+ *
+ * `esperarQuestionario` parava quando havia "algum texto ou algum controle" — e o `loader-container` que o
+ * QuillForms pinta antes do conteúdo já satisfazia as duas coisas. O motor dava a espera por cumprida, lia um
+ * documento vazio e respondia "estrutura não reconhecida". Medido em 06/10/2026 numa vaga da Union IT: o log
+ * registrou o iframe "(ainda carregando)" às 17:35:08 e a desistência às 17:35:11 — três segundos —, enquanto
+ * a captura de tela, tirada logo depois, já mostrava a tela de boas-vindas montada. Não era
+ * incompatibilidade com o formulário: era corrida com o carregamento.
+ *
+ * O HTML aqui é o que o próprio erro gravou no log, com as classes reais do QuillForms.
+ */
+{
+  const { esperarQuestionario } = await import('./platforms/inhire/formulario.ts');
+  // O carregador TEM texto, e é isso que enganava a condição antiga ("tem algum texto ou algum controle"):
+  // ela dava a espera por cumprida com a tela ainda vazia. Sem o texto aqui, o teste passa nas duas versões
+  // e não prova nada — foi o que aconteceu na primeira tentativa de escrevê-lo.
+  const CARREGANDO = '<div id="root"><div><div class="loader-container"><div class="spinner"></div>Carregando...</div></div></div>';
+  const PRONTO =
+    '<div id="root"><div><div class="form-container"><div class="renderer-core-form-flow__wrapper"><div class="qf-welcome-screen-block__wrapper blocktype-welcome-screen-block renderer-core-block">' +
+    '<h1>Responda as perguntas para finalizar sua inscrição</h1><button>Iniciar</button></div></div></div></div></div>';
+
+  const srv = createServer((req, res) => {
+    res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
+    // A página nasce com o carregador e troca para a tela real depois de 1,2 s — como o form-app faz
+    res.end(`<!doctype html><html lang="pt-BR"><meta charset="utf-8"><body>${req.url?.includes('travado') ? CARREGANDO : CARREGANDO}
+      <script>${req.url?.includes('travado') ? '' : `setTimeout(() => { document.body.innerHTML = ${JSON.stringify(PRONTO)}; }, 1200);`}</script>
+    </body></html>`);
+  });
+  await new Promise<void>(r => srv.listen(0, '127.0.0.1', () => r()));
+  const { port } = srv.address() as { port: number };
+  const ctx = await navegador(false);
+  const pg = await ctx.newPage();
+  try {
+    await pg.goto(`http://127.0.0.1:${port}/ok`, { waitUntil: 'domcontentloaded' });
+    // Enquanto só há o carregador, a espera NÃO pode dar por pronta
+    const cedo = await pg.evaluate(() => !!document.querySelector('[class*="loader" i]'));
+    assert.equal(cedo, true, 'a página começa com o carregador, como o form-app de verdade');
+    const t0 = Date.now();
+    assert.equal(await esperarQuestionario(pg), true, 'depois que a tela de boas-vindas monta, a espera conclui');
+    const levou = Date.now() - t0;
+    assert.ok(levou >= 700, `a espera tem de ter ESPERADO o conteúdo chegar, e não voltado na hora com o carregador na tela (levou ${levou} ms)`);
+    assert.equal(await pg.locator('.qf-welcome-screen-block__wrapper').count(), 1, 'e o que estava na tela ao fim era a tela de boas-vindas');
+  } finally {
+    await pg.close().catch(() => {});
+    srv.close();
+  }
+}
+
+/**
+ * E a outra metade: chegar ao questionário significa que "Continuar inscrição" JÁ foi enviado — os dados e o
+ * currículo já estão no servidor. Falhar depois disso não pode voltar para a fila sozinho, porque repetir não
+ * é "tentar de novo": é enviar a primeira etapa outra vez. Foi assim que uma vaga da Union IT recebeu três
+ * envios (17:21, 17:24, 17:35), com o currículo anexado nas três.
+ */
+{
+  const { falhaRepetivel } = await import('./falhas.ts');
+  const doQuestionario =
+    'o questionário abriu mas não reconheci a tela; seus dados e o currículo JÁ foram enviados nesta etapa, então não vou repetir — revise manualmente no site e responda as perguntas por lá. HTML: <div id="root">';
+  const naoCarregou =
+    'o questionário do InHire (form-app) não carregou: ficou em branco por 45 s. Seus dados e o currículo JÁ foram enviados nesta etapa, então não vou repetir — revise manualmente no site e responda as perguntas por lá';
+  assert.equal(falhaRepetivel(doQuestionario), false, 'tela não reconhecida DEPOIS do envio da 1a etapa não se repete');
+  assert.equal(falhaRepetivel(naoCarregou), false, 'e nem quando a culpa é do InHire: repetir reenviaria os dados do mesmo jeito');
+  // E o que é falha de verdade transitória continua voltando para a fila
+  assert.equal(falhaRepetivel('timeout'), true);
+  assert.equal(falhaRepetivel('net::ERR_CONNECTION_RESET'), true);
+  assert.equal(falhaRepetivel('o questionário não carregou: ficou em branco'), true, 'a mesma falha ANTES de enviar nada continua repetível');
+}
+console.log('✓ InHire: questionário carregando não é questionário pronto, e falha depois do envio da 1ª etapa não se repete');
+
 await fecharNavegador();
 console.log('\nEnvio: tudo certo.');

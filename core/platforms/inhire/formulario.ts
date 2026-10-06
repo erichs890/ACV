@@ -824,9 +824,30 @@ type SaidaSequencial = { status: 'concluido' | 'ensaio' } | { status: 'pergunta'
  */
 const ESPERA_QUESTIONARIO_MS = 45_000;
 
-async function esperarQuestionario(raiz: Raiz): Promise<boolean> {
+/**
+ * Espera o questionário ficar PRONTO — e "carregando" não é pronto.
+ *
+ * A condição era "tem algum texto OU algum controle", e o `loader-container` que o QuillForms pinta antes do
+ * conteúdo já satisfazia as duas: um `<div>` com um spinner tem elemento e, às vezes, a palavra "carregando".
+ * O motor dava a espera por cumprida, lia um documento ainda vazio e respondia "estrutura não reconhecida" —
+ * em 06/10/2026, três segundos depois de detectar o iframe "(ainda carregando)", com a captura de tela,
+ * tirada logo após, já mostrando a tela de boas-vindas montada. Não era incompatibilidade: era corrida.
+ *
+ * Agora espera o que significa pronto de verdade: o bloco de boas-vindas, um controle visível, ou texto que
+ * não seja o do próprio carregador. Enquanto houver só o carregador na tela, continua esperando.
+ */
+export async function esperarQuestionario(raiz: Raiz): Promise<boolean> {
   return ate(
-    async () => raiz.evaluate(() => document.body.innerText.trim().length > 0 || document.querySelector('input, textarea, button, [role="radio"], [role="option"]') !== null),
+    async () =>
+      raiz.evaluate(seletorBoasVindas => {
+        if (document.querySelector(seletorBoasVindas)) return true;
+        const visivel = (e: Element) => e.getBoundingClientRect().height > 0;
+        if ([...document.querySelectorAll('input, textarea, [role="radio"], [role="option"], [role="checkbox"]')].some(visivel)) return true;
+        // Só o carregador na tela = ainda não chegou. Botão não conta aqui: o carregador às vezes traz um.
+        if (document.querySelector('[class*="loader" i], [class*="spinner" i]')) return false;
+        const texto = document.body.innerText.replace(/\s+/g, ' ').trim();
+        return texto.length > 0 && !/^(carregando|loading|aguarde)\b/i.test(texto);
+      }, SEQUENCIAL.boasVindasBloco),
     ESPERA_QUESTIONARIO_MS,
     500,
   );
@@ -895,7 +916,9 @@ export async function preencherSequencialGenerico(raiz: Raiz, dados: DadosCandid
   if (!(await esperarQuestionario(raiz)))
     return {
       status: 'erro',
-      motivo: `o questionário do InHire (form-app) não carregou: ficou em branco por ${ESPERA_QUESTIONARIO_MS / 1000} s. É o InHire que está fora do ar, não a sua vaga; o robô tenta de novo sozinho`,
+      // Mesma razão da de baixo: a primeira etapa já foi enviada. Mesmo sendo o InHire que está fora do ar,
+      // tentar de novo reenviaria os seus dados — e a invariante 4 vale mesmo quando a culpa é do outro lado.
+      motivo: `o questionário do InHire (form-app) não carregou: ficou em branco por ${ESPERA_QUESTIONARIO_MS / 1000} s. Seus dados e o currículo JÁ foram enviados nesta etapa, então não vou repetir — revise manualmente no site e responda as perguntas por lá`,
       respondidas,
     };
   const p = pagina(raiz);
@@ -952,7 +975,21 @@ export async function preencherSequencialGenerico(raiz: Raiz, dados: DadosCandid
 
     if (!pergunta && !campos.length && !escolhas.textos.length) {
       const html = await raiz.evaluate(() => document.body.innerHTML.slice(0, 1200)).catch(() => '');
-      return { status: 'erro', motivo: `tela do questionário sem nada reconhecível (estrutura não reconhecida). HTML: ${html.replace(/\s+/g, ' ').slice(0, 300)}`, respondidas };
+      /**
+       * **Isto NÃO pode voltar para a fila sozinho, e é a lição mais cara deste arquivo.**
+       *
+       * Chegar aqui significa que "Continuar inscrição" já foi clicado: os seus dados e o currículo já foram
+       * para o servidor — é exatamente por isso que o questionário apareceu. Repetir não "tenta de novo":
+       * repete o ENVIO da primeira etapa. Em 06/10/2026 o robô fez isso três vezes na mesma vaga da Union IT,
+       * anexando o currículo nas três, e foi assim que uma candidatura virou duas aos olhos do recrutador.
+       *
+       * `revise manualmente` é o que `core/falhas.ts` lê como permanente (PERMANENTE ganha de TRANSITORIO).
+       */
+      return {
+        status: 'erro',
+        motivo: `o questionário abriu mas não reconheci a tela; seus dados e o currículo JÁ foram enviados nesta etapa, então não vou repetir — revise manualmente no site e responda as perguntas por lá. HTML: ${html.replace(/\s+/g, ' ').slice(0, 220)}`,
+        respondidas,
+      };
     }
 
     // ETAPA 2.1–2.3: classifica e responde

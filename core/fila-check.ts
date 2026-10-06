@@ -1036,6 +1036,17 @@ assert.equal(respostaFazSentido(perguntaDe('Qual sua pretensão salarial?'), 'R$
 assert.equal(respostaFazSentido(perguntaDe('Possui CNH?'), 'Sim'), true, 'pergunta de sim-ou-não aceita "Sim"');
 assert.equal(respostaFazSentido(perguntaDe('Conte sobre você'), 'Sim'), false, '"Sim" num campo aberto é sempre herança errada');
 assert.equal(respostaFazSentido(perguntaDe('Escolha', 'opcoes', ['Sim', 'Não']), 'Sim'), true, 'pergunta de opções é resolvida por casarComOpcoes, não aqui');
+/**
+ * **Resposta dada para ESTA pergunta, literalmente, não passa pela trava de tipo.**
+ *
+ * A trava impede HERANÇA de uma pergunta parecida. Com similaridade 1,00 não houve herança: a pessoa salvou
+ * aquela resposta para aquela pergunta. Sem esta exceção, a pergunta "Photo" — que ele respondeu "yes" —
+ * era recusada, porque "yes" num campo de texto cujo rótulo não começa com "você/possui/do you" parece
+ * herança errada. Cinco vagas pararam por isso em 06/10/2026, com a resposta certa salva no banco.
+ */
+kv.set('perguntas', [...kv.get('perguntas', []), { id: 9, icone: '', pergunta: 'Photo', resposta: 'yes', personalizada: true }]);
+assert.equal(respostaSalva(perguntaDe('Photo')), 'yes', 'pergunta idêntica usa a resposta que VOCÊ salvou, sem a trava de tipo');
+assert.equal(respostaSalva(perguntaDe('Photos do seu portfólio, por favor')), null, 'e parecida continua barrada: a excecao é só para a igual');
 console.log('✓ Resposta salva: não se herda por parecença, e campo que pede link ou valor nunca recebe "Sim"');
 
 // ─── 18b) Plataforma travada segura a fila DELA, não a fila inteira ───────────────────────────────

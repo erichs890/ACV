@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas, Quickin, Leve
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (129 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (130 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -61,7 +61,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
   `extensao.pagina`, `erro.processo`), para **contar**. A prosa não diz plataforma, id da vaga nem se houve prova
   de rede, e reconstruir dado a partir de frase já me fez errar uma resposta. Evento novo: nome em `assunto.fato`,
   e **nada de dado pessoal** — o diário é o arquivo que se cola num chat pedindo ajuda.
-- `core/falhas.ts` — falha transitória volta à fila (2/10/30 min, 3x); captcha/vaga encerrada/recusa do servidor, não.
+- `core/falhas.ts` — falha transitória volta à fila (2/10/30 min, 3x); captcha/vaga encerrada/recusa do servidor, não. **E nada que acontece DEPOIS de a primeira etapa ter sido enviada volta sozinho**, mesmo que a falha pareça passageira: no InHire, chegar ao questionário significa que "Continuar inscrição" já foi clicado e os dados e o currículo já estão no servidor — repetir não é tentar de novo, é enviar outra vez. Em 06/10/2026 isso rodou 3x na mesma vaga da Union IT, anexando o currículo nas três, e foi assim que uma candidatura virou duas aos olhos do recrutador.
 - **Site cujos termos proíbem automação** entra em `SEM_AUTOMACAO` (`extensao/comum.js`) e a extensão recusa
   candidatar lá por **todos** os caminhos, inclusive o modo genérico — que é o ramo de "site desconhecido" e
   por isso NÃO protege nada quando se remove uma plataforma do cadastro. A lista mora na extensão, e não no
@@ -124,7 +124,7 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
 | ritmo, limite, janela, modo, ensaio, adaptação, tamanho da fila, regime preferido (`CLT` · `PJ` · `qualquer` · `perguntar`), modo de perguntas (`manual` · `duvida` · `sem_piedade`) | `automacao` (Automação, que **grava sozinha** 600 ms depois de cada mudança) |
 | plataforma ligada **e se está no foco da automação** (`enviar`) | `conexoes` — editável **só** em Automação; Plataformas espelha |
 | respostas de autodeclaração | `sensiveis` |
-| perguntas das empresas | `perguntas` — reaproveitadas só com **0,8 de parecença** e se o tipo do dado fechar (campo que pede link ou valor nunca recebe "Sim") |
+| perguntas das empresas | `perguntas` — reaproveitadas só com **0,8 de parecença** e se o tipo do dado fechar (campo que pede link ou valor nunca recebe "Sim"). **Similaridade 1,00 dispensa a trava de tipo:** ali não houve herança, foi você que respondeu aquela pergunta |
 | modelos de IA (id, preço, nota, padrão) | `MODELOS_IA` em `src/dados.ts` — `core/ia.ts` deriva dela |
 
 A página de **Plataformas** agrupa por LOGIN (precisa × não precisa), e não por região: região é geografia,
