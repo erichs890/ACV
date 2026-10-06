@@ -340,4 +340,6 @@ export interface Estado {
   notificacoes: Record<string, boolean>;
   proximoEnvioEm: string | null;
   ultimaBusca: string | null;
+  /** Você esvaziou a fila: a reposição automática está pausada até mapear de novo ou ligar o robô. */
+  filaPausada: boolean;
 }

@@ -13,7 +13,9 @@ process.env.ACV_DIR = mkdtempSync(join(tmpdir(), 'acv-fila-'));
 
 const { kv, vagas, candidaturas, log, apagarTudo } = await import('./storage/db.ts');
 const { registrarAdapter } = await import('./platforms/adapter.ts');
-const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila, removerDaFila, devolverAFila, repontuar } = await import('./queue.ts');
+const { processarProxima, candidatarAgora, responder, ligarRobo, enfileirarCompativeis, limparDuplicatasDaFila, removerDaFila, devolverAFila, repontuar, esvaziarFila, buscarVagas } = await import(
+  './queue.ts'
+);
 const { AUTOMACAO_PADRAO, ler } = await import('./estado.ts');
 const { executarCandidatura } = await import('./candidatura.ts');
 import type { PerguntaExtra, Vaga } from '../src/types.ts';
@@ -834,6 +836,44 @@ for (const pref of ['qualquer', 'perguntar', 'PJ'] as const) {
   assert.equal(recebido, 'CLT', `vaga que declara CLT manda CLT, mesmo com a preferência em "${pref}"`);
 }
 console.log('✓ Regime: "qualquer modalidade" não pausa e deixa o formulário escolher; a vaga declarada sempre ganha');
+
+// ─── 16) Esvaziar a fila, e a pausa que impede o laço de desfazer isso em 20 s ───────────────────
+cenario({ filaAlvo: 3, limiteDiario: 20 });
+kv.set('robo', 'pausado');
+const cinco = [95, 92, 90, 88, 86].map(score => enfileirar({ status: 'encontrada', posicao: undefined, score }));
+assert.equal(enfileirarCompativeis('teste'), 3);
+
+const removidas = esvaziarFila();
+assert.equal(removidas, 3, 'tira todas da fila');
+assert.equal(cinco.filter(id => st(id) === 'na_fila').length, 0, 'a fila fica vazia');
+// E as vagas voltam a ser CANDIDATAS, não recusadas: é isso que faz esvaziar + mapear dar uma fila nova
+for (const id of cinco) assert.equal(vagas.get(id)!.recusadaPorVoce, undefined, 'esvaziar não é recusar: elas voltam a concorrer');
+
+// Sem a pausa, o laço de 20 s reencheria em segundos e o botão pareceria quebrado
+assert.equal(enfileirarCompativeis('reposição da fila'), 0, 'a reposição automática fica pausada');
+assert.equal(kv.get('fila:pausada', false), true);
+
+// Mapear é ordem sua: libera. (`buscarVagas(true)` sem plataforma conectada não varre nada, mas a pausa sai.)
+kv.set('conexoes', {});
+await buscarVagas(true);
+assert.equal(kv.get('fila:pausada', false), false, 'mandar mapear desfaz a pausa');
+kv.set('conexoes', { teste: { conectadaEm: new Date().toISOString() } });
+assert.equal(enfileirarCompativeis('depois de mapear'), 3, 'e a fila volta a montar, com os critérios de agora');
+
+// Ligar o robô também libera: dar start é dizer "pode encher"
+esvaziarFila();
+assert.equal(kv.get('fila:pausada', false), true);
+ligarRobo(true);
+assert.equal(kv.get('fila:pausada', false), false, 'o start desfaz a pausa');
+
+// Candidatura em voo não sai da fila por aqui (invariante 4: o currículo pode já estar no servidor)
+cenario();
+const voando = enfileirar({ status: 'em_andamento' });
+const paradinha = enfileirar();
+assert.equal(esvaziarFila(), 1, 'só a que não está sendo enviada sai');
+assert.equal(st(voando), 'em_andamento', 'a candidatura em voo fica onde está');
+assert.equal(st(paradinha), 'encontrada');
+console.log('✓ Esvaziar a fila: devolve as vagas ao jogo, pausa a reposição, e mapear ou o start liberam de novo');
 
 apagarTudo();
 log.listar(0);

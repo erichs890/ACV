@@ -5,7 +5,7 @@ App local que acha vagas (InHire, Indeed, Vagas PJ, Divulga Vagas) e candidata s
 ## Rodar
 
 `npm run core` (núcleo, :4780) + `npm run dev` (UI, :5173) — ou `start.bat`. Dados em `%LOCALAPPDATA%\ACV`.
-Antes de commitar: `npm run check` (117 verificações) e `npm run build` (biome + tsc + vite).
+Antes de commitar: `npm run check` (118 verificações) e `npm run build` (biome + tsc + vite).
 `npm run relato` (ou `-- 2` para dois dias) condensa `diario/eventos-*.jsonl` num resumo para ler/colar: falhas
 agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o que a extensão viu em cada site.
 
@@ -14,6 +14,13 @@ agrupadas por motivo, envio com e sem prova de rede, varredura por plataforma, o
 varredura → score → fila → `executarCandidatura` → adapter → **preencher, anexar, enviar, só então confirmar**.
 
 - `core/queue.ts` — trabalhador serial: encadeia vagas até um portão fechar (robô, modo, janela, intervalo, limite/dia). `rodando` ≠ `ocupado`. Pendência pausa **só aquela vaga**.
+  **Dois botões no painel da fila:** *Mapear agora* é a varredura de sempre (`POST /buscar`) — varre as
+  plataformas conectadas, pontua e enfileira, com um caminho só e não dois. *Esvaziar a fila*
+  (`POST /fila/esvaziar`) tira todas da fila **sem** marcar `recusadaPorVoce` (elas voltam a concorrer) e
+  pausa a reposição em `kv['fila:pausada']` — senão o laço de 20 s reencheria e o botão pareceria quebrado.
+  Mapear ou dar start liberam. **Não confundir com `POST /limpar`** (zona de perigo das Configurações), que
+  apaga o banco inteiro, candidaturas inclusive, e cegaria a trava de currículo repetido.
+
   **Formar a fila e enviar são coisas diferentes:** `enfileirarCompativeis` roda com o robô PAUSADO (é a fase de
   mapeamento — você vê o plano antes do start) e enche até `automacao.filaAlvo`; quem autoriza envio é
   `motivoDeEspera`, conferido em `girarFila` a cada rodada. Quantas entram agora é `min(filaAlvo − na fila,

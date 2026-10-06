@@ -43,6 +43,7 @@ import {
   repontuarComIA,
   responder,
   devolverAFila,
+  esvaziarFila,
 } from './queue.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
@@ -383,6 +384,11 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   'POST /fila/remover': async (req, res) => {
     removerDaFila(JSON.parse((await corpo(req)).toString('utf8')).id);
     json(res, 200, { ok: true });
+  },
+  // Esvazia a FILA, não o banco. O `/limpar` (zona de perigo das Configurações) é outra coisa: aquele apaga
+  // as candidaturas e cegaria a trava de duplicidade.
+  'POST /fila/esvaziar': (_r, res) => {
+    json(res, 200, { removidas: esvaziarFila() });
   },
   // Desfazer o "esta não": sem isto um clique errado tiraria a vaga do jogo para sempre
   'POST /fila/devolver': async (req, res) => {

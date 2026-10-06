@@ -115,6 +115,8 @@ export async function repontuarComIA(limite = 50): Promise<number> {
  */
 export async function buscarVagas(manual = false): Promise<number> {
   const cfg = ler.automacao();
+  // Mapear é uma ordem sua: desfaz a pausa que `esvaziarFila` deixou
+  if (manual) retomarFila();
   const principal = ler.curriculos()[0];
   if (!principal?.perfilBusca) {
     registrar('alerta', 'Varredura cancelada: envie um currículo para o ACV montar o perfil de busca.');
@@ -338,6 +340,8 @@ export function enfileirarCompativeis(motivo: string): number {
    * uma lista que nunca anda.
    */
   if (cfg.modo !== 'automatico') return 0;
+  // Você esvaziou a fila de propósito: nada entra até mandar mapear ou ligar o robô
+  if (kv.get<boolean>('fila:pausada', false)) return 0;
 
   limparDuplicatasDaFila();
   const todas = vagas.listar();
@@ -463,6 +467,34 @@ export function removerDaFila(id: string) {
   if (!enfileirarCompativeis('você tirou uma vaga da fila')) registrar('info', 'Não achei outra compatível para repor agora; a fila completa na próxima varredura.');
   emitir({ tipo: 'estado' });
 }
+
+/**
+ * "Apaga essa fila, quero montar de novo."
+ *
+ * Tira todas da fila e **não** marca `recusadaPorVoce`: elas voltam a ser candidatas, e é isso que faz a dupla
+ * esvaziar + mapear dar uma fila nova ordenada pelos critérios de agora. O que seria errado aqui:
+ *
+ *  - ligar no `POST /limpar`: aquele apaga o banco inteiro, **candidaturas inclusive** — ou seja, cegaria
+ *    `jaCandidatado` e o robô recomeçaria mandando currículo repetido para quem já recebeu. Fica onde está,
+ *    na zona de perigo das Configurações.
+ *  - marcar `recusadaPorVoce` em todas: você perderia 20 vagas boas de vista por um clique de limpeza.
+ *  - esvaziar e deixar o laço de 20 s reencher: o botão pareceria quebrado. Daí a pausa abaixo.
+ *
+ * Candidatura em voo não entra: o currículo pode já estar no servidor (invariante 4).
+ */
+export function esvaziarFila(): number {
+  const naFila = vagas.listar().filter(v => NA_FILA.includes(v.status) && v.status !== 'em_andamento');
+  for (const v of naFila) vagas.atualizar(v.id, { status: 'encontrada', posicao: undefined, pendencia: undefined, pedidaPorVoce: undefined });
+  // Pausa a reposição automática: esvaziar quer dizer "espere a minha ordem". Mapear ou ligar o robô liberam
+  // de novo — e a tela diz que está pausada, para ninguém achar que a fila quebrou.
+  kv.set('fila:pausada', true);
+  registrar('alerta', `${naFila.length} vaga(s) saíram da fila. Ela não se reenche sozinha até você mapear de novo ou ligar o robô.`);
+  emitir({ tipo: 'estado' });
+  return naFila.length;
+}
+
+/** Libera a reposição automática depois de um `esvaziarFila`. */
+export const retomarFila = () => kv.set('fila:pausada', false);
 
 /** "Mudei de ideia": desfaz a exclusão e devolve a vaga ao jogo. */
 export function devolverAFila(id: string): void {
@@ -840,6 +872,7 @@ export function iniciarLaco() {
 
 export function ligarRobo(ligar: boolean) {
   kv.set('robo', ligar ? 'ativo' : 'pausado');
+  if (ligar) retomarFila(); // dar start é dizer "pode encher a fila"
   if (!ligar) void fecharNavegador(); // pausou: a janela do robô não fica aberta à toa
   const cfg = ler.automacao();
   registrar(ligar ? 'sucesso' : 'alerta', ligar ? `Robô ligado em modo ${cfg.modo === 'automatico' ? 'automático' : 'manual'}.` : 'Robô pausado.');

@@ -133,5 +133,6 @@ export function montarEstado(): Estado {
     notificacoes: ler.notificacoes(),
     proximoEnvioEm: ler.proximoEnvioEm(),
     ultimaBusca: ler.ultimaBusca(),
+    filaPausada: kv.get<boolean>('fila:pausada', false),
   };
 }

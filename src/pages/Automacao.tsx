@@ -18,6 +18,7 @@ import {
   Sparkles,
   Target,
   Terminal,
+  Trash2,
   X,
 } from 'lucide-react';
 import type { LinhaLog, Vaga } from '../types';
@@ -126,6 +127,8 @@ export default function Automacao() {
   const enviadasHoje = estado.candidaturas.filter(c => c.resultado === 'enviada' && new Date(c.enviadaEm).toDateString() === hoje).length;
   const parada = motivoDeEspera({ robo: estado.robo, cfg: estado.automacao, enviadasHoje, proximoEnvioEm: estado.proximoEnvioEm });
   const faltamNaFila = cabemNaFila(estado.automacao, enviadasHoje, estado.fila.length);
+  // Você esvaziou a fila: ela não se reenche sozinha até mapear ou ligar o robô (core/queue.ts › esvaziarFila)
+  const filaPausada = estado.filaPausada === true;
 
   /**
    * Quando esta posição da fila deve sair.
@@ -273,6 +276,11 @@ export default function Automacao() {
       setBuscando(false);
     }
   }
+
+  // Mesmo trabalho de "Buscar vagas agora", com o nome que faz sentido visto do painel da fila: varre as
+  // plataformas conectadas, pontua e enfileira. Um caminho só — dois botões disparando lógicas diferentes
+  // para o mesmo objetivo é o que o CLAUDE.md chama de segunda fonte.
+  const mapear = buscar;
 
   return (
     <div className="stagger grid grid-cols-[1fr_380px] items-start gap-[15px] max-lg:grid-cols-1">
@@ -764,7 +772,9 @@ export default function Automacao() {
             <p className="p-4 text-center text-xs text-ink-soft">
               {estado.automacao.modo === 'manual'
                 ? 'Escolha vagas na lista ao lado com "Quero me candidatar".'
-                : 'A fila enche sozinha até o alvo assim que houver vagas compatíveis — com o robô ligado ou pausado.'}
+                : filaPausada
+                  ? 'Você esvaziou a fila. Clique em "Mapear agora" para montar outra com os critérios de agora.'
+                  : 'A fila enche sozinha até o alvo assim que houver vagas compatíveis — com o robô ligado ou pausado.'}
             </p>
           ) : (
             <VerMais itens={estado.fila} nome="vagas">
@@ -796,12 +806,25 @@ export default function Automacao() {
             </VerMais>
           )}
 
-          <div className="flex items-center gap-2 border-t border-panel-border px-2.5 py-2">
-            <p className="flex-1 text-[11px] text-ink-soft tabular-nums">
+          <div className="flex flex-wrap items-center gap-2 border-t border-panel-border px-2.5 py-2">
+            <p className="flex-1 basis-full text-[11px] text-ink-soft tabular-nums">
               {enviadasHoje} de {estado.automacao.limiteDiario} enviadas hoje
-              {faltamNaFila > 0 && ` · faltam ${faltamNaFila} para encher a fila`}
+              {filaPausada ? ' · reposição pausada por você' : faltamNaFila > 0 ? ` · faltam ${faltamNaFila} para encher a fila` : ''}
             </p>
-            <button type="button" onClick={() => post('/robo', { ligar: !ativo })} className={`btn btn-sm ${ativo ? 'btn-secondary' : 'btn-primary'}`}>
+            {/* Mapear = a varredura de sempre (`POST /buscar`), e não um caminho novo: ela varre as plataformas
+                conectadas, pontua contra o seu currículo e enfileira as que passam nos seus filtros. Fica aqui
+                porque é daqui que se olha a fila — era noutro painel, longe do efeito que causa. */}
+            <button type="button" disabled={buscando || estado.descoberta.varrendo} onClick={mapear} className="btn btn-primary btn-sm">
+              <Search size={13} aria-hidden />
+              {buscando || estado.descoberta.varrendo ? 'Mapeando...' : 'Mapear agora'}
+            </button>
+            {/* Esvazia a FILA, não o banco. O "apagar tudo" que apaga candidaturas é outro, fica na zona de
+                perigo das Configurações — e apagá-las cegaria a trava de currículo repetido. */}
+            <button type="button" disabled={estado.fila.length === 0} onClick={() => void post('/fila/esvaziar')} className="btn btn-secondary btn-sm">
+              <Trash2 size={13} aria-hidden />
+              Esvaziar a fila
+            </button>
+            <button type="button" onClick={() => post('/robo', { ligar: !ativo })} className={`btn btn-sm ml-auto ${ativo ? 'btn-secondary' : 'btn-primary'}`}>
               {ativo ? <Pause size={13} aria-hidden /> : <Play size={13} aria-hidden />}
               {ativo ? 'Pausar envio' : 'Começar a enviar'}
             </button>
