@@ -41,6 +41,9 @@ export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor
   { id: 'quickin', dominios: ['quickin.io'], importa: false, motor: 'nucleo', login: false },
   { id: 'workable', dominios: ['workable.com'], importa: false, motor: 'nucleo', login: false },
   { id: 'arbeitnow', dominios: ['arbeitnow.com'], importa: false, motor: 'nucleo', login: false },
+  // `motor: 'extensao'` porque o nucleo NAO envia aqui: o formulario do Lever tem hCaptcha, e quem clica
+  // (e resolve o desafio, se aparecer) e a pessoa, no navegador dela. O adapter do nucleo so acha e ranqueia.
+  { id: 'lever', dominios: ['jobs.lever.co'], importa: false, motor: 'extensao', login: false, nome: 'Lever' },
   { id: 'indeed', dominios: ['indeed.com'], importa: false, motor: 'ambos', login: true },
   { id: 'programathor', dominios: ['programathor.com.br'], importa: true, motor: 'ambos', login: true },
   // Sem adapter no núcleo: quem candidata é o motor da extensão, no navegador da pessoa. Entram aqui para
@@ -50,23 +53,34 @@ export const DOMINIOS: { id: string; dominios: string[]; importa: boolean; motor
 ];
 
 /**
- * O que a extensão recebe em `GET /extensao/plataformas` — **só as plataformas que exigem conta.**
+ * O que a extensão recebe em `GET /extensao/plataformas` — **as plataformas em que o ACV sozinho não termina.**
  *
- * A regra, decidida em 05/10/2026: a extensão existe para fazer o que o ACV sozinho NÃO faz, e o que ele não
- * faz é entrar na sua conta. Num site sem login o robô já dá conta inteiro, e com vantagem — ele adapta o
- * currículo, respeita o modo ensaio, prova o envio pela resposta HTTP e tem a trava de duplicidade. Painel
- * aparecendo ali é ruído sobre uma página onde não há nada a decidir.
+ * A regra, decidida em 05/10/2026: a extensão existe para fazer o que o ACV sozinho NÃO faz. Num site onde o
+ * robô dá conta inteiro ele é melhor que a extensão, e com vantagem — adapta o currículo, respeita o modo
+ * ensaio, prova o envio pela resposta HTTP e tem a trava de duplicidade. Painel aparecendo ali é ruído sobre
+ * uma página onde não há nada a decidir.
  *
- * As de `motor: 'extensao'` (LinkedIn, Gupy) não têm adapter e por isso não podem ser filtradas por
- * `adapters[id]` — senão a extensão ficaria sem saber dos sites que ela mesma atende, que foi o conserto de
- * 03/10. Site desconhecido continua ganhando o modo genérico, que não depende desta lista.
+ * Eram duas as coisas que o robô não faz, e por meses só uma delas tinha nome:
+ *
+ *  - **entrar na sua conta** (`login: true` — LinkedIn, Gupy, Indeed, ProgramaThor);
+ *  - **passar por captcha** — e isto apareceu com o Lever (06/10/2026), que não pede login nenhum e por isso
+ *    passava pelo filtro antigo como se o robô resolvesse. Não resolve: o `/apply` tem hCaptcha, e captcha é
+ *    anti-robô que este projeto não contorna. No seu navegador, com o seu clique, não há nada a contornar.
+ *
+ * Então o filtro é `login || motor === 'extensao'`: `motor` é justamente o campo que diz QUEM envia, e
+ * plataforma cujo envio é da extensão tem de chegar à extensão, qualquer que seja o motivo. Filtrar por
+ * `login` era filtrar pelo sintoma de um dos dois casos.
+ *
+ * As de `motor: 'extensao'` não têm adapter de envio e por isso não podem ser filtradas por `adapters[id]` —
+ * senão a extensão ficaria sem saber dos sites que ela mesma atende, que foi o conserto de 03/10. Site
+ * desconhecido continua ganhando o modo genérico, que não depende desta lista.
  *
  * O que se perde de propósito: a ponte do InHire (abrir a página de carreiras de uma empresa e importar uma
  * vaga que a varredura não trouxe). Para candidatar numa vaga do InHire ela precisa ter sido varrida.
  */
 export const plataformasConhecidas = () => {
   const conexoes = ler.conexoes();
-  return DOMINIOS.filter(d => d.login && (d.motor !== 'nucleo' || adapters[d.id])).map(d => ({
+  return DOMINIOS.filter(d => (d.login || d.motor === 'extensao') && (d.motor !== 'nucleo' || adapters[d.id])).map(d => ({
     id: d.id,
     nome: adapters[d.id]?.nome ?? d.nome ?? d.id,
     dominios: d.dominios,

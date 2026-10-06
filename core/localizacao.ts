@@ -84,6 +84,16 @@ export function paisDoLocal(texto: string): string {
   return l.uf ? 'Brasil' : '';
 }
 
+/**
+ * O nome do país a partir da sigla ISO, quando a plataforma informa a sigla em campo próprio ("BR", "PT").
+ *
+ * Existe porque `paisDoLocal` é heurística sobre texto livre e tem um viés deliberado: sigla de duas letras que
+ * também é UF brasileira vale como UF, porque este app é para quem mora no Brasil. Isso está certo para
+ * "Belém, PA" e errado para o Lever, que manda `country: "PA"` querendo dizer Panamá. Campo declarado não se
+ * adivinha — e a tabela de siglas mora aqui, não numa segunda cópia dentro de cada adapter.
+ */
+export const paisDoIso = (iso: string): string => ISO.get(iso.trim().toUpperCase()) ?? '';
+
 export interface Compatibilidade {
   compativel: boolean;
   fator: number; // multiplicador do score: 1 = sem efeito, 0 = incompatível

@@ -138,6 +138,32 @@ const CANDIDATURA = `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><ti
   };
 </script></body></html>`;
 
+/**
+ * Lever: a tela do `/apply`, recortada do HTML real de 06/10/2026 (jobs.lever.co/neon/.../apply).
+ *
+ * O que ela reproduz, e é tudo o que importa aqui: **não há `h1`** (o título mora num `h2` dentro de
+ * `.posting-headline`), **não há JSON-LD** nesta página (só na da vaga), o `<title>` é
+ * `"<Empresa> - <Título>"`, e existe um rótulo "Current company" que é PERGUNTA e não o nome da empresa —
+ * exatamente a armadilha em que o seletor genérico `[class*="company"]` cai.
+ */
+const LEVER_APPLY = `<!doctype html><html lang="en"><meta charset="utf-8">
+<title>Neon Pagamentos - Analista de Growth (Business Analytics) - Pleno</title><body>
+<div class="posting-headline"><h2>Analista de Growth (Business Analytics) - Pleno</h2></div>
+<form id="application-form" enctype="multipart/form-data" method="POST">
+<div class="application-label">ATTACH RESUME/CV</div><input type="file" name="resume">
+<div class="application-label">Full name ✱</div><input type="text" name="name" required>
+<div class="application-label">Email ✱</div><input type="email" name="email" required>
+<div class="application-label">Phone ✱</div><input type="text" name="phone" required>
+<div class="application-label">Current location</div><input type="text" name="location">
+<div class="application-question">Current company</div><input type="text" name="org">
+<div class="application-label">LinkedIn URL ✱</div><input type="text" name="urls[LinkedIn]" required>
+<div class="application-label">GitHub URL</div><input type="text" name="urls[GitHub]">
+<input id="hcaptchaResponseInput" type="hidden" name="h-captcha-response" value="">
+<button id="hcaptchaSubmitBtn" type="submit" class="hidden"></button>
+</form>
+<button id="btn-submit" type="button" data-qa="btn-submit">Submit application</button>
+</body></html>`;
+
 const paginas: Record<string, string> = {
   '/candidatura': CANDIDATURA,
   '/vaga': VAGA_PUBLICA,
@@ -150,6 +176,7 @@ const paginas: Record<string, string> = {
   '/um-clique-form': UM_CLIQUE_FORM,
   '/um-clique-js': UM_CLIQUE_JS,
   '/um-clique-submit-js': UM_CLIQUE_SUBMIT_JS,
+  '/lever-apply': LEVER_APPLY,
 };
 let envios = 0;
 const servidor = createServer((req, res) => {
@@ -263,6 +290,55 @@ try {
   assert.equal(dentro.envio?.clicarEnvia, 'nao', 'logado, o CTA leva à página de candidatura: clicar navega');
   assert.equal(dentro.envio?.rotulo, 'Quero me candidatar');
   console.log('✓ Extensão: handler do ProgramaThor diz se a SUA sessão está valendo pelo destino do botão de candidatura');
+
+  /**
+   * Lever: o handler dedicado existe por causa da trava de duplicidade.
+   *
+   * Título e empresa não são enfeite de painel: são a chave de `jaEnviei({url, titulo, empresa})`, que é o que
+   * impede um segundo currículo na mesma vaga (invariante 4). Na tela do `/apply` do Lever o genérico devolvia
+   * os dois errados — título vazio (não há `h1` e não há JSON-LD aqui) e empresa igual a "Current company",
+   * que é o RÓTULO de uma pergunta do formulário.
+   */
+  await page.goto(`${base}/lever-apply`, { waitUntil: 'domcontentloaded' });
+  await page.addScriptTag({ content: CONTEUDO });
+  const lever = await page.evaluate(() => {
+    const api = (globalThis as unknown as { ACVExtensao: Record<string, (h?: unknown) => Record<string, unknown>> & { GENERICO: Record<string, unknown> } }).ACVExtensao;
+    const h = api.handlerDe('jobs.lever.co') as unknown as {
+      tituloDaVaga: () => string;
+      empresaDaVaga: () => string;
+      precisaLogin: () => { precisa: boolean | null; logado: boolean };
+      descobrirCamposFormulario: () => { pergunta: string }[];
+      botaoFinal: RegExp;
+    };
+    const g = api.GENERICO as unknown as { tituloDaVaga: () => string; empresaDaVaga: () => string };
+    return {
+      titulo: h.tituloDaVaga(),
+      empresa: h.empresaDaVaga(),
+      login: h.precisaLogin(),
+      campos: h.descobrirCamposFormulario().map(c => c.pergunta),
+      finalCasa: h.botaoFinal.test('Submit application'),
+      // o que o genérico faria nesta mesma página, para o teste provar que o dedicado é necessário
+      tituloGenerico: g.tituloDaVaga.call(g),
+      empresaGenerica: g.empresaDaVaga.call(g),
+    };
+  });
+  assert.equal(lever.titulo, 'Analista de Growth (Business Analytics) - Pleno', 'o título sai do h2 da posting-headline');
+  assert.equal(lever.empresa, 'Neon Pagamentos', 'a empresa sai do primeiro pedaço do <title>, antes do primeiro " - "');
+  // Os DOIS vêm vazios no genérico: não há `h1` nesta página, não há JSON-LD (só na página da vaga) e nenhuma
+  // classe com "company". Vazio é o pior caso silencioso: a trava de duplicidade cai para "mesma URL" sem
+  // reclamar de nada, e a mesma vaga republicada com outro id passaria.
+  assert.equal(lever.tituloGenerico, '', 'sem o dedicado o título vem vazio');
+  assert.equal(lever.empresaGenerica, '', 'e a empresa também — é por isto que o dedicado existe');
+  assert.equal(lever.login.precisa, false, 'o Lever não pede conta: o painel aparece ali por causa do captcha, não de login');
+  assert.ok(lever.finalCasa, '"Submit application" é o botão de envio e o genérico já o reconhece');
+  // Os cinco obrigatórios do Lever têm de ser reconhecidos como campo do perfil, não como pergunta da empresa
+  for (const rotulo of ['Full name', 'Email', 'Phone', 'LinkedIn URL', 'RESUME/CV']) {
+    assert.ok(
+      lever.campos.some(c => c.toUpperCase().includes(rotulo.toUpperCase())),
+      `"${rotulo}" tem de ser achado no formulário do Lever; vieram: ${lever.campos.join(' | ')}`,
+    );
+  }
+  console.log('✓ Extensão: no Lever o título e a empresa saem certos — é deles que depende a trava de currículo repetido');
 
   /**
    * O conserto que vale para qualquer site, achado no ProgramaThor: em quadro de vagas com candidatura de um
@@ -415,8 +491,8 @@ try {
   assert.equal(plataformaDaUrl('https://www.vagaspj.com.br/vaga/1')?.id, 'vagaspj', 'a ponte continua conhecendo quem não exige login');
   assert.ok(!plataformasConhecidas().some(p => p.id === 'vagaspj'), 'mas a extensão não recebe plataforma sem login: lá o robô dá conta sozinho');
   assert.ok(
-    plataformasConhecidas().every(p => p.exigeLogin),
-    'nenhuma plataforma sem conta pode chegar à extensão',
+    plataformasConhecidas().every(p => p.exigeLogin || p.motor === 'extensao'),
+    'à extensão só chega plataforma com conta para entrar ou cujo envio é dela (Lever: captcha no formulário)',
   );
 
   /**
@@ -432,7 +508,7 @@ try {
     content_scripts: { js: string[]; matches: string[] }[];
   };
   const matchesDaRede = manifesto.content_scripts.find(c => c.js.includes('rede.js'))!.matches.join(' ');
-  for (const d of dominiosServidos) assert.ok(matchesDaRede.includes(d), `${d} exige conta e precisa estar nos matches do rede.js: sem o monitor não há prova de envio nem corte do ensaio`);
+  for (const d of dominiosServidos) assert.ok(matchesDaRede.includes(d), `${d} é servida à extensão e precisa estar nos matches do rede.js: sem o monitor não há prova de envio nem corte do ensaio`);
 
   vagas.salvar({
     id: 'vagaspj:123',

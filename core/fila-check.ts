@@ -942,6 +942,44 @@ await processarProxima();
 assert.equal(chamadas.get(semTraducao) ?? 0, antes, 'nada de nova tentativa automática');
 console.log('✓ Idioma: vaga em inglês leva o currículo traduzido, e sem ele a vaga para em vez de mandar o português');
 
+// ─── 18) A lista de empresas de ATS por mural (Lever hoje, Greenhouse em seguida) ─────────────────
+// Mora aqui e não no `self-check.ts` porque ESCREVE: só este arquivo troca `ACV_DIR` antes de alguém lê-lo
+// (ele usa `await import` para tudo), então só aqui um teste pode gravar sem mexer no banco de uso real.
+const { boards: listaDeBoards } = await import('./platforms/boards.ts');
+const bds = listaDeBoards('teste-boards');
+assert.equal(bds.inserir('a', 'Empresa A', 'seed'), true);
+assert.equal(bds.inserir('a', 'Empresa A', 'seed'), false, 'inserir duas vezes não duplica nem reescreve');
+bds.inserir('b', 'Empresa B', 'manual');
+bds.inserir('c', 'Empresa C', 'busca');
+assert.equal(bds.get('b')!.origem, 'manual', 'de onde veio a empresa fica gravado: é o que diz se a descoberta funcionou');
+bds.atualizar('a', { ultimaVerificacao: '2026-10-06T10:00:00Z' });
+bds.atualizar('b', { ultimaVerificacao: '2026-10-01T10:00:00Z' });
+assert.deepEqual(
+  bds.aVisitar(3).map(x => x.slug),
+  ['c', 'b', 'a'],
+  'quem nunca foi visto vem primeiro, depois o mais esquecido — é assim que a volta na lista se completa',
+);
+assert.deepEqual(
+  bds.aVisitar(2).map(x => x.slug),
+  ['c', 'b'],
+  'a rodada pega só o teto que couber, e o resto fica para a próxima',
+);
+bds.atualizar('c', { ativo: false });
+assert.deepEqual(
+  bds.aVisitar(3).map(x => x.slug),
+  ['b', 'a'],
+  'board desativado não é visitado',
+);
+// Uma plataforma não vê a lista da outra: o Greenhouse entra sem migração e sem risco de misturar
+const outraLista = listaDeBoards('teste-boards-2');
+assert.equal(outraLista.listar().length, 0, 'a lista é por plataforma');
+outraLista.inserir('a', 'Outra A', 'seed');
+assert.equal(bds.get('a')!.nome, 'Empresa A', 'mesmo slug em duas plataformas são duas empresas diferentes');
+bds.remover('a');
+assert.equal(bds.get('a'), undefined);
+assert.equal(outraLista.get('a')!.nome, 'Outra A', 'remover de uma não remove da outra');
+console.log('✓ Lista de empresas por mural: rotação pelo mais esquecido, origem gravada e uma lista por plataforma');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');

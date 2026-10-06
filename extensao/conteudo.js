@@ -366,7 +366,43 @@
     reconhecerEnvio: () => reconhecerEnvio(PROGRAMATHOR.cta()),
   };
 
-  const REGISTRO = [INDEED, LINKEDIN, PROGRAMATHOR];
+  /**
+   * Lever (jobs.lever.co) — o caso em que o núcleo NÃO pode terminar o trabalho.
+   *
+   * Não é por login: o Lever não pede conta nenhuma para se candidatar. É por captcha — o `/apply` roda
+   * hCaptcha antes de deixar o POST sair (`core/platforms/lever/seletores.ts` tem o levantamento). O robô do
+   * núcleo pararia ali, e contornar captcha é o que este projeto não faz. Aqui, no SEU navegador, não há nada
+   * a contornar: o preenchimento é automático, o clique é seu, e se o desafio aparecer você responde.
+   *
+   * O que o genérico já acerta e por isso não está repetido aqui: os rótulos visíveis do formulário
+   * ("Full name", "Email", "Phone", "Current location", "LinkedIn URL", "ATTACH RESUME/CV") casam todos com
+   * `CONHECIDOS`, e "Submit application" casa com `botaoFinal`. Os campos extras da empresa são
+   * `cards[<uuid>][fieldN]` e seguem o caminho normal: resposta salva preenche, sem resposta a vaga para.
+   *
+   * O que ele erra, e é só isto:
+   *  - **não existe `h1` em nenhuma das duas páginas.** O título mora num `h2` dentro de `.posting-headline`,
+   *    então `tituloDaVaga` do genérico voltava vazio;
+   *  - **a página do `/apply` não tem JSON-LD** (a da vaga tem) e não tem nenhuma classe com "company", então
+   *    o seletor de reserva do genérico também não acha nada: a empresa sai vazia.
+   *
+   * Vazio é o pior caso justamente por ser silencioso — não há erro, só uma chave incompleta. E título e
+   * empresa vazios não são cosmética: são a chave de `jaEnviei({url, titulo, empresa})`. Sem eles a
+   * trava de duplicidade cai para "mesma URL", e a mesma vaga republicada com outro id passaria (invariante 4).
+   * Nas duas páginas o `<title>` é `"<Empresa> - <Título da vaga>"`, e é de lá que o nome da empresa sai.
+   */
+  const LEVER = {
+    dominios: ['jobs.lever.co'],
+    detectaTelaLogin: () => false,
+    precisaLogin: () => ({ precisa: false, logado: true, motivo: 'o Lever não pede conta para se candidatar' }),
+    descobrirCamposFormulario,
+    tituloDaVaga: () => texto(document.querySelector('.posting-headline h2, h2')).slice(0, 180) || doJsonLd()?.titulo || '',
+    // O primeiro pedaço do <title> antes do " - ". O resto é o título da vaga, que tem hífen dentro
+    // ("... - Pleno") — daí cortar só na PRIMEIRA ocorrência.
+    empresaDaVaga: () => (document.title.split(' - ')[0] ?? '').trim().slice(0, 120) || doJsonLd()?.empresa || '',
+    descricaoDaVaga: () => texto(document.querySelector('[data-qa="job-description"]')).slice(0, 4000) || doJsonLd()?.descricao || '',
+  };
+
+  const REGISTRO = [INDEED, LINKEDIN, PROGRAMATHOR, LEVER];
 
   /**
    * O handler desta página: o dedicado do domínio POR CIMA do genérico, nunca no lugar dele.

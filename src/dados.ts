@@ -42,6 +42,7 @@ export const PLATAFORMAS: Plataforma[] = [
     disponivel: false,
     login: false,
     somenteDescoberta: true,
+    motivoSomenteDescoberta: 'os termos de uso do Jobbol (cláusula 5.3) proíbem candidatura automatizada ou em massa. Abra a vaga e se inscreva você.',
     site: 'https://www.jobbol.com.br',
     nota: 'Cerca de 44 mil vagas e os melhores dados estruturados de todas as plataformas daqui — e fora do ACV por quatro motivos, nenhum deles técnico de fácil contorno: os termos de uso (cláusula 5.3) proíbem "candidaturas automáticas ou em massa por sistemas automatizados"; o formulário tem campo-armadilha invisível e atestado de JavaScript; o robots.txt bloqueia a busca dizendo que é caro servir; e a proteção do site devolve 403 para qualquer cliente que não seja navegador (medido: 403 no Node e 200 no curl no mesmo segundo, do mesmo IP). Passar por isso exigiria disfarçar automação, que é o que este projeto não faz. A extensão recusa candidatar aqui por qualquer caminho, inclusive o modo genérico.',
   },
@@ -92,6 +93,25 @@ export const PLATAFORMAS: Plataforma[] = [
     nota: 'ATS brasileiro com 628 empresas em sitemap público, sem login. Os campos usam id em vez de name. Formulário direto com anexo de currículo e envio confirmado na API.',
   },
 
+  {
+    id: 'lever',
+    regiao: 'global',
+    nome: 'Lever',
+    sigla: 'lv',
+    cor: 'bg-aqua',
+    disponivel: true,
+    login: false,
+    /**
+     * Acha e ranqueia; nao candidata. O motivo nao e termo de uso (os do Lever e da Employ nao falam de
+     * candidato, robo nem automacao, lidos em 06/10/2026) — e captcha no formulario de envio. Ver
+     * `core/platforms/lever/index.ts`.
+     */
+    somenteDescoberta: true,
+    motivoSomenteDescoberta:
+      'o formulário do Lever é protegido por captcha (hCaptcha), e o ACV não contorna captcha. Abra a vaga no seu navegador: com a extensão instalada, ela preenche tudo e você dá o clique final.',
+    site: 'https://jobs.lever.co',
+    nota: 'ATS global com muita empresa de tecnologia brasileira: uma requisicao por empresa traz o anuncio inteiro de todas as vagas dela, com pais e modelo de trabalho em campo proprio. Na lista inicial vem CI&T, Neon, Swile, Zippi, dLocal e mais 10 — cerca de 195 vagas no Brasil em 06/10/2026. O envio NAO e feito pelo robo: o formulario tem captcha (hCaptcha) e este app nao contorna captcha. Com a extensao instalada, abra a vaga que o ACV achou e o preenchimento e automatico — o clique final (e o desafio, se aparecer) e seu.',
+  },
   {
     id: 'programathor',
     regiao: 'brasil',

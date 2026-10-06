@@ -23,6 +23,16 @@ export interface Plataforma {
    * "Abrir no site", e duplicação conferida por teste não vira mentira.
    */
   somenteDescoberta?: boolean;
+  /**
+   * POR QUE esta plataforma é só de descoberta, na voz que a pessoa lê, ao lado da vaga.
+   *
+   * Existe porque a tela tinha uma frase fixa — "não permite candidatura automatizada" — e ela é verdade no
+   * Jobbol (os termos de uso proíbem) e MENTIRA no Lever, que não proíbe nada: lá o impedimento é captcha no
+   * formulário, e o caminho é abrir a vaga com a extensão instalada. Motivo errado faz a pessoa desistir de
+   * uma vaga que ela pode mandar. Espelha `PlatformAdapter.motivoSomenteDescoberta` e o self-check cobra que
+   * os dois digam a mesma coisa.
+   */
+  motivoSomenteDescoberta?: string;
 }
 
 export interface Envio {

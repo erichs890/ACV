@@ -7,6 +7,13 @@ import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
 process.env.ACV_PERFIL = join(tmpdir(), 'acv-self-check'); // não colide com o núcleo rodando
+/**
+ * **Nada neste arquivo pode ESCREVER no banco.** Não é disciplina, é limitação: `import` é içado, então
+ * qualquer `process.env.ACV_DIR` daqui roda DEPOIS de `core/config.ts` já ter resolvido o caminho, e o banco
+ * aberto é o de uso real. Tentei apontar para um temporário aqui e o teste da lista de boards gravou no banco
+ * de verdade (06/10/2026). Teste que precisa gravar vai para `fila-check.ts`, que só usa `await import` e por
+ * isso consegue trocar o caminho antes de alguém lê-lo. Aqui, só leitura e função pura.
+ */
 import { markdownParaPdf } from './resume/mdToPdf.ts';
 import { pdfParaMarkdown } from './resume/pdfToMd.ts';
 import { analisarCurriculo } from './resume/analyzer.ts';
@@ -848,6 +855,135 @@ assert.ok(!falhaRepetivel(motivoDoErro('timeout', true, '')), 'envio sem respost
 assert.ok(falhaRepetivel(motivoDoErro('timeout', false, '')), 'sem envio nenhum, pode tentar de novo');
 console.log('✓ Vagas PJ: feed, JSON-LD, corte por localização e travas de envio');
 
+// ─── 7b) Lever: a API por empresa, o corpo que falta nela e a vaga aberta em vários lugares ──────
+// Tudo aqui é desenhado sobre JSON e HTML capturados ao vivo em 06/10/2026 (CI&T, Neon, Swile, Zippi).
+const { montarVaga: montarLever, modeloDe: modeloLever, regimeDe: regimeLever, corpoDaPagina, corpoFaltaNaApi, descricaoDe: descricaoLever, melhorLocal } = await import('./platforms/lever/busca.ts');
+const { extrairSlug: slugLever } = await import('./platforms/lever/boards.ts');
+const { ROTA_ENVIO: ROTA_LEVER, LEVER } = await import('./platforms/lever/seletores.ts');
+const { paisDoIso } = await import('./localizacao.ts');
+const { paisDoLocal: paisDoLocalTexto } = await import('./localizacao.ts');
+
+assert.equal(modeloLever('remote'), 'remoto');
+assert.equal(modeloLever('hybrid'), 'hibrido');
+assert.equal(modeloLever('onsite'), 'presencial', 'o Lever escreve "onsite", sem underscore — não é o "on_site" do Workable');
+assert.equal(modeloLever(undefined), 'indefinido');
+
+/**
+ * `commitment` é texto livre, e é por isso que o regime quase sempre sai indefinido.
+ *
+ * Os quatro valores abaixo são reais, do mesmo campo: regime, tipo de contrato, senioridade e modelo de
+ * trabalho. Ler "Permanent Full Time Employee" como CLT seria adivinhar contrato, e `regimePreferido` tira
+ * vaga da fila com base nisso.
+ */
+assert.equal(regimeLever('CLT'), 'CLT');
+assert.equal(regimeLever('Permanent Full Time Employee'), 'indefinido', 'contrato em inglês não vira CLT por conta própria');
+assert.equal(regimeLever('Mid-Senior Level'), 'indefinido', 'aqui a empresa escreveu senioridade no campo de regime');
+assert.equal(regimeLever('Homeoffice'), 'indefinido', 'e aqui escreveu o modelo de trabalho (CI&T)');
+assert.equal(regimeLever(undefined), 'indefinido');
+
+/**
+ * O país vem da sigla DECLARADA, e a colisão é real: "ES" é Espanha e também Espírito Santo.
+ *
+ * `paisDoLocal` lê sigla de duas letras como UF brasileira de propósito (este app é para quem mora no
+ * Brasil), e por isso devolve "Brasil" para "ES". No Lever isso seria errado em 19 vagas medidas: uma remota
+ * com `country: "ES"` é restrita à Espanha, e lida como brasileira passaria pelo filtro de países como se
+ * fosse daqui. Campo declarado não se adivinha. Sigla fora de `PAISES` devolve vazio, que vale como "não sei
+ * o país" — e remota sem país é compatível, o lado seguro de errar.
+ */
+assert.equal(paisDoIso('BR'), 'Brasil');
+assert.equal(paisDoIso('ES'), 'Espanha', 'sigla declarada não passa pela heurística que lê UF brasileira');
+assert.equal(paisDoLocalTexto('ES'), 'Brasil', 'e a heurística de texto continua certa no que ela faz: "ES" num local é Espírito Santo');
+assert.equal(paisDoIso('zz'), '');
+
+// O corpo do anúncio: `lists` é onde o Lever o guarda, e três dos seis boards medidos não o preenchem
+assert.equal(corpoFaltaNaApi({ id: 'x', text: 'x', hostedUrl: 'x', lists: [{ text: 'Requisitos', content: '<li>Java</li>' }] }), false);
+assert.equal(corpoFaltaNaApi({ id: 'x', text: 'x', hostedUrl: 'x', lists: [] }), true, 'CI&T, Swile e Zippi mandam lists vazio: o anúncio tem de vir da página');
+assert.equal(corpoFaltaNaApi({ id: 'x', text: 'x', hostedUrl: 'x' }), true);
+
+// HTML real da página da vaga, recortado. O marcador é `data-qa`, não a estrutura de div.
+const PAGINA_LEVER = `<html><body><div class="posting-header"><h2>[ job - 32054] Mid-Level Fullstack Developer</h2></div>
+<div class="section page-centered" data-qa="job-description"><div>Responsabilidades</div>
+<ul><li>Desenvolver aplicações em <b>Java</b> 17 com Spring Framework.</li><li>Interfaces em Angular 21 e SASS.</li>
+<li>APIs Restful e SQL Server.</li></ul></div>
+<div class="section page-centered" data-qa="closing-description"><div>Nossos benefícios: plano de saúde</div></div>
+<div data-qa="btn-apply-bottom">apply</div></body></html>`;
+const corpoLever = corpoDaPagina(PAGINA_LEVER);
+assert.ok(corpoLever.startsWith('Responsabilidades'), `o atributo não pode vazar para dentro do texto: ${corpoLever.slice(0, 40)}`);
+assert.ok(corpoLever.includes('Angular') && corpoLever.includes('SQL Server'), 'o corpo inteiro entra');
+assert.ok(!corpoLever.includes('<b>') && !corpoLever.includes('benefícios'), 'vira texto, e para no fim da descrição');
+assert.equal(corpoDaPagina('<html>página sem o marcador</html>'), '');
+
+// E a descrição não sai com o "Sobre nós" em dobro quando a API e a página dizem a mesma coisa
+const aberturaLever = 'Na CI&T, ajudamos grandes empresas.';
+const descLever = descricaoLever({ id: 'x', text: 'x', hostedUrl: 'x', openingPlain: aberturaLever, additionalPlain: 'Nossos benefícios' }, aberturaLever);
+assert.equal(descLever.split('Na CI&T').length - 1, 1, `trecho repetido entre API e página entra uma vez só: ${descLever}`);
+
+/**
+ * A vaga aberta em vários lugares — o achado que mais importa aqui.
+ *
+ * Dado real da CI&T: `location` diz "Brazil" e `allLocations` diz as cidades. Uma HÍBRIDA em Campinas não pode
+ * passar como compatível para quem mora em Fortaleza só porque o rótulo largo não tem cidade nem UF para a
+ * regra reprovar — foi assim que sete candidaturas presenciais erradas saíram em 28/09/2026.
+ */
+const moraEmFortaleza = { localizacaoPresencial: 'Fortaleza - CE', paisesRemoto: ['Brasil'] };
+const CIANDT_HIBRIDA = {
+  id: '6d9f31cf-2493-4774-bb9c-1b9241a33f63',
+  text: '[Job - 31339] Analista de Remuneração Sênior',
+  country: 'BR',
+  workplaceType: 'hybrid',
+  hostedUrl: 'https://jobs.lever.co/ciandt/6d9f31cf-2493-4774-bb9c-1b9241a33f63',
+  categories: { commitment: 'Full Time', location: 'Brazil', allLocations: ['Brazil', 'Campinas, SP', 'São Paulo, SP'] },
+};
+const soRotuloLever = melhorLocal({ ...CIANDT_HIBRIDA, categories: { location: 'Brazil', allLocations: [] } }, 'Brasil', 'hibrido', moraEmFortaleza);
+assert.equal(soRotuloLever.lugar.compativel, true, 'o rótulo "Brazil" sozinho não tem o que reprovar — é justamente o risco');
+const comCidadesLever = melhorLocal(CIANDT_HIBRIDA, 'Brasil', 'hibrido', moraEmFortaleza);
+assert.equal(comCidadesLever.lugar.compativel, false, 'híbrida em Campinas/São Paulo não serve para quem mora em Fortaleza');
+assert.ok(/Campinas|São Paulo/.test(comCidadesLever.local), `o lugar gravado é o que decidiu, para a tela dizer por quê: ${comCidadesLever.local}`);
+// E o contrário: se UM dos lugares serve, a vaga vale e é esse lugar que fica
+const tambemAquiLever = melhorLocal({ ...CIANDT_HIBRIDA, categories: { location: 'Brazil', allLocations: ['Campinas, SP', 'Fortaleza, CE'] } }, 'Brasil', 'hibrido', moraEmFortaleza);
+assert.equal(tambemAquiLever.lugar.compativel, true, 'vaga aberta também na cidade dela não pode ser descartada por causa de Campinas');
+assert.ok(/Fortaleza/.test(tambemAquiLever.local), `vence o melhor lugar, não o primeiro da lista: ${tambemAquiLever.local}`);
+
+const cfgLever = { area: '', senioridade: '', scoreMinimo: 30, regimes: ['remoto', 'hibrido', 'presencial'] } as unknown as Parameters<typeof montarLever>[4];
+const CIANDT_REMOTA = {
+  id: '472ffac1-5bc5-4b1c-97bb-b1b85950f878',
+  text: '[ job - 32054] Mid-Level Fullstack Developer ( Java + Angular ), Brasil',
+  country: 'BR',
+  workplaceType: 'remote',
+  createdAt: Date.now() - 86400000,
+  hostedUrl: 'https://jobs.lever.co/ciandt/472ffac1-5bc5-4b1c-97bb-b1b85950f878',
+  categories: { commitment: 'Homeoffice', location: 'Brazil', allLocations: ['Brazil'] },
+  openingPlain: 'Na CI&T, ajudamos grandes empresas a transformar o potencial da AI.',
+  lists: [],
+};
+const vagaLever = montarLever('ciandt', 'CI&T', CIANDT_REMOTA, perfil, cfgLever, moraEmFortaleza, corpoLever)!;
+assert.equal(vagaLever.id, 'lever:ciandt:472ffac1-5bc5-4b1c-97bb-b1b85950f878');
+assert.equal(vagaLever.tenant, 'ciandt', 'o board fica no tenant: é por ele que a varredura encerra o que saiu do ar');
+assert.equal(vagaLever.pais, 'Brasil');
+assert.equal(vagaLever.modelo, 'remoto');
+assert.equal(vagaLever.regime, 'indefinido');
+assert.ok(vagaLever.skills.includes('java'), `as competências saem do corpo lido da PÁGINA, não do "Sobre nós": ${vagaLever.skills.join(',')}`);
+assert.notEqual(vagaLever.status, 'ignorada', 'remota no Brasil com Java no anúncio tem de ficar na lista');
+// Sem o corpo da página, a mesma vaga é pontuada só pela apresentação da empresa — o motivo de abrir a página
+const semCorpoLever = montarLever('ciandt', 'CI&T', CIANDT_REMOTA, perfil, cfgLever, moraEmFortaleza)!;
+assert.ok(semCorpoLever.score < vagaLever.score, `pontuar só pelo "Sobre nós" dá nota menor (${semCorpoLever.score} < ${vagaLever.score}): é por isso que a página é lida`);
+assert.equal(montarLever('ciandt', 'CI&T', { ...CIANDT_REMOTA, createdAt: Date.now() - 400 * 86400000 }, perfil, cfgLever, moraEmFortaleza), null, 'vaga de mais de um ano no board já foi preenchida');
+assert.equal(montarLever('ciandt', 'CI&T', { id: '', text: '', hostedUrl: '' }, perfil, cfgLever, moraEmFortaleza), null);
+
+// Slug do board: aceita o nome, a URL do board, a da vaga e a do formulário
+assert.equal(slugLever('neon'), 'neon');
+assert.equal(slugLever('https://jobs.lever.co/ciandt'), 'ciandt');
+assert.equal(slugLever('https://jobs.lever.co/zippi/8a2b211c-4b0a-490d-a155-92384ce0f09d/apply'), 'zippi');
+assert.equal(slugLever(''), '');
+
+// A prova de envio da extensão: o POST vai para a própria URL do /apply, porque o <form> não tem action
+assert.ok(ROTA_LEVER.test('https://jobs.lever.co/neon/026b745f-bc2a-4661-8d4e-a711987c2f0b/apply'));
+assert.ok(!ROTA_LEVER.test('https://jobs.lever.co/neon/026b745f-bc2a-4661-8d4e-a711987c2f0b'), 'abrir a vaga não é enviar candidatura');
+assert.ok(LEVER.convencoes.final.test('Submit application'), 'o texto real do botão de envio');
+assert.ok(!LEVER.convencoes.final.test('Apply for this job'), 'o botão que só abre o formulário não pode ser lido como envio');
+
+console.log('✓ Lever: API por empresa, corpo lido da página quando falta, e vaga em vários lugares decidida pelo melhor');
+
 // 8) Campos com nome em português e o LinkedIn em campo type=url
 const { urlDoLinkedin } = await import('./platforms/inhire/formulario.ts');
 assert.equal(papelDe({ nome: 'telefone', rotulo: 'Seu whatsapp (DDD+número)', tipo: 'texto' }), 'celular');
@@ -1334,7 +1470,7 @@ console.log('✓ Idioma da vaga: separa título em inglês de vaga em inglês, e
 // para a pessoa não ficar procurando um botão de enviar que não existe.
 // Importados aqui pelo efeito colateral, como `core/server.ts` faz: sem isto o laço rodaria sobre os poucos
 // adapters que as outras seções deste arquivo importaram, e não provaria nada do contrato.
-for (const p of ['inhire', 'indeed', 'vagaspj', 'divulgavagas', 'workable', 'quickin', 'arbeitnow', 'programathor']) await import(`./platforms/${p}/index.ts`);
+for (const p of ['inhire', 'indeed', 'vagaspj', 'divulgavagas', 'workable', 'quickin', 'arbeitnow', 'programathor', 'lever']) await import(`./platforms/${p}/index.ts`);
 const { adapters: todosAdapters, soDescobre: soDescobreAdapter } = await import('./platforms/adapter.ts');
 assert.ok(Object.keys(todosAdapters).length >= 8, `esperava todos os adapters registrados, vieram ${Object.keys(todosAdapters).length}`);
 for (const a of Object.values(todosAdapters)) {
@@ -1364,14 +1500,20 @@ for (const d of TODOS_DOMINIOS) {
   assert.equal(!!naTela.login, d.login, `${d.id}: DOMINIOS e PLATAFORMAS discordam sobre exigir conta`);
   if (todosAdapters[d.id]?.sessao) assert.equal(d.login, true, `${d.id} tem prova de login no adapter, então DOMINIOS tem de dizer login: true`);
 }
-// A regra de 05/10/2026: a extensão só é servida onde há conta para entrar
+/**
+ * A regra: a extensão é servida onde o ACV sozinho NÃO termina o trabalho.
+ *
+ * Era "onde há conta para entrar" (05/10/2026) e isso estava estreito: o Lever (06/10/2026) não pede login
+ * nenhum e também não pode ser enviado pelo robô, porque o formulário tem captcha. O que decide é `motor` —
+ * o campo que diz quem envia —, e não o sintoma de um dos dois motivos.
+ */
 const { plataformasConhecidas: servirParaExtensao } = await import('./importar.ts');
 const servidasNaExtensao = servirParaExtensao();
 assert.ok(servidasNaExtensao.length > 0);
 assert.ok(
-  servidasNaExtensao.every(p => p.exigeLogin),
-  `a extensão só recebe plataforma com login; veio ${servidasNaExtensao
-    .filter(p => !p.exigeLogin)
+  servidasNaExtensao.every(p => p.exigeLogin || p.motor === 'extensao'),
+  `a extensão só recebe plataforma com login ou cujo envio é dela; veio ${servidasNaExtensao
+    .filter(p => !p.exigeLogin && p.motor !== 'extensao')
     .map(p => p.id)
     .join(', ')}`,
 );
@@ -1380,13 +1522,23 @@ for (const id of ['linkedin', 'gupy', 'indeed', 'programathor'])
     servidasNaExtensao.some(p => p.id === id),
     `${id} exige conta e tem de ser servida à extensão`,
   );
+// O Lever não exige conta e ainda assim entra: quem envia ali é a extensão, porque o robô pararia no captcha.
+// Sem esta linha, "arrumar" o filtro de volta para `login` passaria no teste e deixaria o Lever sem envio.
+assert.ok(
+  servidasNaExtensao.some(p => p.id === 'lever' && !p.exigeLogin && p.motor === 'extensao'),
+  'o Lever não pede login, mas o núcleo não envia nele (captcha): a extensão tem de receber a plataforma',
+);
 for (const id of ['vagaspj', 'divulgavagas', 'quickin', 'workable', 'arbeitnow', 'inhire'])
-  assert.ok(!servidasNaExtensao.some(p => p.id === id), `${id} não exige conta: o robô dá conta sozinho e o painel não deve aparecer ali`);
-console.log('✓ Extensão: servida só onde há conta para entrar, e DOMINIOS × PLATAFORMAS não divergem');
+  assert.ok(!servidasNaExtensao.some(p => p.id === id), `${id} não exige conta e o robô envia: o painel não deve aparecer ali`);
+console.log('✓ Extensão: servida onde o ACV não termina sozinho, e DOMINIOS × PLATAFORMAS não divergem');
 for (const a of Object.values(todosAdapters)) {
   const naTela = CATALOGO.find(p => p.id === a.id);
   if (!naTela) continue; // adapter de teste não está no catálogo
   assert.equal(!!naTela.somenteDescoberta, !!a.somenteDescoberta, `${a.id}: o catálogo da tela e o adapter discordam sobre candidatar`);
+  // E o MOTIVO tem de ser o mesmo nos dois. A tela mostrava uma frase fixa ("não permite candidatura
+  // automatizada") que é verdade no Jobbol e mentira no Lever, onde o impedimento é captcha e existe caminho
+  // pela extensão. Motivo errado faz desistir de vaga que dá para mandar.
+  if (a.somenteDescoberta) assert.equal(naTela.motivoSomenteDescoberta, a.motivoSomenteDescoberta, `${a.id}: o motivo na tela e no núcleo têm de ser o mesmo texto`);
 }
 console.log('✓ Contrato dos adapters: quem não candidata declara que só descobre, e a tela concorda com o núcleo');
 

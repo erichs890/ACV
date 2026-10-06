@@ -926,7 +926,13 @@ function VagaItem({ vaga: v, manual, pdfEnviado, onVerAdaptacao }: { vaga: Vaga;
         {v.motivo && <p className="mt-0.5 text-[11px] text-ink">{v.motivo}</p>}
         {v.skills.length > 0 && <p className="mt-0.5 text-[11px] text-ink-soft">Pede: {v.skills.join(', ')}</p>}
         {v.erro && <p className="mt-0.5 text-[11px] font-bold text-orange-deep">{v.erro}</p>}
-        {plataforma.somenteDescoberta && <p className="mt-0.5 text-[11px] text-ink-soft">O {plataforma.nome} não permite candidatura automatizada — abra e se inscreva por lá.</p>}
+        {/* O MOTIVO, e não uma frase fixa: no Jobbol os termos proíbem, no Lever é captcha e a extensão
+            resolve. Dizer "não permite automatizar" nos dois faria desistir de vaga que dá para mandar. */}
+        {plataforma.somenteDescoberta && (
+          <p className="mt-0.5 text-[11px] text-ink-soft">
+            O ACV só acha vagas do {plataforma.nome}: {plataforma.motivoSomenteDescoberta ?? 'a candidatura é feita por você, no site.'}
+          </p>
+        )}
         {v.formulario && (
           <p className="mt-0.5 text-[11px] text-ink-soft">
             Formulário: {v.formulario.etapas} etapa(s), {v.formulario.campos} campos, {v.formulario.perguntas} pergunta(s) extra{v.formulario.typeform ? ', com Typeform' : ''}

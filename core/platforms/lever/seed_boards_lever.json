@@ -1,0 +1,20 @@
+{
+  "_comentario": "Boards do Lever confirmados um a um em 06/10/2026: pagina HTTP 200 em jobs.lever.co/<slug>, API publica respondendo array, e a primeira vaga de cada um abrindo em 200. Tres candidatos foram REPROVADOS e ficam fora de proposito: aircall (a API devolve 77 vagas, mas a pagina do board e a de cada vaga dao 404 - dado velho na API, vaga inalcancavel), voro e cloudwalk (404 na pagina e zero vagas). Board com zero vagas hoje fica: ele e um endereco valido que enche depois, e tirar custaria redescobrir. Para adicionar: POST /lever/boards com o slug ou a URL do board.",
+  "boards": [
+    { "slug": "ciandt", "nome": "CI&T" },
+    { "slug": "swile", "nome": "Swile" },
+    { "slug": "neon", "nome": "Neon Pagamentos" },
+    { "slug": "zippi", "nome": "Zippi" },
+    { "slug": "dlocal", "nome": "dLocal" },
+    { "slug": "tractian", "nome": "Tractian" },
+    { "slug": "trela", "nome": "Trela" },
+    { "slug": "coupa", "nome": "Coupa Software, Inc." },
+    { "slug": "entrata", "nome": "Entrata" },
+    { "slug": "enablecomp", "nome": "EnableComp" },
+    { "slug": "lucidworks", "nome": "Lucidworks" },
+    { "slug": "kinsta", "nome": "Kinsta" },
+    { "slug": "15five", "nome": "15Five" },
+    { "slug": "benchsci", "nome": "BenchSci" },
+    { "slug": "lever", "nome": "Lever" }
+  ]
+}
