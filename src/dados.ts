@@ -270,6 +270,30 @@ export function perguntaSoDestaVaga(rotulo: string, empresa = ''): boolean {
 }
 
 /**
+ * Nome de empresa sem o que não identifica a empresa.
+ *
+ * "Acme Tecnologia Ltda", "ACME TECNOLOGIA S.A." e "acme" têm de bater: a mesma empresa se escreve de formas
+ * diferentes em cada plataforma, e é isso que faz a mesma vaga republicada escapar de uma trava por nome cru.
+ *
+ * Erra para o lado de JUNTAR, de propósito. Juntar duas empresas que não são a mesma custa uma candidatura
+ * perdida; separar duas que são a mesma custa dois currículos na mesa do mesmo recrutador — e o segundo é o
+ * pior desfecho possível neste projeto. Medido no banco real em 05/10/2026: das 38 empresas para as quais ele
+ * já se candidatou, esta normalização não junta nenhum par indevidamente.
+ *
+ * Existe uma cópia em `extensao/comum.js` (que é um IIFE autossuficiente e não importa módulo), e um teste
+ * cruza as duas — duplicação conferida por teste não vira mentira.
+ */
+export const normalizarEmpresa = (nome: string) =>
+  String(nome ?? '')
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .toLowerCase()
+    .replace(/[.,|/\\-]+/g, ' ')
+    .replace(/\b(s\s?a|sa|ltda|me|eireli|epp|inc|llc|corp|corporation|co|company|group|grupo|holding|tecnologia|servicos|solucoes)\b/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
  * Estamos dentro da janela de envio ("08:00-20:00")? Regra única: o núcleo decide a fila por ela e a tela avisa
  * por ela — duas cópias divergiriam, e o sintoma seria a tela dizer que está tudo certo com o robô parado.
  */

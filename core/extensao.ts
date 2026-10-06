@@ -18,6 +18,9 @@ import { emitir } from './events.ts';
 import { ler } from './estado.ts';
 import { iaAtiva, responderPergunta } from './ia.ts';
 import { candidaturas, kv, log } from './storage/db.ts';
+import { chaveDaVaga } from './candidatura.ts';
+import { normalizarEmpresa } from '../src/dados.ts';
+import { normalizar } from './resume/texto.ts';
 
 export function tokenDaExtensao(): string {
   const salvo = kv.get<string>('extensaoToken', '');
@@ -175,6 +178,55 @@ export function dadosParaExtensao(comCurriculo: boolean): Record<string, unknown
 }
 
 /**
+ * "Já mandei currículo para esta vaga?" — a pergunta que a extensão faz ANTES de preencher.
+ *
+ * É a prevenção da invariante 4 no caminho da extensão, e ela precisa vir do NÚCLEO porque o cadeado local da
+ * extensão (`chrome.storage.local`) só sabe das URLs que ELA enviou. Três casos que só o núcleo pega:
+ *  - o robô já candidatou nesta vaga pelo adapter dele, e a extensão não tem como saber;
+ *  - a mesma vaga republicada em outra URL ou em outra plataforma (o InHire faz isso) — a chave aqui é
+ *    empresa + título, a mesma de `jaCandidatado`, e não a URL;
+ *  - extensão reinstalada ou segundo navegador: o cadeado local nasce vazio, o histórico do núcleo não.
+ *
+ * Com o ACV fechado a extensão não recebe resposta e cai no cadeado local, que é o que ela tem. Menos
+ * garantia, mas nunca zero.
+ */
+export function jaCandidatou(e: { url?: string; titulo?: string; empresa?: string }): { ja: boolean; motivo: string; quando?: string } {
+  const enviadas = candidaturas.listar().filter(c => c.resultado === 'enviada');
+  const semRastreio = (u: string) => {
+    try {
+      const x = new URL(u);
+      return `${x.hostname.replace(/^www\./, '')}${x.pathname.replace(/\/+$/, '')}`.toLowerCase();
+    } catch {
+      return String(u ?? '').toLowerCase();
+    }
+  };
+  const url = e.url ? semRastreio(e.url) : '';
+  const porUrl = url ? enviadas.find(c => c.url && semRastreio(c.url) === url) : undefined;
+  if (porUrl) return { ja: true, motivo: 'você já se candidatou a esta vaga', quando: porUrl.enviadaEm };
+  if (e.titulo && e.empresa) {
+    /**
+     * Duas conferências, e a segunda é mais forte que a do núcleo de propósito.
+     *
+     * `chaveDaVaga` é a trava do robô, com 140 envios limpos atrás dela, e não se mexe nela por aqui. Mas o
+     * caminho da extensão cruza plataformas, e aí a mesma empresa aparece escrita de outro jeito ("Acme
+     * Tecnologia Ltda" numa, "ACME S.A." na outra): o nome cru deixa passar, e passar aqui custa dois
+     * currículos na mesa do mesmo recrutador. Medido no banco real em 05/10/2026: a normalização de empresa
+     * não junta indevidamente nenhuma das 38 empresas para as quais ele já se candidatou, então ela é de graça.
+     */
+    const chave = chaveDaVaga({ empresa: e.empresa, titulo: e.titulo });
+    const chaveForte = `${normalizarEmpresa(e.empresa)}|${normalizar(e.titulo)}`;
+    const irma = enviadas.find(c => chaveDaVaga(c) === chave || `${normalizarEmpresa(c.empresa)}|${normalizar(c.titulo)}` === chaveForte);
+    if (irma)
+      return {
+        ja: true,
+        motivo: `você já se candidatou a "${irma.titulo}" em ${irma.empresa}${irma.url && semRastreio(irma.url) !== url ? ' (outra publicação da mesma vaga)' : ''}`,
+        quando: irma.enviadaEm,
+      };
+  }
+  return { ja: false, motivo: '' };
+}
+
+/**
  * A extensão candidatou numa plataforma e manda o que fez (inclusive o que aconteceu com o ACV fechado).
  * Entra no histórico junto com as candidaturas do robô: o Painel é a visão consolidada de tudo.
  */
@@ -183,10 +235,28 @@ export function receberCandidaturas(lista: { dominio?: string; url?: string; tit
   const perfil = ler.perfil();
   const jaTem = new Set(candidaturas.listar().map(c => `${c.url}|${c.enviadaEm}`));
   let novas = 0;
+  let repetidas = 0;
   for (const c of lista.slice(0, 200)) {
     const url = String(c.url ?? '').slice(0, 500);
     const enviadaEm = c.enviadaEm && !Number.isNaN(Date.parse(c.enviadaEm)) ? c.enviadaEm : new Date().toISOString();
     if (!url || jaTem.has(`${url}|${enviadaEm}`)) continue; // reenvio da fila de pendentes não duplica o histórico
+    /**
+     * Duplicata que JÁ ACONTECEU: registra e grita, nunca descarta.
+     *
+     * Aqui não se previne nada — isto é o relato de um fato passado. A extensão grava a candidatura DEPOIS
+     * de enviar, então quando esta função roda o currículo já está na mesa do recrutador. Recusar o registro
+     * não desfaz o envio: só cega o núcleo, e aí `jaCandidatado` deixa de ver aquela candidatura e o robô
+     * pode mandar um TERCEIRO currículo para a mesma empresa. Então o fato entra no histórico, e o alerta
+     * avisa — a prevenção mora antes, em `jaCandidatou` (que a extensão consulta antes de preencher).
+     */
+    const chave = chaveDaVaga({ empresa: String(c.empresa ?? ''), titulo: String(c.titulo ?? '') });
+    if (candidaturas.listar().some(h => h.resultado === 'enviada' && chaveDaVaga(h) === chave)) {
+      repetidas++;
+      log.registrar(
+        'alerta',
+        `A extensão registrou uma candidatura para "${c.titulo}" em ${c.empresa}, e já havia uma enviada para a mesma empresa e cargo. O currículo foi duas vezes — confira antes de insistir nessa vaga.`,
+      );
+    }
     candidaturas.inserir({
       vagaId: `extensao:${url}`,
       titulo: String(c.titulo ?? 'vaga').slice(0, 200),
@@ -208,6 +278,8 @@ export function receberCandidaturas(lista: { dominio?: string; url?: string; tit
     log.registrar('sucesso', `[extensão] ${novas} candidatura(s) feitas por você no navegador entraram no histórico.`);
     emitir({ tipo: 'estado' });
   }
+  if (repetidas)
+    log.registrar('alerta', `${repetidas} candidatura(s) vinda(s) da extensão repetem empresa e cargo de algo que já havia sido enviado. Nenhuma foi descartada do histórico — o envio já aconteceu.`);
   return novas;
 }
 

@@ -180,10 +180,21 @@ function chaveDaVaga(url) {
  * Mora em `chrome.storage.local` de propósito: tem de sobreviver ao navegador fechado, à extensão recarregada
  * e ao ACV desligado. Guarda a data para o relato poder dizer "você já se candidatou a esta em 03/10".
  */
-async function jaEnviei(url) {
-  const chave = chaveDaVaga(url);
+async function jaEnviei({ url, titulo, empresa }) {
+  // 1) O NÚCLEO primeiro: ele é o único que sabe das candidaturas do robô e das da mesma vaga republicada em
+  //    outra URL ou outra plataforma (a chave lá é empresa + título, não a URL). Também é o único que
+  //    sobrevive a uma extensão reinstalada ou a um segundo navegador.
+  try {
+    const r = await paraONucleo('/extensao/ja-candidatou', { url, titulo, empresa });
+    if (r?.ja) return { ja: true, quando: r.quando, motivo: r.motivo };
+  } catch {
+    // ACV fechado é o caso normal desta arquitetura: cai no cadeado local, abaixo
+  }
+  // 2) O cadeado local, que é o que funciona com o ACV fechado. Só sabe do que ESTA extensão enviou, e só por
+  //    URL — menos garantia que o núcleo, mas nunca zero.
   const enviadas = await ler('enviadas', {});
-  return enviadas[chave] ? { ja: true, quando: enviadas[chave] } : { ja: false };
+  const quando = enviadas[chaveDaVaga(url)];
+  return quando ? { ja: true, quando, motivo: 'você já se candidatou a esta vaga por aqui' } : { ja: false };
 }
 
 /**
@@ -288,7 +299,7 @@ const ACOES = {
   SINCRONIZAR: async () => ({ cache: await sincronizar(true) }),
   DADOS: async () => ({ dados: await dadosParaPreencher() }),
   CANDIDATURA: m => registrarCandidatura(m.candidatura),
-  JA_ENVIEI: m => jaEnviei(m.url),
+  JA_ENVIEI: m => jaEnviei(m),
   CABEM: async m => {
     const cfg = await lerConfig();
     return quantasCabemHoje(m.dominio, cfg, await ler('contadores', {}));

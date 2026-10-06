@@ -16,9 +16,9 @@ const DIR = mkdtempSync(join(tmpdir(), 'acv-extensao-'));
 process.env.ACV_DIR = DIR;
 process.env.ACV_PERFIL = join(DIR, 'navegador');
 
-const { autorizado, lerDeteccoes, perfilParaExtensao, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } = await import('./extensao.ts');
+const { autorizado, jaCandidatou, lerDeteccoes, perfilParaExtensao, receberCandidaturas, registrarCamposFaltando, registrarPlataformaDetectada, tokenDaExtensao } = await import('./extensao.ts');
 const { fecharNavegador, navegador } = await import('./browser.ts');
-const { kv, vagas } = await import('./storage/db.ts');
+const { candidaturas, kv, log, vagas } = await import('./storage/db.ts');
 await import('./platforms/vagaspj/index.ts'); // registra o adapter: a ponte por URL só oferece o que existe
 const { plataformaDaUrl, plataformasConhecidas, vagaDaUrl } = await import('./importar.ts');
 
@@ -344,6 +344,48 @@ try {
   for (const segredo of ['Marina', 'marina@exemplo.com', '11982324410', '52998224725', '4.500']) assert.ok(!serializado.includes(segredo), `valor de dado pessoal vazou para a extensão: ${segredo}`);
   console.log('✓ Núcleo: token protege as rotas da extensão, a detecção se acumula e nenhum dado pessoal vaza');
 
+  /**
+   * `jaCandidatou`: a prevenção da invariante 4 no caminho da extensão, do lado do núcleo.
+   *
+   * Pega três casos que o cadeado local da extensão (por URL, em `chrome.storage.local`) não pega: a
+   * candidatura feita pelo ROBÔ, a mesma vaga republicada em outra URL ou plataforma, e a extensão
+   * reinstalada (cadeado vazio, histórico cheio). A chave é a mesma de `jaCandidatado`: empresa + título.
+   */
+  candidaturas.inserir({
+    vagaId: 'inhire:acme:1',
+    titulo: 'Pessoa Desenvolvedora Back-end',
+    empresa: 'Acme Tecnologia Ltda',
+    plataforma: 'inhire',
+    url: 'https://acme.inhire.app/vagas/1',
+    enviadaEm: new Date().toISOString(),
+    nome: '',
+    email: '',
+    celular: '',
+    curriculo: '',
+    versao: 'original',
+    regime: '',
+    resultado: 'enviada',
+  });
+  assert.equal(jaCandidatou({ url: 'https://acme.inhire.app/vagas/1' }).ja, true, 'a mesma URL é pega');
+  assert.equal(jaCandidatou({ url: 'https://www.acme.inhire.app/vagas/1/?utm_source=x' }).ja, true, 'www, barra final e rastreio não mudam a vaga');
+  const irma = jaCandidatou({ url: 'https://acme.gupy.io/job/999', titulo: 'Pessoa Desenvolvedora Back-end', empresa: 'Acme Tecnologia S.A.' });
+  assert.equal(irma.ja, true, 'outra URL, outra plataforma, mesma empresa e cargo: é a mesma vaga republicada');
+  assert.match(irma.motivo, /outra publica[çc][ãa]o/, 'e o motivo diz isso, para a pessoa entender por que não foi');
+  assert.equal(jaCandidatou({ url: 'https://outra.inhire.app/vagas/7', titulo: 'Pessoa de Produto', empresa: 'Outra' }).ja, false, 'vaga de verdade diferente passa');
+  assert.equal(jaCandidatou({}).ja, false, 'sem url nem par empresa+título não há como afirmar nada');
+
+  // Duplicata que JÁ aconteceu: o núcleo REGISTRA e avisa, nunca descarta — descartar cegaria `jaCandidatado`
+  // e o robô poderia mandar um terceiro currículo para a mesma empresa.
+  log.listar(0);
+  const antesDoRelato = candidaturas.listar().length;
+  receberCandidaturas([{ dominio: 'gupy.io', url: 'https://acme.gupy.io/job/999', titulo: 'Pessoa Desenvolvedora Back-end', empresa: 'Acme Tecnologia Ltda', enviadaEm: new Date().toISOString() }]);
+  assert.equal(candidaturas.listar().length, antesDoRelato + 1, 'o fato entra no histórico: o envio já aconteceu, e esconder isso cegaria o núcleo');
+  assert.ok(
+    log.listar(20).some(l => /j[áa] havia uma enviada para a mesma empresa e cargo/.test(l.msg)),
+    'e o alerta avisa que o currículo foi duas vezes',
+  );
+  console.log('✓ Núcleo: ja-candidatou pega a vaga republicada em outra URL, e duplicata recebida é registrada com alerta');
+
   // ─── C2) "Candidata nesta vaga daqui pelo ACV": a ponte por URL ─────────────────────────────
   // O caso real: a pessoa acha no LinkedIn uma vaga que leva para uma página do InHire. Lá o núcleo já tem
   // adapter testado, então a extensão manda a URL em vez de usar o motor dela.
@@ -442,7 +484,24 @@ try {
   assert.equal(comum.empresaBloqueada('ITAU UNIBANCO', ['Itaú']), 'Itaú', 'acento não pode decidir bloqueio');
   assert.equal(comum.empresaBloqueada('', ['Acme']), null, 'vaga sem empresa não bloqueia por acidente');
   assert.equal(comum.empresaBloqueada('Acme', []), null);
-  console.log('✓ Extensão: empresas bloqueadas batem com S.A., Ltda, acento e nome composto — e não com homônimo parecido');
+  /**
+   * A cópia de `normalizarEmpresa` em `comum.js` tem de concordar com a de `src/dados.ts`.
+   *
+   * São duas de propósito: `comum.js` é um IIFE autossuficiente que roda com o ACV fechado e não importa
+   * módulo nenhum. Mas as duas decidem a mesma coisa em lugares diferentes — a de lá bloqueia empresa, a de
+   * cá pega a mesma vaga republicada com o nome escrito de outro jeito. Divergir significaria a extensão
+   * achando que não é duplicata e o núcleo achando que é, ou o contrário. Duplicação travada por teste.
+   */
+  const { normalizarEmpresa: canonica } = await import('../src/dados.ts');
+  const normalizarLa = (comum as { normalizarEmpresa?: (n: string) => string }).normalizarEmpresa;
+  for (const nome of ['Acme Tecnologia Ltda', 'ACME TECNOLOGIA S.A.', 'acme', 'Grupo Boticário', 'Soñar Assessoria Empresarial', 'Nubank', 'Radix Engenharia', 'XP Inc.', '']) {
+    if (normalizarLa) assert.equal(normalizarLa(nome), canonica(nome), `as duas normalizações de empresa divergem em "${nome}"`);
+  }
+  // E o que importa na prática: as três grafias da mesma empresa colapsam numa chave só
+  assert.equal(canonica('Acme Tecnologia Ltda'), canonica('ACME TECNOLOGIA S.A.'), 'sufixo jurídico não pode separar a mesma empresa');
+  assert.equal(canonica('Acme'), canonica('Acme Tecnologia'), 'nem a palavra genérica');
+  assert.notEqual(canonica('Radix'), canonica('Nubank'), 'mas empresas diferentes continuam diferentes');
+  console.log('✓ Extensão: empresas bloqueadas batem com S.A., Ltda, acento e nome composto — e a normalização é a mesma do núcleo');
 
   // URL de busca do LinkedIn: os parâmetros confirmados em uso real
   const url = new URL(comum.montarUrlBuscaLinkedIn({ palavraChave: 'desenvolvedor java', geoId: '106057199', distanciaKm: 25, janelaTempo: 'semana', apenasCandidaturaSimplificada: true }));
@@ -602,7 +661,7 @@ try {
       (globalThis as Record<string, unknown>).chrome = {
         runtime: {
           // sem `id`: conteudo.js expõe a api e não tenta falar com o navegador
-          sendMessage: (msg: { tipo: string; candidatura?: unknown }, cb: (r: unknown) => void) => {
+          sendMessage: (msg: { tipo: string; candidatura?: unknown; titulo?: string; empresa?: string }, cb: (r: unknown) => void) => {
             const st = (globalThis as unknown as { __stub: Record<string, unknown> }).__stub;
             const resposta =
               (
@@ -612,9 +671,13 @@ try {
                   CABEM: st.cabem,
                   PERGUNTA: st.pergunta ?? { resposta: null, motivo: 'a IA está desligada nas configurações da extensão' },
                   CANDIDATURA: { sincronizado: true },
-                  // A trava de "uma vaga, uma candidatura" do worker, imitada aqui: `enviadas` é o que o
-                  // `chrome.storage.local` guardaria entre cliques, e é o que o motor precisa consultar
-                  JA_ENVIEI: (st.enviadas as string[]).includes(location.href) ? { ja: true, quando: '2026-10-05T12:00:00.000Z' } : { ja: false },
+                  // A trava de "uma vaga, uma candidatura" do worker, imitada aqui. `enviadas` são as URLs que
+                  // o `chrome.storage.local` guardaria entre cliques; `irmas` são empresa+título que o NÚCLEO
+                  // conhece — a mesma vaga republicada em outra URL, que a chave de URL deixa passar.
+                  JA_ENVIEI:
+                    (st.enviadas as string[]).includes(location.href) || ((st.irmas as string[]) ?? []).includes(`${msg.empresa}|${msg.titulo}`)
+                      ? { ja: true, quando: '2026-10-05T12:00:00.000Z', motivo: 'você já se candidatou a esta vaga' }
+                      : { ja: false },
                 } as Record<string, Record<string, unknown>>
               )[msg.tipo] ?? {};
             if (msg.tipo === 'CANDIDATURA') (st.enviadas as string[]).push(location.href);
@@ -688,6 +751,20 @@ try {
   assert.match(String(r.motivo), /j[áa] se candidatou/, 'e a pessoa precisa saber POR QUE não foi');
   assert.equal(envios, antes, 'nenhum segundo envio');
   console.log('✓ Motor: preenche as etapas, envia uma vez só e recusa o segundo clique na mesma vaga');
+
+  /**
+   * A MESMA vaga em outra URL (o InHire republica com outro id, e a vaga aparece em duas plataformas).
+   *
+   * O cadeado local da extensão é por URL e deixaria passar; quem pega é o núcleo, pela chave empresa+título
+   * — a mesma de `jaCandidatado`. É por isso que o motor manda `titulo` e `empresa` na pergunta, e não só a
+   * URL. Sem isto, dois currículos chegariam ao mesmo recrutador por caminhos diferentes.
+   */
+  await prepararCandidatura({ cfg: CFG_FALSA, dados: DADOS_FALSOS, cabem: CABEM_LIVRE, enviadas: [], irmas: ['Acme Tecnologia Ltda|Pessoa Desenvolvedora Back-end'] });
+  const antesDaIrma = envios;
+  r = await candidatar();
+  assert.equal(r.status, 'repetida', `a mesma vaga em outra URL tem de ser recusada pelo par empresa+título (veio ${r.status}: ${r.motivo})`);
+  assert.equal(envios, antesDaIrma, 'e nada pode sair');
+  console.log('✓ Motor: a mesma vaga republicada em outra URL é pega pela chave empresa+título do núcleo');
 
   /**
    * A outra metade do conserto do clique único, e a mais perigosa: quando o botão manda por JavaScript, daqui

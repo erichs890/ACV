@@ -7,7 +7,17 @@ import './platforms/inhire/index.ts';
 import './platforms/indeed/index.ts';
 import { cancelarLogin, entrarNaJanela } from './sessao.ts';
 import { plataformasConhecidas, vagaDaUrl } from './importar.ts';
-import { autorizado, dadosParaExtensao, perfilParaExtensao, receberCandidaturas, registrarCamposFaltando, registrarPlataformaDetectada, responderParaExtensao, tokenDaExtensao } from './extensao.ts';
+import {
+  autorizado,
+  dadosParaExtensao,
+  jaCandidatou,
+  perfilParaExtensao,
+  receberCandidaturas,
+  registrarCamposFaltando,
+  registrarPlataformaDetectada,
+  responderParaExtensao,
+  tokenDaExtensao,
+} from './extensao.ts';
 import './platforms/vagaspj/index.ts';
 import './platforms/divulgavagas/index.ts';
 import './platforms/workable/index.ts';
@@ -203,6 +213,11 @@ const rotas: Record<string, (req: IncomingMessage, res: ServerResponse, url: URL
   'POST /extensao/plataforma': async (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
     json(res, 200, registrarPlataformaDetectada(JSON.parse((await corpo(req)).toString('utf8'))));
+  },
+  // A extensão pergunta ANTES de preencher: é a prevenção da invariante 4 no caminho dela
+  'POST /extensao/ja-candidatou': async (req, res) => {
+    if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });
+    json(res, 200, jaCandidatou(JSON.parse((await corpo(req)).toString('utf8'))));
   },
   'POST /extensao/campos': async (req, res) => {
     if (!autorizado(req.headers.authorization)) return json(res, 401, { erro: 'token inválido' });

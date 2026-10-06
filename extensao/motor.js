@@ -202,11 +202,13 @@
      * na mesma vaga. O núcleo não salvava (a deduplicação dele usa `url|enviadaEm`, e a data muda a cada
      * tentativa), e com o ACV fechado não há núcleo nenhum para salvar.
      */
-    const antes = await aoFundo({ tipo: 'JA_ENVIEI', url: location.href });
+    // `titulo` e `empresa` vão junto: é com eles que o núcleo pega a MESMA vaga republicada em outra URL ou
+    // em outra plataforma, que a URL sozinha deixa passar
+    const antes = await aoFundo({ tipo: 'JA_ENVIEI', url: location.href, titulo, empresa });
     if (antes?.ja)
       return {
         status: 'repetida',
-        motivo: `você já se candidatou a esta vaga em ${new Date(antes.quando).toLocaleString('pt-BR')}. Mandar o currículo duas vezes para o mesmo recrutador queima o candidato, então eu não repito.`,
+        motivo: `${antes.motivo ?? 'você já se candidatou a esta vaga'}${antes.quando ? ` em ${new Date(antes.quando).toLocaleString('pt-BR')}` : ''}. Mandar o currículo duas vezes para o mesmo recrutador queima o candidato, então eu não repito.`,
       };
 
     const cota = await aoFundo({ tipo: 'CABEM', dominio });
