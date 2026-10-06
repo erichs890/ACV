@@ -85,6 +85,25 @@ varredura → score → fila → `executarCandidatura` → adapter → **preench
    republicada em outra URL passaria. Com o ACV aberto, o núcleo pega.
 5. **Ensaio não envia.** No núcleo, as rotas de envio ficam abortadas no navegador do robô; **na extensão**, `rede.js` recusa toda escrita enquanto o ensaio está armado — `fetch`, XHR, o evento `submit` **e `HTMLFormElement.prototype.submit`**, que chamado por JavaScript não dispara evento nenhum — por MÉTODO, não por caminho, e desarmado no fim da tentativa. Nos dois casos o motor preenche e clica normalmente: o que segura é a rede, porque formulário que abre por botão de JavaScript só revela os campos depois do clique. Desligar o ensaio devolve as vagas ensaiadas à fila (`podeEntrarNaFila`) — senão elas ficam órfãs: a tela mostra, o robô nunca pega.
 
+## Tema e abertura (front)
+
+- `src/tema.ts` — claro · escuro · seguir o Windows, em `localStorage`. É preferência de TELA, não dado do
+  robô: mandá-la ao núcleo significaria esperar o servidor para saber de que cor pintar a página. **O
+  `index.html` repete a leitura num script embutido** — ele roda antes de qualquer módulo para a página não
+  piscar branca antes de ficar escura, e script embutido não importa módulo. Mexeu num, mexa no outro.
+- **No escuro trocam as SUPERFÍCIES, não as cores da marca.** Cada cor tem dois papéis — fundo de botão com
+  texto branco (`bg-blue-dark`) e texto sobre o painel (`text-blue-dark`) — e nenhum tom único atende os
+  dois: medido, o melhor compromisso chega a 4,0 de contraste nos dois lados, que é AA só para texto grande.
+  Então o fundo fica com a cor de sempre (ela já passa com branco em cima) e só as utilidades `text-*` são
+  remapeadas para um tom claro, com 5,0+ sobre o painel escuro (`src/index.css`).
+- `src/components/Abertura.tsx` — 3 s de logo se desenhando, pulável por clique, tecla ou botão. **Não são
+  os 3 primeiros segundos do vídeo:** `vidlog.mp4` tem 8 s e aos 2,4 s só existe um traço — o monograma fecha
+  aos 5,0 s. O que toca são os 5 s de desenho acelerados para caber em 3 s. Ela é uma CAMADA por cima (o app
+  monta atrás), some sozinha em qualquer erro do vídeo, aparece uma vez por sessão e nem monta com
+  `prefers-reduced-motion`. O papel branco do vídeo é apagado pela mistura (`darken` no claro; `invert` +
+  `lighten` no escuro) sobre um fundo medido no próprio arquivo — e o `isolation: isolate` ali não é enfeite:
+  sem ele a mistura procura o fundo ATRÁS da abertura e o app inteiro aparece por trás do logo.
+
 ## Uma fonte por campo
 
 | Dado | Dono |

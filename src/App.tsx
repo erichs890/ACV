@@ -14,6 +14,8 @@ import Plataformas from './pages/Plataformas';
 import Automacao from './pages/Automacao';
 import Configuracoes from './pages/Configuracoes';
 import { useEstadoBruto } from './estado';
+import Abertura, { aberturaJaFoiVista } from './components/Abertura';
+import { aplicarTema, lerTema, seguirSistema } from './tema';
 
 const titulos: Record<string, string> = {
   '/painel': 'Painel',
@@ -94,23 +96,33 @@ function Conectando({ offline, tentar }: { offline: boolean; tentar: () => void 
 
 export default function App() {
   const { estado, offline, recarregar } = useEstadoBruto();
+  /**
+   * A abertura começa por cima de TUDO, inclusive da tela de "conectando".
+   *
+   * Assim os 3 s dela são gastos na espera que já existia (montar o React, perguntar ao núcleo) em vez de
+   * somados a ela. Quem pede menos movimento, ou já a viu nesta sessão, entra direto.
+   */
+  const [abertura, setAbertura] = useState(() => !aberturaJaFoiVista() && !globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches);
+
+  // O tema já foi pintado pelo script do index.html; aqui ele só passa a acompanhar o Windows ao vivo
+  useEffect(() => seguirSistema(() => aplicarTema(lerTema())), []);
 
   useEffect(() => {
     if (!estado?.perfil) document.title = 'ACV';
   }, [estado?.perfil]);
 
-  if (!estado) return <Conectando offline={offline} tentar={recarregar} />;
+  // A abertura é uma CAMADA por cima (fixed, z-100), e não um desvio: o app monta e consulta o núcleo
+  // atrás dela. Se fosse `return <Abertura/>`, os 3 s seriam somados à espera em vez de cobri-la.
+  const aberturaNaTela = abertura ? <Abertura onFim={() => setAbertura(false)} /> : null;
 
-  // Sem cadastro, o app inteiro é o formulário de entrada
-  if (!estado.perfil) {
-    return (
-      <Routes>
-        <Route path="*" element={<Cadastro />} />
-      </Routes>
-    );
-  }
-
-  return (
+  const conteudo = !estado ? (
+    <Conectando offline={offline} tentar={recarregar} />
+  ) : !estado.perfil ? (
+    // Sem cadastro, o app inteiro é o formulário de entrada
+    <Routes>
+      <Route path="*" element={<Cadastro />} />
+    </Routes>
+  ) : (
     <Routes>
       <Route element={<Layout />}>
         <Route path="painel" element={<Painel />} />
@@ -121,5 +133,12 @@ export default function App() {
         <Route path="*" element={<Navigate to="/painel" replace />} />
       </Route>
     </Routes>
+  );
+
+  return (
+    <>
+      {aberturaNaTela}
+      {conteudo}
+    </>
   );
 }

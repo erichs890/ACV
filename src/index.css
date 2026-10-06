@@ -337,6 +337,135 @@
   }
 }
 
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+   MODO ESCURO
+
+   O `data-tema` é posto no `<html>` por `src/tema.ts` — e, antes de tudo, pelo script embutido do
+   `index.html`, para a página não piscar branca antes de ficar escura.
+
+   **As superfícies trocam; as cores da marca, não.** Isto não é economia: cada cor aqui tem DOIS papéis no
+   app — fundo de botão com texto branco (`bg-blue-dark`) e texto sobre o painel (`text-blue-dark`) —, e
+   nenhum tom único atende os dois. Medido: o melhor compromisso possível para o azul chega a 4,0 de
+   contraste nos dois lados, que é AA só para texto grande. Então o fundo fica com a cor de sempre (ela já
+   passa com texto branco: 5,21 no azul, 4,78 no laranja) e só o TEXTO ganha um tom claro, logo abaixo. */
+html[data-tema='escuro'] {
+  /* Superfícies: cinza-azulado, não preto puro — preto com texto claro cansa a vista em tela grande */
+  --color-page-bg: #15181d;
+  --color-panel: #1d222a;
+  --color-panel-border: #333b47;
+
+  --color-ink: #e6e9ee; /* 13,1 sobre o painel */
+  --color-ink-soft: #9aa5b4; /* 6,4 sobre o painel */
+
+  /* A sidebar já era escura no claro; aqui ela se funde com o resto em vez de virar um bloco mais claro */
+  --color-side-top: #222932;
+  --color-side-bottom: #171c23;
+}
+
+/* O tom de TEXTO de cada cor da marca, calculado para 5,0+ de contraste sobre o painel escuro.
+   Remapeia a utilidade gerada pelo Tailwind em vez de mudar o token: assim `bg-` continua com a cor cheia. */
+html[data-tema='escuro'] {
+  .text-blue-dark {
+    color: #5894d4;
+  }
+  .text-blue-deep {
+    color: #6f94bc;
+  }
+  .text-green-deep {
+    color: #679f52;
+  }
+  .text-orange-deep {
+    color: #d67754;
+  }
+  .text-purple {
+    color: #a481cd;
+  }
+  .text-amber-ink {
+    color: #a08f60;
+  }
+
+  /* O anel branco do foco existe para o foco aparecer sobre a sidebar escura; no escuro ele vira o fundo */
+  :focus-visible,
+  label:has(> .sr-only:focus-visible) {
+    box-shadow: 0 0 0 2px var(--color-page-bg);
+  }
+
+  /* Faixas de alerta: no claro são lavadas de cor sobre branco, e sobre o painel escuro sumiriam */
+  .bg-orange\/10 {
+    background-color: color-mix(in srgb, var(--color-orange) 18%, transparent);
+  }
+  .bg-amber\/15 {
+    background-color: color-mix(in srgb, var(--color-amber) 22%, transparent);
+  }
+
+  /* Sombra no escuro não é cinza mais claro: é preto mais fundo */
+  .shadow-lg {
+    box-shadow: 0 10px 30px rgb(0 0 0 / 55%);
+  }
+
+  /* O PDF e as capturas são brancos por natureza: um quadro branco inteiro no escuro cega */
+  embed,
+  iframe,
+  img[src$='.png'] {
+    filter: brightness(0.92) contrast(1.02);
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────────────────────────
+   ABERTURA (src/components/Abertura.tsx)
+
+   O vídeo é tinta preta sobre papel branco. Em vez de recortá-lo num quadro, o papel é APAGADO pela mistura:
+   `multiply` no claro (branco sobre branco some, a tinta fica) e, no escuro, `invert` + `screen` (a tinta
+   vira branca, o papel vira preto e some no fundo). Assim o logo se desenha direto sobre a página, nos dois
+   temas, sem moldura e sem retângulo branco piscando numa tela escura. */
+/* O fundo da abertura NÃO é o `page-bg` do app: é o papel do vídeo, medido no arquivo.
+ *
+ * A tinta é preta sobre papel que vai de 226 a 250 de luminância (textura de papel, não branco liso). Com o
+ * fundo logo ABAIXO do papel mais escuro, `darken` (que fica com o menor valor de cada canal) apaga o papel
+ * inteiro e deixa só a tinta — o vídeo se desenha direto na tela, sem retângulo. `multiply` não serviria:
+ * ele multiplica, então papel sobre fundo claro dá um retângulo mais escuro, que foi o que apareceu no
+ * primeiro retrato. No escuro é o espelho: `invert` põe o papel entre 5 e 29, e `lighten` sobre um fundo em
+ * 31 some com ele do mesmo jeito. */
+.abertura {
+  background: #e0e0e0;
+  /* Sem isto o `mix-blend-mode` do vídeo procura o fundo ATRÁS da abertura e mistura com o app inteiro: a
+   * tela ficava com o painel e a barra lateral aparecendo por trás do logo. Isolar fecha o grupo aqui. */
+  isolation: isolate;
+}
+.abertura-video {
+  mix-blend-mode: darken;
+}
+html[data-tema='escuro'] .abertura {
+  background: #1f1f1f;
+}
+html[data-tema='escuro'] .abertura-video {
+  filter: invert(1);
+  mix-blend-mode: lighten;
+}
+
+@keyframes abertura-sai {
+  to {
+    opacity: 0;
+    transform: scale(1.04);
+  }
+}
+
+@keyframes abertura-entra {
+  from {
+    opacity: 0;
+  }
+}
+
+/* A barra que mostra os 3 segundos passando: diz, sem texto, que isto acaba sozinho e rápido */
+@keyframes abertura-tempo {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   /* biome-ignore-start lint/complexity/noImportantStyles: quem pede menos movimento tem de vencer qualquer animacao de componente */
   *,

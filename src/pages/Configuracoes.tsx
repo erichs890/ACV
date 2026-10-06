@@ -8,14 +8,20 @@ import {
   Briefcase,
   Calendar,
   Car,
+  Check,
   CircleCheck,
   DollarSign,
   House,
   Info,
   Languages,
   MessageSquare,
+  Monitor,
+  Moon,
+  Palette,
+  Play,
   Plus,
   RadarIcon,
+  Sun,
   ShieldAlert,
   ShieldCheck,
   Sparkles,
@@ -31,6 +37,8 @@ import ConfigIA from './ConfigIA';
 import ConfigDescoberta from './ConfigDescoberta';
 import ConfigSensiveis from './ConfigSensiveis';
 import { PAISES, PAISES_REMOTO_PADRAO } from '../paises';
+import { lerTema, salvarTema, type Tema } from '../tema';
+import { esquecerAbertura } from '../components/Abertura';
 
 const abas = [
   { id: 'dados', label: 'Meus Dados', icon: User },
@@ -38,6 +46,7 @@ const abas = [
   { id: 'sensiveis', label: 'Autodeclaração e dados sensíveis', icon: ShieldAlert },
   { id: 'ia', label: 'Inteligência Artificial', icon: Sparkles },
   { id: 'descoberta', label: 'Descoberta de vagas', icon: RadarIcon },
+  { id: 'aparencia', label: 'Aparência', icon: Palette },
   { id: 'notificacoes', label: 'Notificações', icon: Bell },
   { id: 'conta', label: 'Dados e Privacidade', icon: ShieldCheck },
 ];
@@ -137,6 +146,7 @@ export default function Configuracoes() {
           {atual === 'sensiveis' && <ConfigSensiveis onSalvar={avisar} />}
           {atual === 'ia' && <ConfigIA onSalvar={avisar} />}
           {atual === 'descoberta' && <ConfigDescoberta onSalvar={avisar} />}
+          {atual === 'aparencia' && <AbaAparencia />}
           {atual === 'notificacoes' && <AbaNotificacoes onSalvar={avisar} />}
           {atual === 'conta' && <AbaPrivacidade />}
         </SalvoEm.Provider>
@@ -533,6 +543,92 @@ function AbaPerguntas({ onSalvar }: { onSalvar: (t: string) => void }) {
       </button>
       <BarraSalvar texto="O robô responde automaticamente apenas as perguntas preenchidas acima." />
     </form>
+  );
+}
+
+/**
+ * Aparência: tema e abertura.
+ *
+ * Não tem botão de salvar, e isso é a regra e não a exceção: o tema se aplica no clique, e você vê o
+ * resultado na própria tela em que está escolhendo. Pedir "salvar" depois de a página já ter mudado de cor
+ * seria perguntar se é para valer o que já valeu.
+ */
+function AbaAparencia() {
+  const [tema, setTema] = useState<Tema>(() => lerTema());
+  const [revista, setRevista] = useState(false);
+
+  const escolher = (t: Tema) => {
+    salvarTema(t);
+    setTema(t);
+  };
+
+  const opcoes: { id: Tema; label: string; descricao: string; icon: LucideIcon }[] = [
+    { id: 'claro', label: 'Claro', descricao: 'o de sempre: fundo cinza-claro e painéis brancos', icon: Sun },
+    { id: 'escuro', label: 'Escuro', descricao: 'cinza-azulado, para trabalhar de noite sem a tela cegar', icon: Moon },
+    { id: 'sistema', label: 'Seguir o Windows', descricao: 'acompanha o tema da máquina, e troca junto quando ele trocar', icon: Monitor },
+  ];
+
+  return (
+    <div className="flex flex-1 flex-col gap-4">
+      <Cabecalho titulo="Aparência" sub="vale neste computador e muda na hora, sem salvar" />
+
+      <fieldset className="flex flex-col gap-2.5">
+        <legend className="label">Tema</legend>
+        <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
+          {opcoes.map(({ id, label, descricao, icon: Icon }) => {
+            const ativo = tema === id;
+            return (
+              <label
+                key={id}
+                className={`flex cursor-pointer flex-col gap-2 rounded-lg border p-3.5 transition-colors ${ativo ? 'border-blue-dark bg-blue-dark/10' : 'border-panel-border hover:border-ink-soft'}`}
+              >
+                <span className="flex items-center gap-2">
+                  <input type="radio" name="tema" value={id} checked={ativo} onChange={() => escolher(id)} className="sr-only" />
+                  <Icon size={16} aria-hidden className={ativo ? 'text-blue-dark' : 'text-ink-soft'} />
+                  <span className="text-[13px] font-bold">{label}</span>
+                  {ativo && <Check size={14} aria-hidden className="ml-auto text-blue-dark" />}
+                </span>
+                <span className="flex-1 text-[11px] text-ink-soft">{descricao}</span>
+                {/* Amostra do tema, pintada com as cores dele e não com as da tela atual */}
+                <span
+                  aria-hidden
+                  className={`mt-auto flex h-[46px] gap-1.5 overflow-hidden rounded-[6px] border p-1.5 ${id === 'escuro' ? 'border-[#333b47] bg-[#15181d]' : id === 'claro' ? 'border-[#c3c9d1] bg-[#eaeaea]' : 'border-panel-border bg-page-bg'}`}
+                >
+                  <span className={`w-[18px] rounded-[3px] ${id === 'escuro' ? 'bg-[#171c23]' : id === 'claro' ? 'bg-[#232a34]' : 'bg-side-bottom'}`} />
+                  <span className={`flex-1 rounded-[3px] ${id === 'escuro' ? 'bg-[#1d222a]' : id === 'claro' ? 'bg-white' : 'bg-panel'}`} />
+                </span>
+              </label>
+            );
+          })}
+        </div>
+      </fieldset>
+
+      <div className="flex flex-wrap items-center gap-2.5 rounded-lg border border-panel-border p-3.5">
+        <div className="flex-1">
+          <p className="text-[13px] font-bold">Abertura</p>
+          <p className="text-[11px] text-ink-soft">
+            O logo se desenhando por 3 segundos quando o ACV abre, com saída a qualquer clique ou tecla. Aparece uma vez por sessão do navegador — e nunca, se o Windows estiver com animações
+            reduzidas.
+          </p>
+        </div>
+        <button
+          type="button"
+          className="btn btn-secondary btn-sm"
+          onClick={() => {
+            esquecerAbertura();
+            setRevista(true);
+          }}
+        >
+          <Play size={14} aria-hidden />
+          Ver de novo
+        </button>
+      </div>
+      {revista && (
+        <p role="status" className="-mt-2 text-[11px] text-green-deep">
+          Pronto: a abertura volta a tocar quando você recarregar a página (F5).
+        </p>
+      )}
+    </div>
   );
 }
 

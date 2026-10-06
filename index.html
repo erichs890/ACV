@@ -14,6 +14,20 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=PT+Sans:wght@400;700&display=swap" rel="stylesheet" />
+    <!--
+      O tema tem de valer no PRIMEIRO QUADRO, senão a página pisca branca antes de ficar escura — e numa tela
+      inteira isso incomoda os olhos de quem escolheu o escuro justamente por isso. Módulo não serve: ele
+      carrega depois do CSS pintar. Daí este script embutido, que é a única duplicação da lógica de
+      `src/tema.ts` (a chave e a leitura do sistema). Mexeu lá, mexa aqui.
+    -->
+    <script>
+      (() => {
+        const escolhido = localStorage.getItem('acv:tema') || 'sistema';
+        const escuro = escolhido === 'escuro' || (escolhido === 'sistema' && matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.tema = escuro ? 'escuro' : 'claro';
+        document.documentElement.style.colorScheme = escuro ? 'dark' : 'light';
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
