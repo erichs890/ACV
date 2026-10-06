@@ -745,6 +745,45 @@ assert.ok(
 );
 console.log('✓ Plataforma só-descoberta: fila, clique manual e ponto de uso — nenhum caminho envia currículo');
 
+// ─── 14) Achados da auditoria do codex (05/10/2026) ──────────────────────────────────────────────
+
+// 14a) O seu clique durante uma candidatura libera A SUA vaga, não a da frente da fila.
+// `pedidoForcado` era um booleano: a exceção dos portões ia para quem `proximaNaFila()` escolhesse — a da
+// FRENTE — então uma vaga automática passava por cima da janela de horário, do intervalo e do limite diário,
+// e a vaga clicada (que entra no fim) continuava esperando. Agora o pedido carrega o id.
+cenario({ janela: '03:00-03:01' }); // portão FECHADO: fora da janela, nada automático pode sair
+const aDaFrente = enfileirar({ score: 95 });
+const aQuePedi = enfileirar({ status: 'encontrada', posicao: undefined, score: 10 });
+await processarProxima();
+assert.equal(st(aDaFrente), 'na_fila', 'fora da janela, a fila não anda');
+await candidatarAgora(aQuePedi);
+await new Promise(r => setTimeout(r, 120)); // deixa o trabalhador assentar: `ligarRobo` de outro cenário dispara `processarProxima` sem await
+assert.equal(st(aQuePedi), 'enviada', 'o seu pedido fura o portão');
+assert.equal(st(aDaFrente), 'na_fila', 'e a vaga automática da frente NÃO herda a sua exceção');
+assert.equal(enviadas(), 1, 'exatamente uma saiu: a que você pediu');
+
+// 14b) Mudar os regimes aceitos tira da fila a vaga que não serve mais.
+// `modeloAceito` era conferido só na entrada da fila; no ponto de uso, `filtroAindaVale` olhava apenas nicho e
+// nota. É a quinta vez que este projeto encontra o mesmo padrão (filtro no ciclo de vida, não no ponto de uso).
+cenario({ regimes: ['remoto', 'presencialNaFila'] });
+const presencialNaFila = enfileirar({ modelo: 'presencial', score: 90 });
+kv.set('automacao', { ...ler.automacao(), regimes: ['remoto'] }); // "agora só aceito remoto"
+await processarProxima();
+assert.equal(enviadas(), 0, 'vaga presencial não pode mais ser enviada depois de você só aceitar remoto');
+assert.equal(st(presencialNaFila), 'ignorada');
+assert.ok(
+  log.listar(50).some(l => /n[ãa]o aceita mais vaga presencial/.test(l.msg)),
+  'e o log diz o motivo, em vez de a vaga sumir em silêncio',
+);
+
+// 14c) Mas o seu clique continua passando por cima disso também: o filtro é do robô, não seu
+cenario({ regimes: ['remoto'] });
+const presencialQuePedi = enfileirar({ modelo: 'presencial', status: 'encontrada', posicao: undefined, score: 90 });
+await candidatarAgora(presencialQuePedi);
+await new Promise(r => setTimeout(r, 120));
+assert.equal(st(presencialQuePedi), 'enviada', 'se VOCÊ pede uma presencial, vai');
+console.log('✓ Auditoria: o seu pedido libera a SUA vaga (não a da frente), e o regime é reconferido no envio');
+
 apagarTudo();
 log.listar(0);
 console.log('\nFila: tudo certo.');

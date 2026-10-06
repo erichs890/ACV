@@ -194,6 +194,21 @@
     const bloqueada = empresaBloqueada(empresa, cfg.empresasBloqueadas);
     if (bloqueada) return { status: 'bloqueada', motivo: `"${empresa}" está na sua lista de empresas bloqueadas (${bloqueada}).` };
 
+    /**
+     * Uma vaga, uma candidatura (invariante 4) — a trava que faltava aqui.
+     *
+     * Vem ANTES do limite do dia e antes de qualquer preenchimento: o pior desfecho possível neste projeto é
+     * dois currículos na mesa do mesmo recrutador, e o motor não tinha nada que impedisse clicar duas vezes
+     * na mesma vaga. O núcleo não salvava (a deduplicação dele usa `url|enviadaEm`, e a data muda a cada
+     * tentativa), e com o ACV fechado não há núcleo nenhum para salvar.
+     */
+    const antes = await aoFundo({ tipo: 'JA_ENVIEI', url: location.href });
+    if (antes?.ja)
+      return {
+        status: 'repetida',
+        motivo: `você já se candidatou a esta vaga em ${new Date(antes.quando).toLocaleString('pt-BR')}. Mandar o currículo duas vezes para o mesmo recrutador queima o candidato, então eu não repito.`,
+      };
+
     const cota = await aoFundo({ tipo: 'CABEM', dominio });
     if (!cota?.cabem)
       return { status: 'limite', motivo: `limite de ${cota?.limite ?? 0} candidatura(s) por dia nesta plataforma já alcançado${cota?.aquecendo ? ' (plataforma em aquecimento)' : ''}.` };

@@ -567,9 +567,12 @@ try {
                   CABEM: st.cabem,
                   PERGUNTA: st.pergunta ?? { resposta: null, motivo: 'a IA está desligada nas configurações da extensão' },
                   CANDIDATURA: { sincronizado: true },
+                  // A trava de "uma vaga, uma candidatura" do worker, imitada aqui: `enviadas` é o que o
+                  // `chrome.storage.local` guardaria entre cliques, e é o que o motor precisa consultar
+                  JA_ENVIEI: (st.enviadas as string[]).includes(location.href) ? { ja: true, quando: '2026-10-05T12:00:00.000Z' } : { ja: false },
                 } as Record<string, Record<string, unknown>>
               )[msg.tipo] ?? {};
-            if (msg.tipo === 'CANDIDATURA') (st.enviadas as unknown[]).push(msg.candidatura);
+            if (msg.tipo === 'CANDIDATURA') (st.enviadas as string[]).push(location.href);
             cb({ ok: true, ...resposta });
           },
         },
@@ -621,16 +624,25 @@ try {
   assert.equal(r.status, 'enviada', `esperava enviada, veio ${r.status}: ${r.motivo}`);
   assert.equal(envios, 1, 'exatamente um envio');
   assert.equal(await page.inputValue('#exp'), 'Mais de 3 anos', 'a resposta salva escolheu a opção certa da lista');
-  const registradas = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: unknown[] } }).__stub.enviadas)) as { titulo: string; empresa: string }[];
+  const registradas = (await page.evaluate(() => (globalThis as unknown as { __stub: { enviadas: string[] } }).__stub.enviadas)) as string[];
   assert.equal(registradas.length, 1, 'a candidatura tem de ser registrada para contar no limite e subir ao ACV');
-  assert.match(registradas[0].empresa, /Acme/);
   assert.ok((r.espera as number) >= 5000, 'o motor devolve quanto esperar antes da próxima');
 
-  // Clicar de novo não manda outra: a trava é a mesma do núcleo (uma vaga, uma candidatura)
+  /**
+   * Clicar de novo na MESMA vaga não manda outra (invariante 4).
+   *
+   * Até 05/10/2026 este teste passava pelo motivo errado: a página falsa desabilita o botão depois do envio,
+   * então nada saía por causa do HTML, não por causa de uma trava. O motor conferia empresa bloqueada e
+   * limite do dia, e nada sobre "já mandei para esta vaga" — a auditoria do codex achou isso, e era o defeito
+   * mais grave do lote: dois currículos para o mesmo recrutador, funcionando até com o ACV fechado (onde não
+   * há núcleo nenhum para salvar). Agora o desfecho é `repetida`, declarado, e o teste exige o motivo.
+   */
   const antes = envios;
   r = await candidatar();
-  assert.equal(envios, antes, `não pode sair um segundo envio (veio ${r.status}: ${r.motivo})`);
-  console.log('✓ Motor: preenche as etapas, envia uma vez só e confirma pela resposta HTTP (prova de rede)');
+  assert.equal(r.status, 'repetida', `o segundo clique tem de ser recusado com motivo, não só não enviar (veio ${r.status}: ${r.motivo})`);
+  assert.match(String(r.motivo), /j[áa] se candidatou/, 'e a pessoa precisa saber POR QUE não foi');
+  assert.equal(envios, antes, 'nenhum segundo envio');
+  console.log('✓ Motor: preenche as etapas, envia uma vez só e recusa o segundo clique na mesma vaga');
 
   /**
    * A outra metade do conserto do clique único, e a mais perigosa: quando o botão manda por JavaScript, daqui

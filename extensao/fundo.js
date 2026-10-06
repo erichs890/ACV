@@ -152,10 +152,50 @@ async function dadosParaPreencher() {
 }
 
 /**
+ * A vaga, sem o que não a identifica.
+ *
+ * Duas URLs da mesma vaga precisam dar a MESMA chave, senão a trava de duplicidade não trava nada: rastreio
+ * de campanha (`?utm_source=...`), `www`, barra no fim e maiúsculas não mudam a vaga. É o mesmo raciocínio
+ * de `chaveUrl` em core/importar.ts — aqui é a versão da extensão, que precisa funcionar com o ACV fechado.
+ */
+function chaveDaVaga(url) {
+  try {
+    const u = new URL(url);
+    return `${u.hostname.replace(/^www\./, '')}${u.pathname.replace(/\/+$/, '')}`.toLowerCase();
+  } catch {
+    return String(url ?? '').toLowerCase();
+  }
+}
+
+/**
+ * Já mandei currículo para esta vaga? (invariante 4 do projeto: uma vaga, uma candidatura.)
+ *
+ * **Isto faltava, e era o defeito mais grave que a auditoria do codex achou em 05/10/2026.** O motor conferia
+ * empresa bloqueada e limite do dia, e NÃO conferia isto: clicar duas vezes no painel da mesma vaga mandava
+ * dois currículos para o mesmo recrutador. O núcleo não salvava: a deduplicação dele, em
+ * `receberCandidaturas`, usa `url|enviadaEm`, e o `enviadaEm` muda a cada tentativa — então as duas entravam
+ * no histórico como candidaturas distintas. E funcionava com o ACV fechado, onde não há núcleo nenhum para
+ * salvar ninguém.
+ *
+ * Mora em `chrome.storage.local` de propósito: tem de sobreviver ao navegador fechado, à extensão recarregada
+ * e ao ACV desligado. Guarda a data para o relato poder dizer "você já se candidatou a esta em 03/10".
+ */
+async function jaEnviei(url) {
+  const chave = chaveDaVaga(url);
+  const enviadas = await ler('enviadas', {});
+  return enviadas[chave] ? { ja: true, quando: enviadas[chave] } : { ja: false };
+}
+
+/**
  * Candidatura feita: conta para o limite do dia e vai para o núcleo. Com o ACV fechado ela fica na fila de
  * pendentes e sobe na próxima sincronização — o histórico consolidado não pode depender de o app estar aberto.
  */
 async function registrarCandidatura(c) {
+  // A marca da vaga vem ANTES de tudo: se a sincronização com o núcleo falhar, a trava de duplicidade não
+  // pode falhar junto. Guardar demais aqui é inofensivo; guardar de menos manda dois currículos.
+  const enviadas = await ler('enviadas', {});
+  enviadas[chaveDaVaga(c.url)] = c.enviadaEm ?? new Date().toISOString();
+  await gravar('enviadas', enviadas);
   const contadores = await ler('contadores', {});
   const atual = contadores[c.dominio] ?? {};
   contadores[c.dominio] = {
@@ -248,6 +288,7 @@ const ACOES = {
   SINCRONIZAR: async () => ({ cache: await sincronizar(true) }),
   DADOS: async () => ({ dados: await dadosParaPreencher() }),
   CANDIDATURA: m => registrarCandidatura(m.candidatura),
+  JA_ENVIEI: m => jaEnviei(m.url),
   CABEM: async m => {
     const cfg = await lerConfig();
     return quantasCabemHoje(m.dominio, cfg, await ler('contadores', {}));

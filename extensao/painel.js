@@ -145,6 +145,9 @@
       if (r.status === 'enviada') {
         registrar('Candidatura enviada.', 'ok');
         if (r.espera) registrar(`Espere ~${Math.round(r.espera / 1000)} s antes da próxima.`);
+      } else if (r.status === 'repetida') {
+        // Não é falha: é a trava funcionando. Vermelho aqui faria a pessoa achar que deu erro e tentar de novo.
+        registrar(r.motivo, 'atencao');
       } else if (r.status === 'ensaio') {
         // Ensaio é desfecho BOM: sem este ramo ele caía no `else` e aparecia em vermelho, como falha
         registrar('Ensaio concluído: o formulário foi preenchido e nada chegou à plataforma.', 'ok');

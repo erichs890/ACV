@@ -109,7 +109,10 @@ async function candidatar(vaga: Vaga, dados: DadosCandidatura, log: Log): Promis
           [...document.querySelectorAll<HTMLInputElement>('input[name]')].filter(i => i.type !== 'file' && i.type !== 'radio' && i.type !== 'checkbox' && i.value).map(i => [i.name, i.value]),
         ),
       );
-      log('info', `Valores no formulário: ${JSON.stringify(valores).slice(0, 400)}`);
+      // Só os NOMES dos campos e se têm valor — nunca o valor. O log vai para `diario/acv-DIA.log`, que é o
+      // arquivo que a pessoa cola num chat pedindo ajuda: celular, CPF e pretensão saíam junto. Achado pela
+      // auditoria do codex em 05/10/2026.
+      log('info', `Campos preenchidos no ensaio: ${Object.keys(valores).join(', ').slice(0, 400) || '(nenhum)'}`);
       return { ...r.resultado, captura: await captura('ensaio'), formulario: resumo };
     }
     if (r.resultado.status === 'erro') return { ...r.resultado, motivo: recusaDoServidor || r.resultado.motivo, captura: await captura('erro'), formulario: resumo };

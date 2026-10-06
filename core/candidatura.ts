@@ -218,7 +218,9 @@ export async function executarCandidatura(id: string) {
   if (!perfil || !principal?.caminho || !existsSync(principal.caminho)) {
     vagas.atualizar(id, { status: 'erro', erro: 'perfil ou currículo principal ausente' });
     registrar('erro', `"${vaga.titulo}": perfil ou currículo principal ausente.`);
-    anotarDesfecho(vaga, 'erro', { motivo: 'perfil ou currículo principal ausente', curriculo: principal?.caminho ?? null });
+    // `curriculoPresente`, e não o caminho: um caminho absoluto carrega o nome de usuário e a estrutura de
+    // pastas dele, e o diário existe para ser colado num chat. Achado pela auditoria do codex em 05/10/2026.
+    anotarDesfecho(vaga, 'erro', { motivo: 'perfil ou currículo principal ausente', perfilPresente: !!perfil, curriculoPresente: !!principal?.caminho && existsSync(principal.caminho) });
     return;
   }
   if (!adapter) {

@@ -257,6 +257,10 @@ function filtroAindaVale(v: Vaga, cfg: ReturnType<typeof ler.automacao>): string
   const excluido = termoExcluido(v.titulo, cfg.excluir);
   if (excluido) return `"${excluido}" está na sua lista de nichos a evitar`;
   if (v.score < cfg.scoreMinimo) return `a compatibilidade dela (${v.score}%) ficou abaixo do seu mínimo (${cfg.scoreMinimo}%)`;
+  // O modelo de trabalho era conferido SÓ na entrada da fila: passar a aceitar apenas remoto não tirava a
+  // vaga presencial que já estava enfileirada, e ela saía. É a quinta vez que este projeto encontra o mesmo
+  // padrão (filtro no ciclo de vida em vez do ponto de uso). Achado pela auditoria do codex em 05/10/2026.
+  if (!modeloAceito(v, cfg)) return `você não aceita mais vaga ${v.modelo} (Automação › regimes)`;
   return '';
 }
 
@@ -433,8 +437,9 @@ export function candidatarAgora(id: string): Promise<void> {
   });
   registrar('info', `"${v.titulo}" entrou na fila.`);
   emitir({ tipo: 'estado' });
-  // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do ACV continua ignorando
-  return processarProxima(true);
+  // Devolve a promessa: quem clicou na extensão espera o desfecho; a tela do ACV continua ignorando.
+  // O id vai junto: é ele que faz a exceção dos portões valer para ESTA vaga e não para a da frente da fila.
+  return processarProxima(true, id);
 }
 
 /**
@@ -641,7 +646,16 @@ async function liberarNavegador() {
 
 let ultimaEspera = '';
 let rodando = false; // trabalhador da fila ativo (cobre o intervalo entre duas candidaturas)
-let pedidoForcado = false; // chegou um pedido manual enquanto o robô estava ocupado: roda assim que liberar
+/**
+ * A vaga que VOCÊ pediu enquanto o trabalhador estava ocupado — o id, não um booleano.
+ *
+ * Era `let pedidoForcado = false`, e isso liberava a vaga errada: `forcarAgora` dispensava os portões e
+ * `proximaNaFila()` escolhia pela posição, que é a da FRENTE da fila. Ou seja, clicar em "Quero me
+ * candidatar" durante uma candidatura empurrava uma vaga AUTOMÁTICA por cima da janela de horário, do
+ * intervalo e do limite diário — e a vaga que você clicou, que entra no fim da fila, continuava esperando.
+ * Achado pela auditoria do codex em 05/10/2026.
+ */
+let pedidoForcado: string | null = null; // chegou um pedido manual enquanto o robô estava ocupado: roda assim que liberar
 
 /** Processa UMA candidatura. Retorna true se pode continuar imediatamente para a próxima. */
 async function processarUma(proxima: Vaga): Promise<boolean> {
@@ -682,47 +696,65 @@ async function processarUma(proxima: Vaga): Promise<boolean> {
  *
  * `forcar` = pedido manual do usuário: roda a próxima da fila ignorando os portões de agendamento.
  */
-export async function processarProxima(forcar = false) {
+export async function processarProxima(forcar = false, idPedido?: string) {
   // `ocupado` é a candidatura em si; `rodando` é o trabalhador — sem ele, o laço de 20 s entraria entre duas
   // candidaturas do mesmo trabalhador (quando `ocupado` já voltou a false) e abriria uma segunda fila em paralelo.
   if (rodando || ocupado) {
     // Não perde o pedido: quem está rodando agora reavalia a fila ao terminar
-    if (forcar) pedidoForcado = true;
+    if (forcar) pedidoForcado = idPedido ?? pedidoForcado ?? '*';
     return;
   }
   rodando = true;
   try {
-    await girarFila(forcar);
+    await girarFila(forcar ? (idPedido ?? '*') : null);
   } finally {
     rodando = false;
   }
   // Um pedido manual que chegou durante a rodada: atende agora, sem esperar os 20 s
-  if (pedidoForcado) await processarProxima(true);
+  if (pedidoForcado) {
+    const pendente = pedidoForcado;
+    pedidoForcado = null;
+    await processarProxima(true, pendente === '*' ? undefined : pendente);
+  }
 }
 
-async function girarFila(forcar: boolean) {
+/** `forcadoPara`: null = rodada normal · id = a vaga que você pediu · '*' = pedido sem id (retomada). */
+async function girarFila(forcadoPara: string | null) {
   for (let rodada = 0; rodada < 50; rodada++) {
     const cfg = ler.automacao();
-    const forcarAgora = forcar || pedidoForcado;
-    pedidoForcado = false;
-    if (!forcarAgora) {
+    const pedido = forcadoPara ?? pedidoForcado;
+    pedidoForcado = null;
+    limparForaDoFoco(); // o foco pode ter mudado depois que a vaga entrou na fila
+
+    /**
+     * A vaga que você pediu vem PRIMEIRO, e só ela dispensa os portões.
+     *
+     * Antes a ordem era outra: o portão era dispensado e então `proximaNaFila()` escolhia pela posição — a
+     * da FRENTE da fila. Duas consequências, as duas erradas: uma vaga AUTOMÁTICA passava por cima da janela
+     * de horário, do intervalo e do limite diário herdando a sua exceção, e a vaga que você clicou (que entra
+     * no fim da fila) continuava esperando. Achado pela auditoria do codex em 05/10/2026.
+     *
+     * `pedidaPorVoce` entra na conta porque é a marca persistente do seu clique: ela sobrevive a uma
+     * reinicialização do núcleo, e o `pedido` em memória não.
+     */
+    const pedida = pedido && pedido !== '*' ? vagas.get(pedido) : null;
+    const proxima = pedida && NA_FILA.includes(pedida.status) ? pedida : vagas.proximaNaFila();
+    if (!proxima) {
+      await liberarNavegador();
+      return;
+    }
+    if (!(pedido === '*' || pedido === proxima.id || proxima.pedidaPorVoce === true)) {
       const espera = porQueParada(cfg);
       if (espera) {
         await liberarNavegador();
         // Só avisa quando há fila de verdade e o motivo mudou (senão vira ruído a cada 20 s)
-        if (vagas.proximaNaFila() && espera !== ultimaEspera) {
+        if (espera !== ultimaEspera) {
           registrar('info', `Fila parada: ${espera}.`);
           ultimaEspera = espera;
         }
         return;
       }
       ultimaEspera = '';
-    }
-    limparForaDoFoco(); // o foco pode ter mudado depois que a vaga entrou na fila
-    const proxima = vagas.proximaNaFila();
-    if (!proxima) {
-      await liberarNavegador();
-      return;
     }
     // Filtro de agora, não o de quando ela entrou na fila
     const desatualizada = filtroAindaVale(proxima, cfg);
@@ -735,7 +767,7 @@ async function girarFila(forcar: boolean) {
     }
     if (cfg.ensaio) registrar('alerta', `Modo ensaio LIGADO: "${proxima.titulo}" será preenchida mas NÃO enviada. Desligue o ensaio em Automação para candidatar de verdade.`);
     if (!(await processarUma(proxima))) return;
-    forcar = false; // um pedido manual libera uma candidatura; as seguintes respeitam os portões
+    forcadoPara = null; // um pedido manual libera UMA candidatura; as seguintes respeitam os portões
   }
 }
 
