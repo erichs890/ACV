@@ -138,8 +138,9 @@ export async function buscarVagas(manual = false): Promise<number> {
         novas = novas.concat(achadas);
         terminarPlataforma(id, vagas.listar().length - antes);
       } catch (e) {
-        registrar('erro', `${id}: a varredura falhou (${(e as Error).message.slice(0, 90)}).`);
-        terminarPlataforma(id, 0);
+        const motivo = (e as Error).message.slice(0, 90);
+        registrar('erro', `${id}: a varredura falhou (${motivo}).`);
+        terminarPlataforma(id, 0, motivo); // o motivo vai para a tela de mapeamento, não só para o log
       }
     }
   } finally {

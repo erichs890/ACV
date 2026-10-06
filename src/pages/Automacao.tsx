@@ -26,6 +26,7 @@ import Panel from '../components/Panel';
 import VerMais from '../components/VerMais';
 import { BotaoSalvar } from '../components/BotaoSalvar';
 import Modal from '../components/Modal';
+import TelaDeMapeamento from '../components/TelaDeMapeamento';
 import { statusRobo } from '../components/Sidebar';
 import { useEstado, type ConfigAutomacao } from '../estado';
 import { post, urlArquivo } from '../api';
@@ -116,6 +117,8 @@ export default function Automacao() {
   const [mostrarIgnoradas, setMostrarIgnoradas] = useState(false);
   const [mostrarEnviadas, setMostrarEnviadas] = useState(false);
   const [mostrarForaDoFoco, setMostrarForaDoFoco] = useState(false);
+  // A tela de mapeamento abre no clique e NÃO fecha sozinha ao terminar: o fim é o momento de ler o resultado
+  const [mapeando, setMapeando] = useState(false);
   const set = (mudanca: Partial<ConfigAutomacao>) => setCfg(c => ({ ...c, ...mudanca }));
 
   const conectadas = PLATAFORMAS.filter(p => estado.conexoes[p.id]);
@@ -277,10 +280,15 @@ export default function Automacao() {
     }
   }
 
-  // Mesmo trabalho de "Buscar vagas agora", com o nome que faz sentido visto do painel da fila: varre as
-  // plataformas conectadas, pontua e enfileira. Um caminho só — dois botões disparando lógicas diferentes
-  // para o mesmo objetivo é o que o CLAUDE.md chama de segunda fonte.
-  const mapear = buscar;
+  /**
+   * Mesmo trabalho de "Buscar vagas agora" — um caminho só, porque dois botões disparando lógicas diferentes
+   * para o mesmo objetivo é a segunda fonte que o CLAUDE.md proíbe. O que muda é a tela: abre a janela de
+   * mapeamento, onde dá para ver cada portal sendo varrido.
+   */
+  async function mapear() {
+    setMapeando(true);
+    await buscar();
+  }
 
   return (
     <div className="stagger grid grid-cols-[1fr_380px] items-start gap-[15px] max-lg:grid-cols-1">
@@ -847,6 +855,18 @@ export default function Automacao() {
           )}
         </Panel>
       </div>
+
+      <TelaDeMapeamento
+        aberto={mapeando}
+        onFechar={() => setMapeando(false)}
+        varredura={estado.varredura}
+        fila={estado.fila}
+        filaAlvo={estado.automacao.filaAlvo}
+        onComecarEnvio={() => {
+          setMapeando(false);
+          void post('/robo', { ligar: true });
+        }}
+      />
 
       {pendente && (
         // `key` por vaga: cada pergunta é uma decisão própria, então o modal remonta e reabre na seguinte

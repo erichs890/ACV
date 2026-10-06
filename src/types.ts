@@ -187,6 +187,26 @@ export interface ProgressoVarredura {
   novas: number; // vagas inéditas achadas nesta varredura
   conhecidas: number; // vagas que o robô já tinha: é o que garante que clicar de novo não repete
   iniciadaEm: string | null;
+  /**
+   * O estado de CADA plataforma, não só da que roda agora.
+   *
+   * Os campos acima descrevem a plataforma atual, e isso basta para uma barra de progresso — mas não para
+   * ver a varredura inteira acontecendo, que é o que a tela de mapeamento mostra. Sem isto, as já terminadas
+   * perdem o que trouxeram assim que a próxima começa.
+   */
+  porPlataforma: Record<string, PassoDaPlataforma>;
+}
+
+export interface PassoDaPlataforma {
+  estado: 'espera' | 'varrendo' | 'pronta' | 'erro';
+  etapa: string;
+  atual: number;
+  total: number;
+  novas: number;
+  conhecidas: number;
+  erro?: string;
+  /** Milissegundos que ela levou, para a tela mostrar quem é lenta e quem é rápida. */
+  duracaoMs?: number;
 }
 
 export interface ConfigDescoberta {

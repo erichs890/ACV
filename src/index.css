@@ -284,6 +284,20 @@
   }
 }
 
+/* Barra de trabalho de tamanho DESCONHECIDO (tela de mapeamento).
+   Existe porque `total: 0` significa "nao sei quantas paginas isso tem" — o Divulga Vagas abre 150 e o InHire
+   uma requisicao por empresa. Mostrar uma barra parada em 50% seria inventar um numero; esta anda sem
+   prometer quanto falta. O bloco de prefers-reduced-motion abaixo a congela, e nesse caso ela fica como um
+   trecho estatico no comeco, que continua dizendo "ha trabalho em curso" sem se mover. */
+@keyframes indeterminada {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(300%);
+  }
+}
+
 /* Grafico do mes (src/components/GraficoDoMes.tsx).
    O estado BASE e o desenho pronto (dashoffset 0) e a animacao vem DE 1 ate 0: assim, quando o bloco de
    prefers-reduced-motion desliga as animacoes, a linha aparece inteira em vez de desaparecer. */
