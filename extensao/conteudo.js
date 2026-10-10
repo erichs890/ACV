@@ -450,8 +450,32 @@
   // ─── Diagnóstico ──────────────────────────────────────────────────────────────────────────────
   const dominioBase = host => host.replace(/^www\./, '');
 
-  /** Só reporta o que é mesmo página de vaga: anúncio com JobPosting ou botão de candidatura à vista. */
-  const pareceVaga = () => todos('script[type="application/ld+json"]').some(s => /"@type"\s*:\s*"?JobPosting/i.test(s.textContent ?? '')) || !!botaoCandidatar() || URL_LOGIN.test(location.pathname);
+  /**
+   * É mesmo uma página de vaga? Em site DESCONHECIDO, é isto que decide se o painel aparece.
+   *
+   * Duas das três condições antigas faziam o painel invadir a web inteira:
+   *
+   *  - **`/login` no caminho da URL** punha o painel em TODA tela de entrada que existe — banco, e-mail,
+   *    painel de hospedagem. Ela nem servia para o que parecia: em plataforma conhecida o painel já aparece
+   *    de qualquer jeito (`classificar` só chega aqui quando o site NÃO está no cadastro), então o único
+   *    efeito dela era ruído em site alheio. Saiu.
+   *  - **um botão com "aplicar"/"inscrever"** é fraco sozinho: "Aplicar" aparece em simulador de banco, em
+   *    site de curso e no portfólio dele. Agora o botão precisa de companhia — a página tem de falar de vaga
+   *    no título ou no caminho, ou ter um campo de anexo de currículo.
+   *
+   * O `JobPosting` no JSON-LD continua bastando sozinho: ali é a própria página se declarando uma vaga.
+   */
+  // Com borda de palavra: sem ela, "job" casaria dentro de "adjob" e "apply" dentro de "supply"
+  const CONTEXTO_DE_VAGA = /\b(vagas?|carreiras?|trabalhe[- ]conosco|oportunidades?|recrutamento|jobs?|careers?|position|opening|hiring|apply)\b/i;
+  const temJobPosting = () => todos('script[type="application/ld+json"]').some(s => /"@type"\s*:\s*"?JobPosting/i.test(s.textContent ?? ''));
+  const campoDeCurriculo = () =>
+    todos('input[type="file"]').some(e => /curr[íi]culo|curriculum|resume|\bcv\b|anexo/i.test(`${e.name} ${e.id} ${e.getAttribute('aria-label') ?? ''} ${e.closest('label')?.textContent ?? ''}`));
+
+  const pareceVaga = () => {
+    if (temJobPosting()) return true;
+    if (!botaoCandidatar()) return false;
+    return CONTEXTO_DE_VAGA.test(`${document.title} ${location.pathname}`) || campoDeCurriculo();
+  };
 
   function diagnosticar() {
     const handler = handlerDe(location.hostname);

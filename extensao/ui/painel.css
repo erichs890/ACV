@@ -94,6 +94,33 @@
 .topo button:hover {
   background: rgb(255 255 255 / 15%);
 }
+/* O interruptor da extensão, no topo do painel.
+ *
+ * É um `role="switch"` e não mais um quadradinho de 24 px como os vizinhos: desligar a extensão inteira não
+ * é a mesma classe de ação que recolher ou esconder, e a forma precisa dizer isso antes do clique. Chave
+ * ligada à esquerda não existe — o pino à direita é o que todo mundo lê como "ligado". */
+.topo button[role='switch'] {
+  width: 34px;
+  height: 18px;
+  padding: 0 2px;
+  justify-content: flex-end;
+  border-radius: 9px;
+  border-color: rgb(255 255 255 / 55%);
+  background: rgb(255 255 255 / 25%);
+  transition:
+    background-color 0.15s,
+    justify-content 0s;
+}
+.topo button[role='switch'] span[aria-hidden] {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: #fff;
+  display: block;
+}
+.topo button[role='switch']:hover {
+  background: rgb(255 255 255 / 40%);
+}
 
 /* ─── Corpo ───────────────────────────────────────────────────────────────────────────────────── */
 .corpo {

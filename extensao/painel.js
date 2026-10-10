@@ -200,6 +200,7 @@
       <div class="topo">
         <span class="monograma" aria-hidden="true"></span>
         <h2>ACV</h2>
+        <button id="desligar" type="button" role="switch" aria-checked="true" title="Extensão ligada. Desligar some com o painel em TODAS as páginas; para religar, clique no ícone do ACV na barra do navegador."><span aria-hidden="true"></span><span class="sr-only">Extensão ligada</span></button>
         <button id="recolher" type="button" aria-expanded="true" aria-controls="corpo" title="Recolher">—</button>
         <button id="esconder" type="button" title="Esconder nesta página">✕</button>
       </div>
@@ -259,6 +260,22 @@
       c.hidden = !c.hidden;
       $('recolher').setAttribute('aria-expanded', String(!c.hidden));
       $('recolher').title = c.hidden ? 'Expandir' : 'Recolher';
+    });
+
+    /**
+     * O interruptor da extensão, no próprio painel.
+     *
+     * São TRÊS coisas parecidas e o título de cada botão diz qual é qual: `—` recolhe para a barra, `✕`
+     * esconde NESTE site até fechar o navegador, e este desliga o painel em TODA página até você religar.
+     * Ele fica aqui, e não só no popup, porque quem quer desligar está olhando para o painel atrapalhando a
+     * tela — e o caminho mais curto dali é um clique no próprio painel, não procurar o ícone na barra.
+     *
+     * Não pergunta "tem certeza?": o título diz onde religar, e desfazer é um clique no ícone do ACV. Caixa
+     * de confirmação para esconder um painel é mais um estorvo em cima do estorvo que a pessoa quer tirar.
+     */
+    $('desligar').addEventListener('click', async () => {
+      await aoFundo({ tipo: 'CONFIG_GRAVAR', cfg: { painelLigado: false } });
+      // O ouvinte de `storage.onChanged` (no fim deste arquivo) tira o painel desta aba e das outras abertas
     });
 
     // Esconder, não destruir. Antes o ✕ dava `remove()` no host e o painel só voltava recarregando a página.

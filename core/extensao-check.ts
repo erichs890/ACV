@@ -1028,6 +1028,67 @@ try {
   assert.equal(visibilidade.escondido, 0, 'o ✕ marca `hidden` no host: o painel TEM de sumir, apesar do display !important da armadura');
   assert.ok(visibilidade.sobAtaque > 0, 'e a página hospedeira continua sem conseguir apagar o painel — a armadura não foi enfraquecida');
   console.log('✓ Extensão: o ✕ esconde o painel de verdade, e a página hospedeira continua sem poder apagá-lo');
+
+  /**
+   * **Onde o painel NÃO pode aparecer.** Em site desconhecido, `pareceVaga` é o único portão.
+   *
+   * Duas das três condições antigas punham o painel na web inteira:
+   *  - `/login` no caminho da URL alcançava TODA tela de entrada que existe — banco, e-mail, hospedagem. E
+   *    nem servia para o que parecia: em plataforma conhecida o painel já aparece de qualquer jeito
+   *    (`classificar` só consulta `pareceVaga` quando o site NÃO está no cadastro), então o único efeito era
+   *    ruído em site alheio;
+   *  - um botão com "aplicar"/"inscrever" é fraco sozinho: aparece em banco ("Aplicar agora"), em site de
+   *    curso ("Inscrever-se") e no portfólio do próprio dono.
+   *
+   * Relato dele em 09/10/2026: "atualize a extensão pra ela não invadir mais meu site".
+   */
+  const ondeAparece = async (titulo: string, corpo: string, caminho = '/') => {
+    const pg = await ctx.newPage();
+    await pg.route('**/*', r => r.fulfill({ contentType: 'text/html; charset=utf-8', body: `<!doctype html><html lang="pt-BR"><meta charset="utf-8"><title>${titulo}</title>${corpo}` }));
+    await pg.goto(`https://sitequalquer.exemplo${caminho}`, { waitUntil: 'domcontentloaded' });
+    await pg.addScriptTag({ content: CONTEUDO });
+    const r = await pg.evaluate(() => (globalThis as unknown as { ACVExtensao: { pareceVaga: () => boolean } }).ACVExtensao.pareceVaga());
+    await pg.close();
+    return r;
+  };
+
+  // O que É vaga continua passando
+  assert.equal(await ondeAparece('Dev Pleno', '<script type="application/ld+json">{"@type":"JobPosting","title":"Dev"}</script>'), true, 'anúncio que se declara JobPosting basta sozinho');
+  assert.equal(await ondeAparece('Vagas | Acme', '<button>Candidatar-se</button>'), true, 'botão de candidatura + a página falando de vaga');
+  assert.equal(await ondeAparece('Acme', '<button>Inscrever-se</button><label>Currículo<input type="file" name="curriculo"></label>'), true, 'botão + campo de currículo também é vaga');
+
+  // E o que NÃO é, para de aparecer
+  assert.equal(await ondeAparece('Entrar', '<form><input type="password"></form>', '/login'), false, 'tela de login de site qualquer NÃO é página de vaga');
+  assert.equal(await ondeAparece('Miguel Oliveira — Desenvolvedor', '<a href="#c">Aplicar para projetos</a>'), false, 'portfólio com "Aplicar" não é vaga');
+  assert.equal(await ondeAparece('Investimentos', '<button>Aplicar agora</button>'), false, 'banco com "Aplicar agora" não é vaga');
+  assert.equal(await ondeAparece('Curso de React', '<button>Inscrever-se</button>'), false, 'site de curso com "Inscrever-se" não é vaga');
+  assert.equal(await ondeAparece('Blog', '<p>oi</p>'), false);
+  console.log('✓ Extensão: o painel só aparece em página que é mesmo vaga — login, portfólio e banco ficam em paz');
+
+  /**
+   * O interruptor da extensão, no próprio painel.
+   *
+   * Três botões parecidos no topo e três coisas diferentes: `—` recolhe, `✕` esconde neste site até fechar o
+   * navegador, e o `role="switch"` desliga em TODA página. Ele mora no painel, e não só no popup, porque
+   * quem quer desligar está olhando para o painel atrapalhando a tela.
+   */
+  {
+    const painel = readFileSync(new URL('../extensao/painel.js', import.meta.url), 'utf8');
+    assert.match(painel, /id="desligar"[^>]*role="switch"/, 'o interruptor é um switch de verdade, não um botão qualquer');
+    assert.match(painel, /'desligar'\)\.addEventListener/, 'e ele tem ação ligada');
+    assert.match(painel, /painelLigado: false/, 'desligar grava a preferência, que o ouvinte de storage lê para sumir das abas abertas');
+    // Os três botões existem e cada um diz no título o que faz — sem isso viram três enfeites iguais
+    for (const [id, dica] of [
+      ['recolher', /Recolher/],
+      ['esconder', /Esconder nesta p/],
+      ['desligar', /TODAS as p/],
+    ] as const) {
+      const m = painel.match(new RegExp(`id="${id}"[^>]*title="([^"]+)"`));
+      assert.ok(m, `o botão ${id} precisa de um title que explique o que ele faz`);
+      assert.match(m[1], dica, `o title do ${id} tem de distinguir ele dos outros dois`);
+    }
+    console.log('✓ Extensão: recolher, esconder neste site e desligar em tudo são três botões distintos, cada um dizendo o que faz');
+  }
 } finally {
   await page.close().catch(() => {});
   servidor.close();
